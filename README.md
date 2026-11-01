@@ -2,6 +2,8 @@
 
 Paste a script, get a construction-paper cartoon. An AI director reads your script, designs and casts the characters, builds the sets, voices every line and animates each scene in the flat cut-out style of the [Paper Town Character Creator](https://limittox.github.io/south-park-character-creator/). Then you edit by dragging things around, changing beats, or telling the chat what to change, and export an MP4.
 
+**Try it: https://limittox.github.io/south-park-animator/**
+
 Everything runs in the browser. Your OpenRouter key is stored only in your browser and is sent only to OpenRouter.
 
 ## What it does
@@ -53,7 +55,9 @@ Open Settings (⚙) and paste an [OpenRouter key](https://openrouter.ai/keys). T
 
 `kit-gallery.html` (served by `npm run dev`) shows every set piece by day and night, plus sample sets. It's handy when drawing new pieces.
 
-If this site and the Character Creator are served from the same origin (for example both on `<user>.github.io`), *Use my creator crew* reads the creator's saved crew directly.
+If this site and the Character Creator are served from the same origin (as on `limittox.github.io`), *Use my creator crew* reads the creator's saved crew directly.
+
+Every push to `main` runs the tests, builds the site and publishes it to GitHub Pages (`.github/workflows/deploy.yml`).
 
 ## How it's built
 
