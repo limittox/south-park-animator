@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseScript, SAMPLE_SCRIPT } from './episode/parseScript';
+import { PROMPT_EXAMPLE, PROMPT_PLACES, scriptWritingPrompt } from './episode/writingPrompt';
+import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
 import { cameraFor, compileEpisode, estimateLineSeconds, locate, sampleEpisode, syntheticEnvelope, WIDE, type SceneFrame } from './episode/timeline';
 import { repositionActor, setMoodAt } from './episode/edit';
@@ -54,6 +56,44 @@ describe('parseScript', () => {
       ['kid', 'Nowhere.', undefined],
     ]);
     expect(ep.cast.find((c) => c.id === 'mom')?.look.body).not.toBe('kid');
+  });
+});
+
+describe('AI writing prompt', () => {
+  it("teaches a format the parser reads: the prompt's own example parses fully", () => {
+    const ep = parseScript(PROMPT_EXAMPLE);
+    expect(ep.title).toBe('The Lemonade Loophole');
+    expect(ep.scenes[0].set).toMatchObject({ kind: 'preset', preset: 'mainstreet' });
+    expect(ep.cast.map((c) => c.name).sort()).toEqual(['Gus', 'Officer Plunkett', 'Tilly']);
+    const beats = ep.scenes[0].beats;
+    expect(beats.filter((b) => b.text)).toHaveLength(5);
+    expect(beats.find((b) => b.who === 'officer-plunkett')?.delivery).toBe('nervous');
+    expect(beats.some((b) => b.action === 'jump' && b.who === 'gus')).toBe(true);
+    expect(beats.some((b) => b.moves?.some((m) => m.who === 'gus' && m.kind === 'exit'))).toBe(true);
+    expect(ep.scenes[0].blocking.find((b) => b.who === 'tilly')?.offstage).toBe(true);
+  });
+
+  it('only promises hand-drawn sets for places that have one', () => {
+    for (const place of PROMPT_PLACES) {
+      const ep = parseScript(`EXT. ${place.toUpperCase()} - DAY\nA: Hi.`);
+      expect(ep.scenes[0].set.kind, place).toBe('preset');
+    }
+  });
+
+  it('carries the crew names and draft along when there are some', () => {
+    const plain = scriptWritingPrompt();
+    expect(plain).toContain('Ask me what the episode is about');
+    expect(plain).not.toContain('MY CHARACTERS');
+    expect(plain).not.toContain('MY DRAFT');
+    const full = scriptWritingPrompt({ crew: ['Dex', 'Priya'], draft: 'TITLE: Mine\nDEX: Hi.' });
+    expect(full).toContain('spelled exactly like this: Dex, Priya.');
+    expect(full).toMatch(/MY DRAFT\nTITLE: Mine\nDEX: Hi\.$/);
+    expect(full).toContain('Read my draft');
+  });
+
+  it('strips code fences from a pasted script', () => {
+    expect(stripCodeFences('```text\nTITLE: X\nA: Hi.\n```\n')).toBe('TITLE: X\nA: Hi.\n');
+    expect(stripCodeFences('A: no fences')).toBe('A: no fences');
   });
 });
 

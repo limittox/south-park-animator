@@ -12,6 +12,7 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 - Any script format: `NAME: line`, screenplay layout, loose prose. Scene headings (`INT. CLASSROOM - DAY`) choose the set; parentheticals (`(whispering)`) become acting directions; stage directions become entrances, exits, faints, sound effects and so on.
 - Two LLM calls run in parallel: a **casting director** designs every character from the creator's ~300 paper parts and picks a voice, and a **storyboard director** turns each scene into beats with blocking, moods, gestures, camera cuts and comic pauses.
 - Characters you made in the Character Creator can play themselves: import your crew file or paste share links, and any script name that matches gets their look.
+- **Writing with your own AI?** *Copy AI prompt* copies instructions for ChatGPT, Claude, Gemini or any other chat: the script format the app reads best, the places with hand-drawn sets, the action and acting words it animates, comedy tips and an example. Your crew names and current draft go along. Paste the finished script back in; code fences are stripped automatically.
 - **No key?** *Quick build* parses the script by itself and gives everyone a stand-in look. Stand-in voices come from your browser's speech engine (exported videos are silent then).
 
 **Voices**

@@ -560,6 +560,32 @@ label.inline input {
   background-attachment: local !important;
 }
 
+.ai-write {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 2px dashed var(--ink);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.ai-write b {
+  color: var(--ink);
+}
+
+.ai-write .btn {
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .ai-write {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .script-actions {
   display: flex;
   align-items: center;

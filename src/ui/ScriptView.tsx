@@ -3,6 +3,8 @@ import type { CharacterState } from '../types';
 import type { Episode } from '../episode/types';
 import { CharacterSvg } from '../character/Character';
 import { parseScript, SAMPLE_SCRIPT } from '../episode/parseScript';
+import { scriptWritingPrompt } from '../episode/writingPrompt';
+import { copyText, stripCodeFences } from '../lib/clipboard';
 import { applyCrew, directScript, type DirectorProgress } from '../ai/director';
 import { creatorCrew, loadCrew, parseCrewFile, parseShareLink, saveCrew } from '../store/episodes';
 import type { Settings } from '../store/settings';
@@ -67,6 +69,14 @@ export function ScriptView({ settings, onEpisode, onOpenSettings }: Props) {
     }
   };
 
+  // The draft goes along so the outside AI can keep working on it; the sample isn't anyone's draft.
+  const draft = script.trim() && script !== SAMPLE_SCRIPT ? script : '';
+  const copyPrompt = async () => {
+    const ok = await copyText(scriptWritingPrompt({ crew: crew.map((c) => c.name), draft }));
+    if (ok) toast(draft ? 'Prompt and your draft copied. Paste them into your AI chat.' : 'Prompt copied. Paste it into your AI chat.');
+    else toast("Couldn't reach the clipboard. Try again, or allow clipboard access for this site.", 'error');
+  };
+
   const words = script.trim() ? script.trim().split(/\s+/).length : 0;
 
   return (
@@ -81,10 +91,26 @@ export function ScriptView({ settings, onEpisode, onOpenSettings }: Props) {
             pick or build the set. Put acting notes in brackets: <code>BENNY: (whispering) Psst.</code>
           </p>
         </div>
+        <div className="ai-write">
+          <span>
+            <b>Writing with ChatGPT, Claude or Gemini?</b> Copy our instructions into your chat, work on the script there, then paste the finished script here.
+          </span>
+          <button className="btn small" onClick={copyPrompt} title={draft ? 'Copies the writing instructions with your current draft and crew names' : 'Copies the writing instructions, plus your crew names'}>
+            📋 Copy AI prompt
+          </button>
+        </div>
         <textarea
           className="script-input"
           value={script}
           onChange={(e) => updateScript(e.target.value)}
+          onPaste={(e) => {
+            // Scripts copied out of an AI chat often keep their ``` fences; drop them.
+            const text = e.clipboardData.getData('text');
+            if (!/^[ \t]*```/m.test(text)) return;
+            e.preventDefault();
+            const el = e.currentTarget;
+            updateScript(el.value.slice(0, el.selectionStart) + stripCodeFences(text) + el.value.slice(el.selectionEnd));
+          }}
           placeholder={'EXT. BUS STOP - MORNING\nThree kids wait for the bus.\n\nDEX: I can\'t feel my toes.\nBENNY: (excited) Dude, that means they fell off!'}
           spellCheck
           aria-label="Script"
