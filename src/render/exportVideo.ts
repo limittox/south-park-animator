@@ -61,14 +61,24 @@ function sliceAudio(buf: AudioBuffer, from: number, to: number): AudioBuffer {
   return out;
 }
 
-function loadSvg(markup: string): Promise<HTMLImageElement> {
+/**
+ * Drawing an SVG <img> straight onto a canvas makes Chromium keep a full-size raster of it (on the
+ * GPU) until the next garbage collection, which an export hardly ever triggers: 8 MB a frame at
+ * 1080p, gigabytes within a minute. An ImageBitmap's raster is ours to close once it's drawn.
+ */
+async function drawSvg(g: CanvasRenderingContext2D, markup: string, width: number, height: number): Promise<void> {
   const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
   const img = new Image();
   img.src = url;
-  return img
-    .decode()
-    .then(() => img)
-    .finally(() => URL.revokeObjectURL(url));
+  try {
+    await img.decode();
+    const bmp = await createImageBitmap(img).catch(() => null);
+    g.drawImage(bmp ?? img, 0, 0, width, height);
+    bmp?.close();
+  } finally {
+    img.src = '';
+    URL.revokeObjectURL(url);
+  }
 }
 
 export interface ExportProgress {
@@ -118,10 +128,9 @@ export async function exportEpisode({ compiled, clips, lines, height, fps = 30, 
       const t = i / fps;
       const frame = sampleEpisode(compiled, t, clips);
       const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
-      const img = await loadSvg(markup.replace(/^<svg([^>]*)>/, `<svg$1>${css}`));
       g.fillStyle = '#000';
       g.fillRect(0, 0, width, height);
-      g.drawImage(img, 0, 0, width, height);
+      await drawSvg(g, markup.replace(/^<svg([^>]*)>/, `<svg$1>${css}`), width, height);
       await video.add(t, 1 / fps);
       // Feed audio in one-second slices alongside the pictures so the muxer can interleave.
       if (audio && mixed) {

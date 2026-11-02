@@ -78,7 +78,7 @@ export function ExportModal({ compiled, clips, lines, missingVoices, voicing, on
           <div className="bar">
             <div style={{ width: `${Math.round(pct * 100)}%` }} />
           </div>
-          <p className="muted small">{eta !== null ? `About ${fmt(eta)} left.` : 'Warming up…'} Keep this tab open.</p>
+          <p className="muted small">{eta !== null ? `About ${fmt(eta)} left.` : 'Warming up…'} Keep this tab in front: browsers slow down background tabs a lot.</p>
           <button className="btn small" onClick={() => abort.current?.abort()}>
             Cancel
           </button>
@@ -112,7 +112,7 @@ export function ExportModal({ compiled, clips, lines, missingVoices, voicing, on
           <button className="btn red big" onClick={run}>
             🎬 Render MP4
           </button>
-          <p className="muted small">Rendering happens on this computer and runs at about real time or a little slower.</p>
+          <p className="muted small">Rendering happens on this computer and runs at about real time, as long as this tab stays in front.</p>
         </div>
       )}
     </Modal>
