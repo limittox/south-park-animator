@@ -270,6 +270,17 @@ export function getGeo(body: string, headShape: string): BodyGeo {
   return { ...base, headRx: base.headRx * shape.sx, headRy: base.headRy * shape.sy };
 }
 
+/**
+ * Sitting, seen from the front: everything above the hips drops to `hipY` while the feet stay
+ * on the floor, so the legs get shorter (thighs pointing at the camera). Feet never pass the hips.
+ */
+export function seatedGeo(g: BodyGeo, hipY: number | undefined): BodyGeo {
+  if (hipY === undefined) return g;
+  const d = Math.min(hipY, g.legBottom - 6) - g.legTop;
+  if (d <= 0) return g;
+  return { ...g, headCy: g.headCy + d, torsoTop: g.torsoTop + d, torsoBottom: g.torsoBottom + d, legTop: g.legTop + d, shoulderY: g.shoulderY + d, handY: g.handY + d };
+}
+
 /** Body outline for shirts and everything worn on the torso. */
 export function torsoPath(g: BodyGeo, inset = 0): string {
   const { cx, torsoTop: top, torsoBottom: bot, belly } = g;

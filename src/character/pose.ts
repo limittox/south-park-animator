@@ -117,6 +117,20 @@ export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number
   return [arm(-1), arm(1)];
 }
 
+/** Running: both arms bent at the elbow, pumping in turn. */
+export function runArms(g: BodyGeo, t: number): ArmsPose {
+  const arm = (side: -1 | 1): ArmState => reach(g, side, swing(g, side, 48 + Math.sin(t * TAU * 3.4 + (side === 1 ? 0 : Math.PI)) * 30, 0.8), 0.36, 'down');
+  return [arm(-1), arm(1)];
+}
+
+/** Handing something over: the prop hand (side 1) reaches out toward `toward`, across the body if need be. */
+export function handOverArms(g: BodyGeo, toward: -1 | 1): ArmsPose {
+  const s = armGeo(g, 1).start;
+  const len = dist(s, handPos(g, 1));
+  const target: Pt = [g.cx + toward * (g.shoulder + len * 0.75), g.shoulderY + len * 0.5];
+  return [restArm(g, -1), reach(g, 1, target, toward === 1 ? 0.06 : 0.16, 'down')];
+}
+
 function lerpArm(a: ArmState, b: ArmState, k: number): ArmState {
   return {
     side: b.side,

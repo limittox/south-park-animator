@@ -1,6 +1,6 @@
 import { memo, useId, type ReactNode } from 'react';
 import type { CategoryId, CharacterState, RenderCtx } from '../types';
-import { ADULT_FACE_FIT, armGeo, armPath, CANADIAN_SPLIT_Y, eyeFit, FACE_FIT, frameViewBox, getGeo, HEAD_RX, HEAD_RY, HEAD_SHAPES, handPos } from './geometry';
+import { ADULT_FACE_FIT, armGeo, armPath, CANADIAN_SPLIT_Y, eyeFit, FACE_FIT, frameViewBox, getGeo, HEAD_RX, HEAD_RY, HEAD_SHAPES, handPos, seatedGeo } from './geometry';
 import { isRest, restArms, type ArmsPose, type ArmState } from './pose';
 import { ink, O } from './parts/common';
 import { BROWS, EYES, FACE_DETAILS, FACIAL_HAIR, MOUTHS, NOSES, talkingMouth } from './parts/face';
@@ -24,17 +24,22 @@ export interface CharacterProps {
   arms?: ArmsPose;
   /** Eyes shut for a blink. */
   blink?: boolean;
+  /** Sitting: where the hips are (character coordinates); see seatedGeo. */
+  hipY?: number;
   onPartClick?: (cat: CategoryId) => void;
 }
 
 /** A whole character as an SVG <g>, in character coordinates (ground at y = 480). */
-export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn = 0, arms: pose, blink = false, onPartClick }: CharacterProps) {
+export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn = 0, arms: pose, blink = false, hipY, onPartClick }: CharacterProps) {
   const rawId = useId();
   const prefix = 'c' + rawId.replace(/[^a-zA-Z0-9]/g, '');
   let counter = 0;
   const uid = (name: string) => `${prefix}-${name}-${counter++}`;
 
-  const g = getGeo(c.body, c.headShape);
+  const standing = getGeo(c.body, c.headShape);
+  const g = seatedGeo(standing, hipY);
+  // Sitting with the legs folded: knees toward the camera, a little wider than the hips.
+  const folded = g.legTop - standing.legTop > 8;
   const shape = HEAD_SHAPES[c.headShape] ?? HEAD_SHAPES.round;
   const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk });
 
@@ -277,6 +282,16 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
       {hat.back && <g transform={headT}>{part('hat', <g transform={hatT}>{hat.back(ctx(c.hatColor))}</g>)}</g>}
       {part('bottom', bottom.render(ctx(bottomColor)))}
       {part('shoes', shoes.render(ctx(c.shoesColor)))}
+      {folded &&
+        part(
+          'bottom',
+          <>
+            {([-1, 1] as const).map((side) => (
+              <ellipse key={side} cx={g.cx + side * (g.legSep + 6)} cy={g.legTop + 16} rx={g.legW / 2 + 9} ry={Math.min(24, 8 + (g.legBottom - g.legTop) * 0.3)} fill={bottomColor} {...ink} />
+            ))}
+          </>,
+          'lap',
+        )}
       {top.skirt && part('top', top.skirt(ctx(c.topColor)))}
       {part(
         'top',

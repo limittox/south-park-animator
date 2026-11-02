@@ -18,6 +18,19 @@ export interface SceneDef {
   render: (o: SceneOpts) => ReactNode;
   /** Drawn over the cast, e.g. a desk the characters stand behind. */
   front?: (o: SceneOpts) => ReactNode;
+  /** Places to sit, in scene coordinates. */
+  seats?: PresetSeat[];
+}
+
+/** A seat drawn into a preset: sitters' feet go on `y`, their hips `h` above it, sharing width `w`. */
+export interface PresetSeat {
+  id: string;
+  x: number;
+  y: number;
+  h: number;
+  w: number;
+  /** Drawn again over whoever sits there (the table or desk they sit behind). */
+  cover?: () => ReactNode;
 }
 
 export const DISPLAY = "'Luckiest Guy', 'Arial Black', Impact, sans-serif";
@@ -175,6 +188,28 @@ export function windowPane(x: number, y: number, w: number, h: number, glass = '
   );
 }
 
+/** The classroom's kid desks (left edge x) and the desk without its chair back. */
+const CLASS_DESKS = [60, 1340];
+const classDesk = (x: number) => (
+  <g>
+    <rect x={x} y={760} width={200} height={26} {...f('#e4dc4a')} />
+    <rect x={x + 14} y={786} width={14} height={110} {...f('#8e8c92')} />
+    <rect x={x + 172} y={786} width={14} height={110} {...f('#8e8c92')} />
+  </g>
+);
+
+/** The cafeteria's lunch tables (left edge x), with the bench in front and a tray. */
+const LUNCH_TABLES = [20, 1300];
+const lunchTable = (x: number) => (
+  <g>
+    <rect x={x} y={780} width={280} height={30} {...f('#d9d4d3')} />
+    <rect x={x + 20} y={810} width={16} height={100} {...f('#8e8c92')} />
+    <rect x={x + 244} y={810} width={16} height={100} {...f('#8e8c92')} />
+    <rect x={x - 10} y={860} width={300} height={22} {...f('#c2bec5')} />
+    <rect x={x + 60} y={758} width={90} height={22} rx={4} {...f('#f0742a')} strokeWidth={2} />
+  </g>
+);
+
 /* ------------------------------------------------------------ scenes */
 
 export const SCENES: SceneDef[] = [
@@ -331,17 +366,17 @@ export const SCENES: SceneDef[] = [
         <text x={800} y={72} textAnchor="middle" fontFamily={DISPLAY} fontSize={30} fill="#fff">
           GO YETIS!
         </text>
-        {[60, 1340].map((x) => (
+        {CLASS_DESKS.map((x) => (
           <g key={x}>
-            <rect x={x} y={760} width={200} height={26} {...f('#e4dc4a')} />
-            <rect x={x + 14} y={786} width={14} height={110} {...f('#8e8c92')} />
-            <rect x={x + 172} y={786} width={14} height={110} {...f('#8e8c92')} />
             <rect x={x + 30} y={700} width={140} height={60} {...f('#3b6fd8')} />
+            {classDesk(x)}
           </g>
         ))}
         <circle cx={1440} cy={740} r={18} fill="#d33b2c" stroke={O} strokeWidth={3} />
       </g>
     ),
+    // Kids sit between the chair back and the desk, so the desk is drawn again over them.
+    seats: CLASS_DESKS.map((x, i) => ({ id: `desk-${i + 1}`, x: x + 100, y: 896, h: 92, w: 170, cover: () => <g className="sp-scene">{classDesk(x)}</g> })),
   },
   {
     id: 'cafeteria',
@@ -414,17 +449,13 @@ export const SCENES: SceneDef[] = [
           OR ELSE
         </text>
         <path d="M 130 300 q 40 30 80 0" fill="none" stroke="#26367a" strokeWidth={6} />
-        {[20, 1300].map((x) => (
-          <g key={x}>
-            <rect x={x} y={780} width={280} height={30} {...f('#d9d4d3')} />
-            <rect x={x + 20} y={810} width={16} height={100} {...f('#8e8c92')} />
-            <rect x={x + 244} y={810} width={16} height={100} {...f('#8e8c92')} />
-            <rect x={x - 10} y={860} width={300} height={22} {...f('#c2bec5')} />
-            <rect x={x + 60} y={758} width={90} height={22} rx={4} {...f('#f0742a')} strokeWidth={2} />
-          </g>
+        {LUNCH_TABLES.map((x) => (
+          <g key={x}>{lunchTable(x)}</g>
         ))}
       </g>
     ),
+    // People eat behind the tables, facing the room: the table and its front bench cover them.
+    seats: LUNCH_TABLES.map((x, i) => ({ id: `table-${i + 1}`, x: x + 140, y: 910, h: 62, w: 280, cover: () => <g className="sp-scene">{lunchTable(x)}</g> })),
   },
   {
     id: 'livingroom',
@@ -474,6 +505,7 @@ export const SCENES: SceneDef[] = [
         <ellipse cx={1440} cy={690} rx={56} ry={12} {...f('#dbb016')} />
       </g>
     ),
+    seats: [{ id: 'couch', x: 800, y: 700, h: 172, w: 520 }],
   },
   {
     id: 'pond',
@@ -729,6 +761,10 @@ export const SCENES: SceneDef[] = [
         </g>
       );
     },
+    seats: [
+      { id: 'log-1', x: 420, y: 920, h: 40, w: 240 },
+      { id: 'log-2', x: 1180, y: 920, h: 40, w: 240 },
+    ],
   },
   {
     id: 'news',
@@ -774,6 +810,8 @@ export const SCENES: SceneDef[] = [
         </text>
       </g>
     ),
+    // Anchors' chairs are hidden behind the desk.
+    seats: [{ id: 'desk', x: 800, y: 880, h: 130, w: 900 }],
   },
   {
     id: 'studio',

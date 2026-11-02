@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
-import type { KitPiece, KitSet, Scene, Weather } from '../episode/types';
+import type { KitPiece, KitSet, Scene, Vehicle, VehicleType, Weather } from '../episode/types';
+import { getVehicleDef, VEHICLES } from '../sets/vehicles';
 import { WEATHER_LIST } from '../episode/catalog';
 import { SCENES } from '../scenes/backgrounds';
 import { defaultKitSet, getPieceDef, KIT_PIECES } from '../sets/kit';
@@ -220,6 +221,77 @@ export function SetPanel({ scene, onScene }: Props) {
           </div>
         </>
       )}
+
+      <Vehicles scene={scene} onScene={onScene} />
     </div>
+  );
+}
+
+/** Cars and buses in the scene. They drive and pick people up with moves in the Beats tab. */
+function Vehicles({ scene, onScene }: Props) {
+  const list = scene.vehicles ?? [];
+  const put = (next: Vehicle[], merge?: string) => onScene({ ...scene, vehicles: next.length ? next : undefined }, merge);
+  const change = (v: Vehicle, patch: Partial<Vehicle>, merge?: string) =>
+    put(
+      list.map((x) => {
+        if (x.id !== v.id) return x;
+        const next: Vehicle = { ...x, ...patch };
+        for (const k of Object.keys(next) as (keyof Vehicle)[]) if (next[k] === undefined) delete next[k];
+        return next;
+      }),
+      merge,
+    );
+  const add = (type: VehicleType) => {
+    let id: string = type;
+    for (let n = 2; list.some((v) => v.id === id); n++) id = `${type}-${n}`;
+    put([...list, { id, type, x: 800, offstage: true, ...(type === 'bus' ? { lane: 'front' as const } : {}) }]);
+  };
+  return (
+    <>
+      <h4>Vehicles</h4>
+      <p className="muted small">Make one drive in, pick people up and drive off with moves in the Beats tab.</p>
+      <div className="row wrap">
+        {VEHICLES.map((d) => (
+          <button key={d.id} className="btn small" onClick={() => add(d.id)}>
+            + {d.name}
+          </button>
+        ))}
+      </div>
+      <div className="pieces">
+        {list.map((v) => {
+          const def = getVehicleDef(v.type);
+          return (
+            <div key={v.id} className="piece-row">
+              <div className="piece-top">
+                <b>
+                  {def.name} <span className="muted small">({v.id})</span>
+                </b>
+                <span className="spacer" />
+                <label className="check" title="Drives in later">
+                  <input type="checkbox" checked={!!v.offstage} onChange={(e) => change(v, { offstage: e.target.checked || undefined })} /> starts off stage
+                </label>
+                <label className="check" title="Face left">
+                  <input type="checkbox" checked={!!v.flip} onChange={(e) => change(v, { flip: e.target.checked || undefined })} /> flip
+                </label>
+                <button className="icon-btn tiny" onClick={() => put(list.filter((x) => x.id !== v.id))} aria-label={`Remove ${def.name}`}>
+                  ✕
+                </button>
+              </div>
+              <div className="piece-controls">
+                <label>
+                  x
+                  <input type="range" min={0} max={1600} step={10} value={v.x} onChange={(e) => change(v, { x: Number(e.target.value) }, `vx-${v.id}`)} />
+                </label>
+                <select value={v.lane ?? 'back'} onChange={(e) => change(v, { lane: e.target.value === 'front' ? 'front' : undefined })} aria-label="Lane">
+                  <option value="back">behind the front row</option>
+                  <option value="front">in front of everyone</option>
+                </select>
+                <input type="color" value={v.color ?? def.defaultColor} onChange={(e) => change(v, { color: e.target.value }, `vc-${v.id}`)} aria-label="Colour" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

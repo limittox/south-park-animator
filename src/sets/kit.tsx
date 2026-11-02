@@ -50,6 +50,11 @@ export interface KitPieceDef {
   text?: boolean;
   /** What `color` / `color2` paint, for the LLM. */
   colors?: string;
+  /**
+   * People can sit on it: seat height above the base and the width they share (piece units).
+   * `cover` pieces (tables, desks) are drawn again over whoever sits at them.
+   */
+  seat?: { h: number; w: number; cover?: boolean };
   render(p: ResolvedPiece, ctx: KitCtx): ReactNode;
   /** Drawn after the night tint: lit windows, lamps, flames, the moon. */
   lights?(p: ResolvedPiece, ctx: KitCtx): ReactNode;
@@ -459,6 +464,34 @@ export const KIT_PIECES: KitPieceDef[] = [
     ),
   },
   {
+    id: 'grandfather-clock',
+    name: 'Grandfather Clock',
+    desc: "Tall wooden grandfather clock with a brass pendulum; grandparents' living rooms, creepy hallways.",
+    place: 'interior',
+    anchor: 'floor',
+    w: 140,
+    h: 440,
+    defaultY: 700,
+    defaultColor: '#6b4226',
+    render: (p) => (
+      <g>
+        <rect x={-50} y={-310} width={100} height={300} {...f(p.color)} />
+        <rect x={-30} y={-268} width={60} height={196} rx={6} {...f(shade(p.color, -0.3))} />
+        <path d="M 0 -262 L 0 -130" stroke="#c9a640" strokeWidth={5} />
+        <circle cx={0} cy={-116} r={18} {...f('#e2b93b')} />
+        <rect x={-64} y={-24} width={128} height={24} {...f(shade(p.color, -0.15))} />
+        <rect x={-66} y={-418} width={132} height={124} rx={10} {...f(p.color)} />
+        <path d="M -70 -410 Q 0 -462 70 -410 Z" {...f(shade(p.color, 0.12))} />
+        <circle cx={0} cy={-356} r={46} {...f('#f4ecd6')} />
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i * Math.PI) / 6;
+          return <path key={i} d={`M ${Math.sin(a) * 36} ${-356 - Math.cos(a) * 36} L ${Math.sin(a) * 42} ${-356 - Math.cos(a) * 42}`} stroke={O} strokeWidth={3} />;
+        })}
+        <path d="M 0 -356 L 0 -386 M 0 -356 L 20 -346" stroke={O} strokeWidth={5} strokeLinecap="round" />
+      </g>
+    ),
+  },
+  {
     id: 'wall-sign',
     name: 'Wall Sign',
     desc: 'Painted sign high on the wall naming the place ("PRINCIPAL\'S OFFICE", "CITY WOK", "EMERGENCY").',
@@ -774,6 +807,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'desk',
     name: 'Office Desk',
+    seat: { h: 110, w: 300, cover: true },
     desc: 'Wooden desk with drawers; offices, police stations. Put a computer on it (computer y = desk y - 200).',
     place: 'interior',
     anchor: 'floor',
@@ -798,6 +832,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'school-desk',
     name: 'School Desk',
+    seat: { h: 92, w: 150, cover: true },
     desc: 'Kid-sized classroom desk with a yellow top and a blue chair back; put a row of them in a classroom.',
     place: 'interior',
     anchor: 'floor',
@@ -819,6 +854,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'teacher-desk',
     name: "Teacher's Desk",
+    seat: { h: 120, w: 380, cover: true },
     desc: "Big teacher's desk with an apple, papers and a mug; set front:true with the teacher behind it.",
     place: 'interior',
     anchor: 'floor',
@@ -844,6 +880,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'table',
     name: 'Table',
+    seat: { h: 96, w: 280, cover: true },
     desc: 'Plain table; dining rooms, restaurants, kitchens, break rooms.',
     place: 'interior',
     anchor: 'floor',
@@ -862,6 +899,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'chair',
     name: 'Chair',
+    seat: { h: 108, w: 100 },
     desc: 'Wooden chair.',
     place: 'interior',
     anchor: 'floor',
@@ -882,6 +920,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'couch',
     name: 'Couch',
+    seat: { h: 168, w: 520 },
     desc: 'Living-room couch with a throw pillow.',
     place: 'interior',
     anchor: 'floor',
@@ -904,6 +943,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'armchair',
     name: 'Armchair',
+    seat: { h: 150, w: 190 },
     desc: 'Comfy single armchair; dads, therapists, talk shows.',
     place: 'interior',
     anchor: 'floor',
@@ -950,6 +990,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'bed',
     name: 'Bed',
+    seat: { h: 124, w: 360 },
     desc: 'Bed seen from the side with a headboard on the left, pillow and blanket; bedrooms.',
     place: 'interior',
     anchor: 'floor',
@@ -1326,6 +1367,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'toilet',
     name: 'Toilet',
+    seat: { h: 100, w: 120 },
     desc: 'Toilet seen from the front; bathrooms.',
     place: 'interior',
     anchor: 'floor',
@@ -1812,6 +1854,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'bench',
     name: 'Bench',
+    seat: { h: 78, w: 240 },
     desc: 'Wooden park bench; parks, bus stops, the pond.',
     place: 'exterior',
     anchor: 'ground',
@@ -1989,6 +2032,7 @@ export const KIT_PIECES: KitPieceDef[] = [
   {
     id: 'rock',
     name: 'Rock',
+    seat: { h: 88, w: 160 },
     desc: 'Grey boulder.',
     place: 'exterior',
     anchor: 'ground',
@@ -2537,6 +2581,21 @@ export function renderKitSet(set: KitSet): { back: ReactNode; front: ReactNode }
   };
 }
 
+/** One piece on its own, tinted like the set: a table or desk drawn again over the people sitting at it. */
+export function renderKitPiece(set: KitSet, pieceId: string): ReactNode {
+  const piece = set.pieces.find((p) => p.id === pieceId);
+  const def = piece && BY_ID.get(piece.type);
+  if (!piece || !def) return null;
+  const p = resolvePiece(set, piece);
+  const tint = set.place === 'exterior' && TINT[set.time] ? `url(#kit-tint-${set.time})` : undefined;
+  return (
+    <g className="sp-scene">
+      {tint && tintDef(set.time)}
+      <g filter={tint}>{placed(p, def.render(p, { time: set.time, set }), p.id)}</g>
+    </g>
+  );
+}
+
 /** Where the characters' feet go. */
 export function kitGroundY(set: KitSet): number {
   return set.place === 'exterior' && set.ground === 'road' ? 945 : 930;
@@ -2591,7 +2650,7 @@ const TIMES: TimeOfDay[] = ['day', 'dusk', 'night'];
 
 export function kitCatalogForPrompt(): string {
   const piece = (d: KitPieceDef) =>
-    `- ${d.id} (${d.place}, ${d.anchor}, ${d.w}×${d.h}${d.defaultY !== undefined ? `, y≈${d.defaultY}` : ''}${d.text ? ', text' : ''}) — ${d.desc}${d.colors ? ` [${d.colors}]` : ''}`;
+    `- ${d.id} (${d.place}, ${d.anchor}, ${d.w}×${d.h}${d.defaultY !== undefined ? `, y≈${d.defaultY}` : ''}${d.text ? ', text' : ''}${d.seat ? (d.seat.cover ? ', seat behind it' : ', seat') : ''}) — ${d.desc}${d.colors ? ` [${d.colors}]` : ''}`;
   return [
     'PAPER SET KIT (a set is { "kind": "kit", "place", "time", ...style, "pieces": [...] })',
     `place: interior | exterior. time: ${TIMES.join(' | ')}.`,

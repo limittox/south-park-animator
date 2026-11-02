@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import type { Beat, CastMember, Episode, Move, Scene, Shot } from '../episode/types';
 import { ACTION_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST } from '../episode/catalog';
 import { insertBeat, moveBeat, removeBeat, updateBeat } from '../episode/edit';
+import { seatsOf } from '../episode/seats';
+import { getVehicleDef } from '../sets/vehicles';
+import { HELD } from '../character/parts/held';
 import type { VoiceStatus } from '../audio/useVoiceBank';
 
 interface Props {
@@ -66,35 +69,108 @@ function ShotEditor({ shot, cast, onChange }: { shot?: Shot; cast: CastMember[];
   );
 }
 
-function MovesEditor({ moves, cast, onChange }: { moves: Move[]; cast: CastMember[]; onChange: (m: Move[]) => void }) {
-  const set = (i: number, patch: Partial<Move>) => onChange(moves.map((m, j) => (j === i ? { ...m, ...patch } : m)));
+const DRIVES: Move['kind'][] = ['walk', 'enter', 'exit', 'appear', 'vanish'];
+
+function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: CastMember[]; scene: Scene; onChange: (m: Move[]) => void }) {
+  const vehicles = scene.vehicles ?? [];
+  const seats = seatsOf(scene.set);
+  const set = (i: number, patch: Partial<Move>) =>
+    onChange(
+      moves.map((m, j) => {
+        if (j !== i) return m;
+        const next: Move = { ...m, ...patch };
+        for (const k of Object.keys(next) as (keyof Move)[]) if (next[k] === undefined) delete next[k];
+        return next;
+      }),
+    );
   return (
     <div className="moves">
-      {moves.map((m, i) => (
-        <div key={i} className="move-row">
-          <CastSelect cast={cast} value={m.who} onChange={(v) => v && set(i, { who: v })} />
-          <select value={m.kind} onChange={(e) => set(i, { kind: e.target.value as Move['kind'] })} aria-label="Move">
-            <option value="walk">walks to</option>
-            <option value="enter">enters to</option>
-            <option value="exit">exits</option>
-            <option value="appear">appears at</option>
-            <option value="vanish">vanishes</option>
-          </select>
-          {(m.kind === 'walk' || m.kind === 'enter' || m.kind === 'appear') && (
-            <input type="number" min={140} max={1460} step={20} value={m.x ?? 800} onChange={(e) => set(i, { x: Number(e.target.value) })} aria-label="Target x" />
-          )}
-          {(m.kind === 'enter' || m.kind === 'exit') && (
-            <select value={m.side ?? ''} onChange={(e) => set(i, { side: (e.target.value || undefined) as Move['side'] })} aria-label="Side">
-              <option value="">nearest side</option>
-              <option value="left">from/to left</option>
-              <option value="right">from/to right</option>
+      {moves.map((m, i) => {
+        const vehicle = vehicles.some((v) => v.id === m.who);
+        return (
+          <div key={i} className="move-row">
+            <select
+              value={m.who}
+              onChange={(e) => {
+                const toVehicle = vehicles.some((v) => v.id === e.target.value);
+                set(i, { who: e.target.value, ...(toVehicle && !DRIVES.includes(m.kind) ? { kind: 'walk', on: undefined } : {}), ...(toVehicle ? { run: undefined } : {}) });
+              }}
+              aria-label="Who moves"
+            >
+              {cast.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+              {vehicles.length > 0 && (
+                <optgroup label="Vehicles">
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {getVehicleDef(v.type).name} ({v.id})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
-          )}
-          <button className="icon-btn tiny" onClick={() => onChange(moves.filter((_, j) => j !== i))} aria-label="Remove move">
-            ✕
-          </button>
-        </div>
-      ))}
+            <select
+              value={m.kind}
+              onChange={(e) => {
+                const kind = e.target.value as Move['kind'];
+                set(i, { kind, on: kind === 'getIn' ? vehicles[0]?.id : kind === 'sit' ? m.on : undefined });
+              }}
+              aria-label="Move"
+            >
+              <option value="walk">{vehicle ? 'drives to' : 'walks to'}</option>
+              <option value="enter">{vehicle ? 'drives in to' : 'enters to'}</option>
+              <option value="exit">{vehicle ? 'drives off' : 'exits'}</option>
+              <option value="appear">appears at</option>
+              <option value="vanish">vanishes</option>
+              {!vehicle && <option value="sit">sits on</option>}
+              {!vehicle && <option value="stand">stands up</option>}
+              {!vehicle && vehicles.length > 0 && <option value="getIn">gets in</option>}
+              {!vehicle && vehicles.length > 0 && <option value="getOut">gets out</option>}
+            </select>
+            {(m.kind === 'walk' || m.kind === 'enter' || m.kind === 'appear') && (
+              <input type="number" min={vehicle ? 0 : 140} max={vehicle ? 1600 : 1460} step={20} value={m.x ?? 800} onChange={(e) => set(i, { x: Number(e.target.value) })} aria-label="Target x" />
+            )}
+            {(m.kind === 'enter' || m.kind === 'exit') && (
+              <select value={m.side ?? ''} onChange={(e) => set(i, { side: (e.target.value || undefined) as Move['side'] })} aria-label="Side">
+                <option value="">{vehicle ? 'the way it faces' : 'nearest side'}</option>
+                <option value="left">from/to left</option>
+                <option value="right">from/to right</option>
+              </select>
+            )}
+            {m.kind === 'sit' && (
+              <select value={m.on ?? ''} onChange={(e) => set(i, { on: e.target.value || undefined })} aria-label="Seat">
+                <option value="">{seats.length ? 'nearest seat' : 'the floor'}</option>
+                {seats.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.id}
+                  </option>
+                ))}
+                {seats.length > 0 && <option value="floor">the floor</option>}
+              </select>
+            )}
+            {m.kind === 'getIn' && (
+              <select value={m.on ?? ''} onChange={(e) => set(i, { on: e.target.value })} aria-label="Vehicle">
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {getVehicleDef(v.type).name} ({v.id})
+                  </option>
+                ))}
+              </select>
+            )}
+            {!vehicle && (m.kind === 'walk' || m.kind === 'enter' || m.kind === 'exit' || m.kind === 'sit' || m.kind === 'getIn') && (
+              <label className="check" title="Run instead of walk">
+                <input type="checkbox" checked={!!m.run} onChange={(e) => set(i, { run: e.target.checked || undefined })} /> run
+              </label>
+            )}
+            <button className="icon-btn tiny" onClick={() => onChange(moves.filter((_, j) => j !== i))} aria-label="Remove move">
+              ✕
+            </button>
+          </div>
+        );
+      })}
       <button className="btn tiny" onClick={() => onChange([...moves, { who: cast[0]?.id ?? '', kind: 'walk', x: 800 }])} disabled={!cast.length}>
         + move
       </button>
@@ -185,7 +261,16 @@ function BeatCard(props: {
       <details className="more">
         <summary>
           More
-          {[beat.action, beat.sfx, beat.effect, beat.caption, beat.moves?.length ? `${beat.moves.length} move${beat.moves.length > 1 ? 's' : ''}` : '', beat.pauseAfter ? `${beat.pauseAfter}s pause` : '']
+          {[
+            beat.action,
+            beat.sfx,
+            beat.effect,
+            beat.caption,
+            beat.moves?.length ? `${beat.moves.length} move${beat.moves.length > 1 ? 's' : ''}` : '',
+            beat.hold ? `holds ${HELD.find((h) => h.id === beat.hold)?.name.toLowerCase() ?? beat.hold}` : '',
+            beat.give ? `hands to ${ep.cast.find((c) => c.id === beat.give)?.name ?? beat.give}` : '',
+            beat.pauseAfter ? `${beat.pauseAfter}s pause` : '',
+          ]
             .filter(Boolean)
             .map((x) => (
               <span key={String(x)} className="tag">
@@ -235,6 +320,22 @@ function BeatCard(props: {
             Caption
             <input value={beat.caption ?? ''} placeholder="On-screen text, e.g. Three hours later…" onChange={(e) => set({ caption: e.target.value }, `cap-${beat.id}`)} />
           </label>
+          <label>
+            Holds
+            <select value={beat.hold ?? ''} onChange={(e) => set({ hold: e.target.value || undefined })} title="What they hold from this beat on">
+              <option value="">—</option>
+              <option value="none">nothing (puts it away)</option>
+              {HELD.filter((h) => h.id !== 'none').map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Hands it to
+            <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.give} onChange={(v) => set({ give: v })} allowNone />
+          </label>
           {isLine && (
             <label className="span2">
               Looks at
@@ -243,7 +344,7 @@ function BeatCard(props: {
           )}
           <div className="span2">
             <span className="lbl">Movement</span>
-            <MovesEditor moves={beat.moves ?? []} cast={ep.cast} onChange={(m) => set({ moves: m })} />
+            <MovesEditor moves={beat.moves ?? []} cast={ep.cast} scene={scene} onChange={(m) => set({ moves: m })} />
           </div>
         </div>
       </details>

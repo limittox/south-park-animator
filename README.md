@@ -24,6 +24,10 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 **Animation**
 - One pure timeline (`src/episode/timeline.ts`) turns the episode into frames. The player and the exporter both sample it, so what you see is what you export.
 - Stop-motion hop walks, entrances and exits, blinks, a talking bob, 12 moods, 13 arm gestures (wave, point, facepalm, flail…), jumps, spins, trembles and faints.
+- Running: faster, quicker hops, a forward lean and pumping arms.
+- Sitting on couches, chairs, benches, beds, logs and the floor, or behind tables and desks (which are drawn again over the sitters). Grown-ups sink into the seat with their knees toward the camera; little kids are lifted onto it, legs dangling. Several people share a seat side by side.
+- Props: 35 things to hold (phones, cash, gifts, love letters, sodas, snowballs, pickaxes, beers, swabs, microphones, butterfly nets…), picked up, put away or handed from one character to another mid-line.
+- Vehicles: a car, a police car with flashing lights and the yellow school bus drive in and off, juddering on spinning wheels, with passengers showing through the windows. People get in and out; the bus can pull up in front of everyone.
 - Listeners turn toward whoever is talking. Talkers face the person they address.
 - Hard camera cuts between wide, medium and close-up shots framed from where people stand, plus slow push-ins, screen shake and flashes.
 - A title card, an original synthesized guitar sting for scene changes, synthesized sound effects (pop, boing, crash, thud, fart…), weather and captions.
@@ -35,7 +39,8 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 **Editing**
 - Pause and drag characters on the stage. If a move brought them there, the move's target changes; otherwise their starting spot does. Click a character to set their face from that beat on, or flip them.
 - In the Set tab, drag kit pieces around and change colours, text, size and the wall and floor styles.
-- In the Beats tab, edit every line, speaker, delivery, face, gesture, camera shot, action, sound effect, caption, pause and movement.
+- In the Beats tab, edit every line, speaker, delivery, face, gesture, camera shot, action, sound effect, caption, pause, prop and movement (walk or run, sit and stand, get in and out, drive).
+- In the Set tab, add cars, police cars and buses to any scene.
 - In the Cast tab: choose the voice, pitch, speed and acting note, and test the voice. Redesign a character by describing the change, randomise them, swap in a crew look, or open them in the Character Creator and paste the share link back.
 - In the Chat tab, write feedback ("make the teacher angrier and cut to his face", "move this scene to a hospital at night") for the current scene or the whole episode. Every change can be undone.
 - Undo and redo (Ctrl+Z / Ctrl+Y); episodes autosave to IndexedDB.

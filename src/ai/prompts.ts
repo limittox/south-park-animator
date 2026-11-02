@@ -2,6 +2,8 @@ import { CATEGORIES } from '../data/catalog';
 import { CLOTH_COLORS, HAIR_COLORS, SKIN_TONES } from '../data/palette';
 import { SCENES } from '../scenes/backgrounds';
 import { kitCatalogForPrompt } from '../sets/kit';
+import { vehicleCatalogForPrompt } from '../sets/vehicles';
+import { HELD } from '../character/parts/held';
 import { ACTION_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST, WEATHER_LIST, type VocabEntry } from '../episode/catalog';
 import type { CategoryId } from '../types';
 
@@ -26,7 +28,17 @@ const PRESET_NOTES: Record<string, string> = {
 };
 
 export function presetReference(): string {
-  return SCENES.map((s) => `  ${s.id} (${s.name}): ${PRESET_NOTES[s.id] ?? s.quip}`).join('\n');
+  return SCENES.map((s) => {
+    const seats = s.seats?.length ? ` Seats: ${s.seats.map((x) => `"${x.id}" (x ${x.x})`).join(', ')}.` : '';
+    return `  ${s.id} (${s.name}): ${PRESET_NOTES[s.id] ?? s.quip}${seats}`;
+  }).join('\n');
+}
+
+/** Props a character can hold or hand over. */
+export function propReference(): string {
+  return HELD.filter((h) => h.id !== 'none')
+    .map((h) => `${h.id} (${h.name})`)
+    .join(', ');
 }
 
 const LOOK_CATS: [string, CategoryId][] = [
@@ -150,7 +162,8 @@ Scene = {
   "title": "short name", "description": "what happens",
   "set": SetSpec,
   "weather": one of ${WEATHER_LIST.map((w) => w.id).join(', ')},
-  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false } ],
+  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "in": "car", "hold": "phone" } ],  // sit / in / hold only when needed
+  "vehicles": [ { "id": "car", "type": "car|police|bus", "x": 800, "color": "#hex", "offstage": true, "lane": "back|front" } ],  // only if a vehicle appears
   "beats": [ Beat ],
   "hold": seconds of establishing wide shot before the first beat (about 1.2; 0.6 for the first scene),
   "sting": true to play the short guitar sting over the hold (scene changes)
@@ -164,7 +177,9 @@ Beat = {
   "reactions": { "other name": mood },  // faces of listeners, from this beat on
   "gesture": arm pose of "who" during the beat,
   "action": one-shot body action of "who",
-  "moves": [ { "who": "name", "kind": "walk|enter|exit|appear|vanish", "x": 800, "side": "left|right" } ],
+  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|stand|getIn|getOut", "x": 800, "side": "left|right", "run": true, "on": "seat or vehicle" } ],
+  "hold": "prop id",  // what "who" holds from this beat on ("none" puts it away)
+  "give": "name",  // "who" hands their prop to this person during the beat
   "lookAt": "name the speaker looks at (default: nearest person)",
   "shot": { "type": "wide|medium|close", "on": ["names"], "push": false },  // camera cut at the start of the beat; omit to keep the current shot
   "sfx": sound effect, "effect": screen effect,
@@ -186,6 +201,15 @@ sfx:
 ${list(SFX_LIST)}
 effects:
 ${list(EFFECT_LIST)}
+props (for "hold", "give" and blocking "hold"): ${propReference()}
+vehicles:
+${vehicleCatalogForPrompt()}
+
+STAGE BUSINESS
+- Walk and run: a move with "run": true runs (walk, enter, exit). Use it for chases, panics and excited arrivals.
+- Sitting: a "sit" move walks the character to a seat and sits them down; "on" is a seat id, a seat type ("couch", "bench", "chair", "table", "desk", "log") or "floor". A "stand" move gets them up; walking anywhere also gets them up. Blocking "sit" starts them seated. Seats are the "seat" pieces of a kit set (sitters face the camera; at tables and desks they sit behind it) or the seats listed for a preset. Several people share a couch or table side by side.
+- Props: "hold" puts a prop in "who"'s hand (pick something up, pull out a phone); "give" hands it to someone, who should be standing near them. Blocking "hold" sets the prop they start the scene with.
+- Vehicles: list them in the scene's "vehicles". They drive with the same moves, using the vehicle id as "who": "enter" drives in and parks at x (vehicles face right and come from the left; give the vehicle "flip": true, or the move a "side", to come from the right), "walk" drives to x, "exit" drives off with everyone inside. Blocking "in" starts someone inside (the first one in is the driver); "getIn" walks someone to the door and in ("on": vehicle id), "getOut" lets them out next to it. A vehicle in "lane": "front" passes in front of everyone, like the school bus pulling up at the bus stop and hiding the kids; "back" (default) parks behind the front row. A car is about 780 wide, the bus 1320.
 
 SETS
 SetSpec is either a preset: { "kind": "preset", "preset": "<id>" } (townsign also takes "townName")
@@ -205,7 +229,8 @@ DIRECTING RULES
 6. Gestures on about a third of the lines, where they fit. Pointing and explaining use the arm on the side of whoever they look at.
 7. Camera: wide by default. Cut to a close-up for punchlines, outbursts and reaction shots, a medium shot for intimate two-person moments, then cut back to wide. Don't cut on every line.
 8. Comic timing: pauseAfter 0.6 to 1.2 before deadpan answers and after shocking lines; a silent reaction beat (duration 1 to 1.5, with reactions) is often funnier than a line.
-9. Outdoor town scenes usually have "weather": "snow" unless the script says otherwise.`;
+9. Outdoor town scenes usually have "weather": "snow" unless the script says otherwise.
+10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who run run; anything someone picks up, eats, reads or hands over becomes a "hold" or "give"; arrivals and departures by car or bus use a vehicle.`;
 }
 
 export function editSystem(): string {

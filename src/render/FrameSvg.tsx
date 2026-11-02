@@ -1,9 +1,11 @@
-import { memo, type ReactNode, type Ref, type SVGProps } from 'react';
+import { memo, useId, type ReactNode, type Ref, type SVGProps } from 'react';
 import type { SetSpec, Weather } from '../episode/types';
-import { FRAME_H, FRAME_W, type ActorFrame, type Frame, type SceneFrame } from '../episode/timeline';
+import { FRAME_H, FRAME_W, type ActorFrame, type Frame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
 import { CharacterGroup } from '../character/Character';
 import { getScene } from '../scenes/backgrounds';
 import { renderKitSet } from '../sets/kit';
+import { getVehicleDef, wheel } from '../sets/vehicles';
+import { renderSeatCover } from '../episode/seats';
 import { seeded } from '../character/parts/common';
 
 export const DISPLAY = "'Luckiest Guy', 'Arial Black', Impact, sans-serif";
@@ -30,10 +32,38 @@ export function actorTransform(a: ActorFrame): string {
 export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
   return (
     <g transform={actorTransform(a)}>
-      <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} />
+      <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} hipY={a.hipY} />
     </g>
   );
 });
+
+/** The table or desk someone sits behind, drawn again over them. */
+const SeatCover = memo(function SeatCover({ set, seat }: { set: SetSpec; seat: string }) {
+  return <>{renderSeatCover(set, seat)}</>;
+});
+
+/** A car or bus: glass, then the passengers clipped to the cabin, then the body with its windows cut out. */
+function VehicleShape({ v, passengers }: { v: VehicleFrame; passengers: ReactNode }) {
+  const def = getVehicleDef(v.type);
+  const t = `translate(${v.x.toFixed(1)} ${(v.y + v.bounce).toFixed(1)}) scale(${v.flip ? -1 : 1} 1)`;
+  // Unique per drawing: a scene thumbnail on the same page draws the same vehicle somewhere else.
+  const clip = `veh${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  return (
+    <g className="sp-scene">
+      <clipPath id={clip}>
+        <path d={def.cabin} transform={t} />
+      </clipPath>
+      <g transform={t}>
+        <path d={def.cabin} fill={def.glass} />
+      </g>
+      <g clipPath={`url(#${clip})`}>{passengers}</g>
+      <g transform={t}>
+        {def.body(v.color, { flip: v.flip, lights: v.lights })}
+        {def.wheels.map((x) => wheel(x, def.wheelR, v.spin))}
+      </g>
+    </g>
+  );
+}
 
 /* ---------------------------------------------------------------- weather */
 
@@ -177,13 +207,32 @@ function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svg
   const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : frame.camera;
   const set = frame.scene.scene.set;
   const k = cam.w / FRAME_W;
+  const actor = (a: ActorFrame) => {
+    const node = <Actor key={a.castId} a={a} />;
+    return renderActor ? <g key={a.castId}>{renderActor(a, node)}</g> : node;
+  };
+  // People and vehicles back to front; passengers are drawn inside their vehicle.
+  const items: { y: number; node: ReactNode }[] = [
+    ...frame.actors
+      .filter((a) => !a.riding)
+      .map((a) => ({
+        y: a.y,
+        node: a.cover ? (
+          <g key={a.castId}>
+            {actor(a)}
+            <SeatCover set={set} seat={a.cover} />
+          </g>
+        ) : (
+          actor(a)
+        ),
+      })),
+    ...frame.vehicles.map((v) => ({ y: v.y, node: <VehicleShape key={`v-${v.id}`} v={v} passengers={frame.actors.filter((a) => a.riding === v.id).map(actor)} /> })),
+  ];
+  items.sort((a, b) => a.y - b.y);
   return (
     <svg ref={svgRef} viewBox={`${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`} preserveAspectRatio="xMidYMid slice" {...rest}>
       <SetLayer set={set} layer="back" />
-      {frame.actors.map((a) => {
-        const node = <Actor key={a.castId} a={a} />;
-        return renderActor ? <g key={a.castId}>{renderActor(a, node)}</g> : node;
-      })}
+      {items.map((i) => i.node)}
       <SetLayer set={set} layer="front" />
       <WeatherLayer weather={frame.weather} t={frame.scene.start + frame.t} />
       {sceneOverlay}

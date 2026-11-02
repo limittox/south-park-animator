@@ -1,5 +1,5 @@
 import type { MoodId } from './types';
-import { normalizeEpisode, looksAdult } from './normalize';
+import { normalizeEpisode, looksAdult, propId } from './normalize';
 import type { Episode } from './types';
 
 /*
@@ -16,17 +16,28 @@ const TITLE = /^\s*(?:TITLE|EPISODE)\s*:\s*(.+)$/i;
 const COLON_LINE = /^\s*([A-Za-z][A-Za-z0-9 .'’-]{0,40}?)\s*(\(([^)]*)\))?\s*:\s*(.+)$/;
 const NAME_ONLY = /^\s*([A-Z][A-Z0-9 .'’-]{1,40}?)\s*(\(([^)]*)\))?\s*$/;
 
+interface RawMove {
+  who: string;
+  kind: string;
+  side?: string;
+  x?: number;
+  run?: boolean;
+  on?: string;
+}
+
 interface RawBeat {
   who?: string;
   text?: string;
   delivery?: string;
   mood?: MoodId;
   action?: string;
-  moves?: { who: string; kind: string; side?: string; x?: number }[];
+  moves?: RawMove[];
   sfx?: string;
   effect?: string;
   shot?: { type: string; on?: string[] };
   gesture?: string;
+  hold?: string;
+  give?: string;
 }
 
 interface RawScene {
@@ -34,11 +45,33 @@ interface RawScene {
   description: string;
   set: { kind: 'preset'; preset: string } | { kind: 'kit'; place: 'interior' | 'exterior'; time: string; pieces: unknown[] };
   weather: string;
-  blocking: { who: string; x: number; depth: number; mood: MoodId; offstage?: boolean }[];
+  blocking: { who: string; x: number; depth: number; mood: MoodId; offstage?: boolean; sit?: string; in?: string }[];
   beats: RawBeat[];
+  vehicles: { id: string; type: string; x: number; offstage: boolean; lane?: 'front' }[];
+  /** Who starts the scene inside which vehicle. */
+  riders: Map<string, string>;
   people: string[];
   offscreen: Set<string>;
 }
+
+/** Stand for "the kids" / "everyone" until we know who's in the scene. */
+const KIDS = '*kids';
+const EVERYONE = '*all';
+const KID_WORDS = /\b(the kids|the boys|the girls|the class|the children|the students)\b/i;
+const ALL_WORDS = /\b(everyone|everybody|they all|all of them|they)\b/i;
+
+const VEHICLE_WORDS: [RegExp, string][] = [
+  [/\bschool ?bus\b|\bbus\b/i, 'bus'],
+  [/\b(police car|cop car|squad car|cruiser|patrol car)\b/i, 'police'],
+  [/\b(car|van|truck|taxi|minivan|sedan|station wagon)\b/i, 'car'],
+];
+const SEAT_WORDS = /\b(?:on|at|in|onto|around|by)\s+(?:the|a|an|his|her|their|its)?\s*(couch|sofa|bench|chair|armchair|desks?|tables?|floor|ground|logs?|campfire|bed|toilet|rock|stool)\b/i;
+/** The kit piece to add for "sits on the <word>" when a built set has nothing to sit on. */
+const SEAT_PIECES: Record<string, string> = { couch: 'couch', chair: 'chair', armchair: 'armchair', bench: 'bench', table: 'table', desk: 'desk', bed: 'bed', toilet: 'toilet', rock: 'rock', log: 'bench', stool: 'chair', seat: 'chair' };
+
+/** "hands the remote to Dad", "gives Priya the money". */
+const GIVE_PROP = /\b(?:hands?|gives?|passes?|offers?|tosses)\s+(?:[a-z][\w.]*\s+)?(?:a|an|the|his|her|their|some)\s+([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
+const PROP_VERB = /\b(?:picks? up|grabs?|takes? out|pulls? out|holds? up|holds|is holding|holding|clutches|clutching|carries|carrying|eats?|drinks?|sips?|reads?|waves? around|opens?)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
 
 const MOOD_WORDS: [RegExp, MoodId][] = [
   [/\b(scream|screaming|yell|yelling|shout|shouting|furious|rage|enraged)\b/i, 'rage'],
@@ -93,19 +126,91 @@ const cleanName = (n: string) =>
 
 function titleCase(name: string): string {
   if (name !== name.toUpperCase()) return name;
-  return name.toLowerCase().replace(/(^|[\s.'-])([a-z])/g, (_m, p: string, ch: string) => p + ch.toUpperCase());
+  return name
+    .toLowerCase()
+    .replace(/(^|[\s.'-])([a-z])/g, (_m, p: string, ch: string) => p + ch.toUpperCase())
+    .replace(/\bMc([a-z])/g, (_m, ch: string) => `Mc${ch.toUpperCase()}`);
+}
+
+/** A prop named in a stage direction ("a phone", "the money"). */
+function propIn(text: string): string | undefined {
+  const m = PROP_VERB.exec(text) ?? GIVE_PROP.exec(text);
+  if (m) {
+    const words = m[1].split(/\s+/);
+    // "the love letter" and "a phone call" both work: try two words, then each word.
+    for (const w of [m[1], ...words]) {
+      const id = propId(w);
+      if (id && id !== 'none') return id;
+    }
+  }
+  return undefined;
+}
+
+/** Vehicles: arriving, getting in and out, driving off. Returns null when the direction isn't about one. */
+function vehicleBeat(text: string, subjects: string[], group: string | null, scene: RawScene): RawBeat | null {
+  const type = VEHICLE_WORDS.find(([re]) => re.test(text))?.[1];
+  const riding = (name: string) => [...scene.beats].reverse().find((b) => b.moves?.some((m) => m.who === name && (m.kind === 'getIn' || m.kind === 'getOut')))?.moves?.find((m) => m.who === name)?.kind === 'getIn' || scene.riders.has(name);
+  const vehicleOf = (name: string) => scene.riders.get(name) ?? scene.vehicles[scene.vehicles.length - 1]?.id;
+  const find = () => (type ? [...scene.vehicles].reverse().find((v) => v.type === type) : scene.vehicles[scene.vehicles.length - 1]);
+  if (type && /\b(drives? (up|in|over|by)|pulls? (up|in)|arrives?|comes?|shows? up|rolls? up)\b/i.test(text)) {
+    let v = find();
+    if (!v || !/\bagain\b/i.test(text)) {
+      v = { id: `${type}-${scene.vehicles.length + 1}`, type, x: 800, offstage: true, ...(type === 'bus' ? { lane: 'front' as const } : {}) };
+      scene.vehicles.push(v);
+    }
+    for (const s of subjects) scene.riders.set(s, v.id);
+    return { moves: [{ who: v.id, kind: 'enter', x: 800 }], ...(subjects[0] ? { who: subjects[0] } : {}) };
+  }
+  const leaving = /\b(drives? (off|away)|pulls? away|speeds? (off|away)|zooms? off|takes? off|leaves)\b/i.test(text);
+  if (leaving && (type || subjects.some(riding) || (!subjects.length && scene.vehicles.length))) {
+    const v = (subjects[0] && scene.riders.get(subjects[0])) || find()?.id || vehicleOf(subjects[0] ?? '');
+    return v ? { moves: [{ who: v, kind: 'exit' }] } : null;
+  }
+  if (/\b(gets? (in|into|on|onto|aboard)|climbs? (in|into|on|aboard)|boards?|hops? (in|on)|jumps? in)\b/i.test(text) && (type || scene.vehicles.length)) {
+    const v = find()?.id;
+    return v ? { moves: (subjects.length ? subjects : [group ?? EVERYONE]).map((s) => ({ who: s, kind: 'getIn', on: v })) } : null;
+  }
+  if (/\b(gets? (out|off)|climbs? (out|off|down)|hops? (out|off)|steps? (out|off))\b/i.test(text) && (type || scene.vehicles.length)) {
+    return { moves: (subjects.length ? subjects : [group ?? EVERYONE]).map((s) => ({ who: s, kind: 'getOut' })) };
+  }
+  return null;
 }
 
 /** Turn plain-English stage directions into moves and actions where we can recognise them. */
 function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | null {
-  const subjects = known.filter((n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
+  // Subjects in the order the direction names them: "Dex hands the money to Priya". Names count as written
+  // ("Stan", "STAN"): not the word "phone" for a character called Phone, and not "Stan's living room".
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const at = (n: string) => text.search(new RegExp(`\\b(?:${esc(n)}|${esc(n.toUpperCase())})\\b(?!['’]s\\b)`));
+  const subjects = known.filter((n) => at(n) >= 0).sort((a, b) => at(a) - at(b));
+  const group = subjects.length ? null : KID_WORDS.test(text) ? KIDS : ALL_WORDS.test(text) ? EVERYONE : null;
+  const vehicle = vehicleBeat(text, subjects, group, scene);
+  if (vehicle) return vehicle;
   const beat: RawBeat = {};
   const who = subjects[0];
-  if (/\b(enters?|walks? in|comes? in|arrives?|runs? in|shows? up|steps? in)\b/i.test(text)) {
-    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'enter' }));
-  } else if (/\b(leaves?|exits?|walks? (off|out|away)|storms? off|runs? (off|away|out)|goes? home)\b/i.test(text)) {
-    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'exit' }));
+  const run = /\b(runs?|running|dash(es)?|sprints?|races?|rushes|bolts?)\b/i.test(text);
+  if (/\b(enters?|walks? in|comes? in|arrives?|runs? in|shows? up|steps? in|rushes in|bursts? in)\b/i.test(text)) {
+    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'enter', ...(run ? { run } : {}) }));
+  } else if (/\b(leaves?|exits?|walks? (off|out|away)|storms? off|runs? (off|away|out)|goes? home|bolts?|flees)\b/i.test(text)) {
+    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'exit', ...(run ? { run } : {}) }));
+  } else if (/\b(sits?|sitting|sat|takes? a seat|plops? down|flops? down)\b/i.test(text)) {
+    const seat = SEAT_WORDS.exec(text)?.[1]?.toLowerCase();
+    const on = seat === 'sofa' ? 'couch' : seat === 'campfire' ? 'log' : seat?.replace(/s$/, '');
+    beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'sit', ...(on ? { on } : {}) }));
+  } else if (/\b(stands? up|gets? up|jumps? up|rises|leaps? up)\b/i.test(text)) {
+    beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'stand' }));
+  } else if (/\b(vanish(es)?|disappears?|poofs?)\b/i.test(text)) {
+    beat.moves = subjects.map((s) => ({ who: s, kind: 'vanish' }));
+  } else if (/\b(appears?|pops? up|materiali[sz]es?)\b/i.test(text)) {
+    beat.moves = subjects.map((s) => ({ who: s, kind: 'appear' }));
   }
+  const prop = propIn(text);
+  const giving = /\b(hands?|gives?|passes?|offers?|tosses)\b/i.test(text);
+  if (giving && subjects.length >= 2) {
+    beat.give = subjects[1];
+    if (prop) beat.hold = prop;
+  } else if (prop) beat.hold = prop;
+  else if (/\b(drops?|puts? (it |them )?(down|away)|throws? (it )?away|pockets?)\b/i.test(text)) beat.hold = 'none';
   if (/\b(faints?|passes out|collapses?|falls? (over|down)|dies)\b/i.test(text)) beat.action = 'faint';
   else if (/\b(jumps?|leaps?)\b/i.test(text)) beat.action = 'jump';
   else if (/\b(shakes?|trembles?|shivers?)\b/i.test(text)) beat.action = 'shake';
@@ -115,13 +220,19 @@ function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | n
     beat.effect = 'flash';
   } else if (/\bfarts?\b/i.test(text)) beat.sfx = 'fart';
   else if (/\b(slaps?)\b/i.test(text)) beat.sfx = 'slap';
-  else if (/\b(crash(es)?|smash(es)?)\b/i.test(text)) beat.sfx = 'crash';
-  else if (/\bdoorbell\b/i.test(text)) beat.sfx = 'doorbell';
+  else if (/\b(crash(es)?|smash(es)?)\b/i.test(text)) {
+    beat.sfx = 'crash';
+    beat.effect = 'shake';
+  } else if (/\bdoorbell\b/i.test(text)) beat.sfx = 'doorbell';
+  else if (/\b(crowd cheers|cheers|applauds|applause)\b/i.test(text)) beat.sfx = 'cheer';
+  else if (/\bpops?\b/i.test(text)) beat.sfx = 'pop';
+  if (/\bflash(es)?\b/i.test(text) && !beat.effect) beat.effect = 'flash';
   if (/\bwaves?\b/i.test(text)) beat.gesture = 'wave';
   if (/\bpoints?\b/i.test(text)) beat.gesture = 'point';
   if (/\bsnow(ing|s)?\b/i.test(text) && /\b(start|begin|it'?s)\b/i.test(text)) scene.weather = 'snow';
   if (!beat.moves?.length) delete beat.moves;
-  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect) return null;
+  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give) return null;
+  if ((beat.hold || beat.give) && !who) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect ? { ...beat, hold: undefined, give: undefined } : null;
   if (who) beat.who = who;
   return beat;
 }
@@ -139,6 +250,8 @@ export function parseScript(script: string): Episode {
       weather: /\bsnow/i.test(heading) ? 'snow' : 'none',
       blocking: [],
       beats: [],
+      vehicles: [],
+      riders: new Map(),
       people: [],
       offscreen: new Set(),
     };
@@ -147,6 +260,17 @@ export function parseScript(script: string): Episode {
   };
   let scene: RawScene | null = null;
   let pendingSpeaker: { name: string; delivery?: string } | null = null;
+
+  // Directions often name people before they speak ("Dad sits on the couch."), so learn every speaker first.
+  const speakers: string[] = [];
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    const c = COLON_LINE.exec(line);
+    const n = !c && lines[i + 1]?.trim() ? NAME_ONLY.exec(line) : null;
+    const name = c && !/^(note|fade|cut|title)$/i.test(c[1]) ? c[1] : n && n[1].trim().split(/\s+/).length <= 4 && !/^(FADE|CUT|THE END|END|INT|EXT)\b/.test(n[1]) ? n[1] : '';
+    const clean = name && !HEADING.test(line) && !TITLE.test(line) ? titleCase(cleanName(name)) : '';
+    if (clean && !speakers.includes(clean)) speakers.push(clean);
+  });
 
   const addLine = (rawName: string, delivery: string | undefined, text: string) => {
     if (!scene) scene = newScene('', false);
@@ -183,7 +307,8 @@ export function parseScript(script: string): Episode {
     }
     const h = HEADING.exec(line);
     if (h && (h[1] || line.length < 80)) {
-      const interior = /^INT/i.test(h[1] ?? '') || /\b(inside|interior|room|office|store|shop|house|kitchen|hall|school)\b/i.test(h[2] ?? '');
+      // EXT means outside, even outside a house or a town hall.
+      const interior = /^INT/i.test(h[1] ?? '') || (!/^EXT/i.test(h[1] ?? '') && /\b(inside|interior|room|office|store|shop|house|kitchen|hall|school)\b/i.test(h[2] ?? ''));
       scene = newScene((h[2] || line).trim(), interior);
       pendingSpeaker = null;
       continue;
@@ -207,34 +332,80 @@ export function parseScript(script: string): Episode {
       pendingSpeaker = { name: n[1] + (n[2] ?? ''), delivery: n[3] };
       continue;
     }
-    // Stage direction.
+    // Stage direction, a sentence at a time: "Dad sits on the couch. The kids sit on the floor."
     if (!scene) scene = newScene('', false);
     const text = line.replace(/^[[(]|[\])]$/g, '');
     if (!scene.description) scene.description = text;
-    const known = [...new Set([...allNames, ...scene.people])];
-    const b = actionBeat(text, known, scene);
-    if (b) scene.beats.push(b);
+    const known = [...new Set([...speakers, ...allNames, ...scene.people])];
+    for (const sentence of text.split(/(?<=[.!?])(?<!\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|Mt|Lt|Sgt|Prof)\.)\s+(?=[A-Z])|;\s+/)) {
+      const b = actionBeat(sentence, known, scene);
+      if (b) scene.beats.push(b);
+    }
   }
 
   // Block everyone who talks or moves: spread across the stage, entrances start off stage.
   for (const s of scenes) {
-    const people = [...new Set([...s.people, ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? [])])];
-    const onstage = people.filter((p) => !s.offscreen.has(p));
+    // "The kids" and "everyone" are whoever turns out to be in the scene.
+    const present = [...new Set([...s.people, ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? [])])].filter((p) => !p.startsWith('*') && !s.offscreen.has(p));
+    const kids = present.filter((p) => !looksAdult(p));
+    for (const b of s.beats) {
+      if (!b.moves?.some((m) => m.who.startsWith('*'))) continue;
+      b.moves = b.moves.flatMap((m) => (m.who.startsWith('*') ? (m.who === KIDS && kids.length ? kids : present).map((p) => ({ ...m, who: p })) : [m]));
+    }
+    // Sitting down before anyone has said a word is how the scene starts.
+    const firstLine = s.beats.findIndex((b) => b.text);
+    const seated = new Map<string, string>();
+    s.beats.forEach((b, i) => {
+      if (firstLine >= 0 && i > firstLine) return;
+      b.moves = b.moves?.filter((m) => {
+        const earlier = s.beats.slice(0, i).some((pb) => pb.moves?.some((pm) => pm.who === m.who));
+        if (m.kind !== 'sit' || earlier) return true;
+        seated.set(m.who, m.on ?? 'seat');
+        return false;
+      });
+      if (b.moves && !b.moves.length) delete b.moves;
+    });
+    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give);
+    // A built set gets the furniture people sit on: "sit at a table" in a bar needs a table.
+    const set = s.set;
+    if (set.kind === 'kit') {
+      const asked = [...seated.values(), ...s.beats.flatMap((b) => b.moves ?? []).filter((m) => m.kind === 'sit').map((m) => m.on ?? 'seat')];
+      [...new Set(asked)]
+        .filter((k) => k !== 'floor' && k !== 'ground')
+        .forEach((k, i) => {
+          const type = set.place === 'exterior' && !['bench', 'rock', 'log'].includes(k) ? 'bench' : SEAT_PIECES[k] ?? 'chair';
+          if (!set.pieces.some((p) => (p as { type?: string }).type === type)) set.pieces.push({ type, x: [800, 460, 1140][i % 3] });
+        });
+    }
+    const people = [...new Set([...s.people, ...seated.keys(), ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? [])])].filter((p) => !s.vehicles.some((v) => v.id === p));
+    const onstage = people.filter((p) => !s.offscreen.has(p) && !s.riders.has(p));
+    // Spread out whoever's standing; people seated at the start head for the seat nearest their own spot.
+    const standing = onstage.filter((p) => !seated.has(p));
+    const spread = (i: number, n: number) => (n === 1 ? 800 : Math.round(330 + (i * (1270 - 330)) / (n - 1)));
     onstage.forEach((p, i) => {
-      const n = onstage.length;
-      const x = n === 1 ? 800 : Math.round(330 + (i * (1270 - 330)) / (n - 1));
+      const x = seated.has(p) ? spread(i, onstage.length) : spread(standing.indexOf(p), standing.length);
       const firstMove = s.beats.find((b) => b.moves?.some((m) => m.who === p))?.moves?.find((m) => m.who === p);
       const firstLine = s.beats.findIndex((b) => b.who === p && b.text);
       const firstMoveIdx = s.beats.findIndex((b) => b.moves?.some((m) => m.who === p));
-      const entersLater = firstMove?.kind === 'enter' && (firstLine === -1 || firstMoveIdx < firstLine);
-      if (firstMove?.kind === 'enter') firstMove.x = x;
-      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater ? { offstage: true } : {}) });
+      const arrives = firstMove?.kind === 'enter' || firstMove?.kind === 'appear';
+      const entersLater = arrives && (firstLine === -1 || firstMoveIdx < firstLine);
+      if (arrives) firstMove.x = x;
+      const sit = seated.get(p);
+      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater ? { offstage: true } : {}), ...(sit ? { sit } : {}) });
     });
+    for (const [p, v] of s.riders) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', in: v });
     for (const p of s.offscreen) if (!onstage.includes(p)) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', offstage: true });
     // A little camera grammar: big emotional lines get a close-up, then cut back wide.
     let close = false;
     for (const b of s.beats) {
-      if (!b.text) continue;
+      if (!b.text) {
+        // A car through the wall or a puff of smoke wants the whole stage in view.
+        if (close && (b.moves?.length || b.sfx || b.effect)) {
+          b.shot = { type: 'wide' };
+          close = false;
+        }
+        continue;
+      }
       if ((b.mood === 'rage' || b.mood === 'shock') && b.who && !s.offscreen.has(b.who)) {
         b.shot = { type: 'close', on: [b.who] };
         close = true;
@@ -248,7 +419,7 @@ export function parseScript(script: string): Episode {
   const raw = {
     title: title || (scenes[0]?.title ? `The ${scenes[0].title} Incident` : 'Untitled Episode'),
     cast: allNames.map((name) => ({ name, bio: looksAdult(name) ? 'a grown-up in town' : 'a kid in town' })),
-    scenes: scenes.map(({ people: _p, offscreen: _o, ...rest }) => rest),
+    scenes: scenes.map(({ people: _p, offscreen: _o, riders: _r, ...rest }) => rest),
   };
   return normalizeEpisode(raw, script);
 }

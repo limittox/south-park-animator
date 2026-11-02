@@ -63,7 +63,7 @@ export function scriptWritingPrompt({ crew = [], draft = '' }: PromptContext = {
 - Acting notes go in brackets right after the colon: BENNY: (whispering) Psst. Over here.
 - A voice from off screen: PRIYA (O.S.): Dex! Dinner!
 - Spell every name exactly the same way every time.
-- Stage directions go on their own line, in the present tense, one action per line, naming who does it. The app animates these words: enters, walks in, arrives, leaves, exits, storms off, faints, collapses, jumps, shakes, trembles, spins, waves, points. These make sounds: explodes, farts, slaps, crashes, doorbell rings. "It starts snowing." makes it snow.
+- Stage directions go on their own line, in the present tense, one action per sentence, naming who does it. The app animates these words: enters, walks in, arrives, leaves, exits, storms off, runs in, runs off, faints, collapses, jumps, shakes, trembles, spins, waves, points. People can sit (on the couch, at the table, at their desks, on a bench, on the floor) and stand up. They can pick up, eat, read or hold a prop (a phone, money, a gift, a letter, a soda, a snowball, a book, a TV remote…) and hand it to someone: "Gus hands the money to Tilly." They can drive up in a car or a police car, get in, get out and drive off, and the school bus can pull up. These make sounds: explodes, farts, slaps, crashes, doorbell rings. "It starts snowing." makes it snow.
 - Acting notes also set the character's face: angry, yelling, screaming, sad, crying, shocked, scared, nervous, excited, happy, sarcastic, smug, evil, scheming, deadpan, bored, sick, dreamy, in love, hysterical. A line in ALL CAPS with an exclamation mark is screamed.`,
 
     `WRITING TIPS

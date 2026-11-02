@@ -84,15 +84,20 @@ export interface Shot {
   push?: boolean;
 }
 
-export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish';
+export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'stand' | 'getIn' | 'getOut';
 
 export interface Move {
+  /** Cast id, or a vehicle id: vehicles drive with walk / enter / exit / appear / vanish. */
   who: string;
   kind: MoveKind;
-  /** Target x for walk / enter; ignored for exit / vanish. */
+  /** Target x for walk / enter / appear, the spot to sit near for sit; ignored otherwise. */
   x?: number;
   /** Side of the screen for enter / exit. */
   side?: 'left' | 'right';
+  /** Run instead of walk (walk / enter / exit / sit). */
+  run?: boolean;
+  /** sit: a seat id or type ("couch", "bench", "chair-2"), or "floor". getIn: the vehicle id. */
+  on?: string;
 }
 
 export type SfxId =
@@ -131,6 +136,10 @@ export interface Beat {
   action?: ActionId;
   /** Movements that start with this beat (can run while someone talks). */
   moves?: Move[];
+  /** Prop `who` holds from this beat on (a held item id; "none" puts it away). */
+  hold?: string;
+  /** Cast id `who` hands their prop to during this beat. */
+  give?: string;
   /** Cast id `who` looks at; defaults to the nearest other character. */
   lookAt?: string;
   /** Camera cut at the start of the beat. Leave out to keep the previous shot. */
@@ -157,6 +166,30 @@ export interface Blocking {
   offstage?: boolean;
   /** Mirror the whole character (held item swaps hands). */
   flip?: boolean;
+  /** Seated when the scene starts: a seat id or type, or "floor". */
+  sit?: string;
+  /** Riding in this vehicle when the scene starts. */
+  in?: string;
+  /** Prop in hand when the scene starts, instead of the one in their look. */
+  hold?: string;
+}
+
+export type VehicleType = 'car' | 'police' | 'bus';
+
+/** A car or bus. It drives with moves (who = its id) and people get in and out of it. */
+export interface Vehicle {
+  id: string;
+  type: VehicleType;
+  /** Body colour; each type has its own default. */
+  color?: string;
+  /** Centre x when the scene starts. */
+  x: number;
+  /** Off stage at the start (drives in later). */
+  offstage?: boolean;
+  /** Faces left. Vehicles turn to face the way they drive. */
+  flip?: boolean;
+  /** "back" parks behind the front row of characters; "front" drives along the very front, in front of everyone. */
+  lane?: 'back' | 'front';
 }
 
 export type Weather = 'none' | 'snow' | 'confetti' | 'hearts' | 'cheesy' | 'rain';
@@ -170,6 +203,7 @@ export interface Scene {
   weather: Weather;
   blocking: Blocking[];
   beats: Beat[];
+  vehicles?: Vehicle[];
   /** Seconds of establishing wide shot before the first beat. */
   hold: number;
   /** Play the scene-change guitar sting over the hold. */

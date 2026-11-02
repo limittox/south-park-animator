@@ -470,6 +470,200 @@ export const HELD: HeldDef[] = [
       );
     },
   },
+  {
+    id: 'cash',
+    name: 'Wad of Cash',
+    quip: 'Forty-three dollars. In ones. Earned honestly. Mostly.',
+    defaultColor: '#7fbf3f',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g transform={`rotate(-14 ${x} ${y})`}>
+          {[-16, 0, 16].map((a) => (
+            <g key={a} transform={`rotate(${a} ${x + 6} ${y + 4})`}>
+              <rect x={x - 12} y={y - 62} width={40} height={66} rx={3} {...f(c.color)} strokeWidth={2} />
+              <circle cx={x + 8} cy={y - 29} r={10} fill="none" stroke={shade(c.color, -0.35)} strokeWidth={2} />
+              <text x={x + 8} y={y - 22} textAnchor="middle" fontFamily="'Luckiest Guy', 'Arial Black', sans-serif" fontSize={18} fill={shade(c.color, -0.45)}>
+                $
+              </text>
+            </g>
+          ))}
+        </g>
+      );
+    },
+  },
+  {
+    id: 'gift',
+    name: 'Gift Box',
+    quip: 'It is socks. It is always socks.',
+    defaultColor: '#d33b2c',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <rect x={x - 12} y={y - 62} width={64} height={66} rx={3} {...f(c.color)} />
+          <rect x={x + 14} y={y - 62} width={12} height={66} fill="#f2c230" stroke={O} strokeWidth={1.5} />
+          <rect x={x - 12} y={y - 36} width={64} height={12} fill="#f2c230" stroke={O} strokeWidth={1.5} />
+          <path d={`M ${x + 20} ${y - 62} q -26 -26 -30 -4 q 4 10 30 4 q 26 -26 30 -4 q -4 10 -30 4 Z`} fill="#f2c230" {...ink} strokeWidth={2} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'letter',
+    name: 'Love Letter',
+    quip: 'Do you like me? Check yes or no. Has been carried around for six weeks.',
+    defaultColor: '#ffffff',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g transform={`rotate(-12 ${x} ${y})`}>
+          <rect x={x - 14} y={y - 52} width={76} height={50} rx={3} {...f(c.color)} />
+          <path d={`M ${x - 14} ${y - 52} L ${x + 24} ${y - 22} L ${x + 62} ${y - 52}`} fill="none" stroke={O} strokeWidth={2} />
+          <path d={`M ${x + 24} ${y - 18} C ${x + 10} ${y - 28} ${x + 16} ${y - 40} ${x + 24} ${y - 32} C ${x + 32} ${y - 40} ${x + 38} ${y - 28} ${x + 24} ${y - 18} Z`} fill="#e5322d" stroke={O} strokeWidth={1.5} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'remote',
+    name: 'TV Remote',
+    quip: 'Holder of the remote. Ruler of the living room. Do not challenge the remote.',
+    defaultColor: '#3d3d44',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g transform={`rotate(-24 ${x} ${y})`}>
+          <rect x={x - 4} y={y - 84} width={30} height={92} rx={8} {...f(c.color)} />
+          <circle cx={x + 11} cy={y - 70} r={5} fill="#d33b2c" />
+          {[0, 1, 2].map((r) =>
+            [0, 1].map((col) => <rect key={`${r},${col}`} x={x + 2 + col * 12} y={y - 54 + r * 14} width={7} height={7} rx={2} fill="#c9c9c9" />),
+          )}
+        </g>
+      );
+    },
+  },
+  {
+    id: 'soda',
+    name: 'Giant Soda',
+    quip: 'The 64-ounce Thirst Destroyer. Nobody has ever finished one. Nobody.',
+    defaultColor: '#d33b2c',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <path d={`M ${x - 18} ${y - 92} L ${x + 34} ${y - 92} L ${x + 26} ${y + 8} L ${x - 10} ${y + 8} Z`} {...f(c.color)} />
+          <path d={`M ${x - 14} ${y - 62} L ${x + 30} ${y - 62} L ${x + 28} ${y - 40} L ${x - 12} ${y - 40} Z`} fill="#fff" />
+          <rect x={x - 22} y={y - 102} width={60} height={12} rx={5} {...f('#f4f4f4')} />
+          <path d={`M ${x + 12} ${y - 100} L ${x + 22} ${y - 144} L ${x + 34} ${y - 146}`} fill="none" stroke={O} strokeWidth={8} strokeLinecap="round" />
+          <path d={`M ${x + 12} ${y - 100} L ${x + 22} ${y - 144} L ${x + 34} ${y - 146}`} fill="none" stroke="#f2c230" strokeWidth={4} strokeLinecap="round" />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'bag',
+    name: 'Grocery Bag',
+    quip: 'Milk, eggs and nineteen bags of chips. Mom said "groceries". These are groceries.',
+    defaultColor: '#c9a07a',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <path d={`M ${x + 20} ${y - 76} L ${x + 34} ${y - 130} L ${x + 44} ${y - 128} L ${x + 34} ${y - 76} Z`} {...f('#f2d38a')} strokeWidth={2} />
+          <path d={`M ${x - 6} ${y - 78} q -6 -34 10 -40 q 6 22 2 40 Z`} fill="#7fbf3f" {...ink} strokeWidth={2} />
+          <path d={`M ${x - 22} ${y - 80} L ${x + 50} ${y - 80} L ${x + 46} ${y + 16} L ${x - 18} ${y + 16} Z`} {...f(c.color)} />
+          <path d={`M ${x - 22} ${y - 80} l 6 8 l 6 -8 l 6 8 l 6 -8 l 6 8 l 6 -8 l 6 8 l 6 -8 l 6 8 l 6 -8 l 6 8 l 6 -8`} fill="none" stroke={shade(c.color, -0.3)} strokeWidth={2} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'beer',
+    name: 'Beer Bottle',
+    quip: 'Grown-ups only. Smells like a garage on a Sunday.',
+    defaultColor: '#7a4a1e',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g transform={`rotate(-8 ${x} ${y})`}>
+          <path d={`M ${x - 10} ${y + 8} L ${x - 10} ${y - 50} Q ${x - 10} ${y - 62} ${x - 2} ${y - 70} L ${x - 2} ${y - 94} L ${x + 12} ${y - 94} L ${x + 12} ${y - 70} Q ${x + 20} ${y - 62} ${x + 20} ${y - 50} L ${x + 20} ${y + 8} Z`} {...f(c.color)} />
+          <rect x={x - 10} y={y - 42} width={30} height={26} fill="#f2e2b8" stroke={O} strokeWidth={1.5} />
+          <rect x={x - 4} y={y - 100} width={22} height={8} rx={2} fill="#c9c9c9" stroke={O} strokeWidth={1.5} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'pickaxe',
+    name: 'Pickaxe',
+    quip: 'For mining. Or for a dance craze. Mostly a dance craze.',
+    defaultColor: '#9aa3ad',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        // Tilted out to the side, so the head clears a kid's big round head.
+        <g transform={`rotate(32 ${x} ${y})`}>
+          <path d={`M ${x + 4} ${y + 16} L ${x + 10} ${y - 132}`} stroke={O} strokeWidth={13} strokeLinecap="round" />
+          <path d={`M ${x + 4} ${y + 16} L ${x + 10} ${y - 132}`} stroke="#a5713d" strokeWidth={8} strokeLinecap="round" />
+          <path d={`M ${x - 52} ${y - 104} Q ${x + 10} ${y - 168} ${x + 72} ${y - 104} L ${x + 64} ${y - 96} Q ${x + 10} ${y - 140} ${x - 44} ${y - 96} Z`} {...f(c.color)} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'swab',
+    name: 'Cotton Swab',
+    quip: 'A very long cotton swab. Goes all the way up. Do not ask how far.',
+    defaultColor: '#ffffff',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <path d={`M ${x + 2} ${y + 4} L ${x + 34} ${y - 104}`} stroke={O} strokeWidth={8} strokeLinecap="round" />
+          <path d={`M ${x + 2} ${y + 4} L ${x + 34} ${y - 104}`} stroke={c.color} strokeWidth={4} strokeLinecap="round" />
+          <ellipse cx={x + 37} cy={y - 116} rx={10} ry={16} transform={`rotate(17 ${x + 37} ${y - 116})`} fill="#fdfdfd" {...ink} strokeWidth={2} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'microphone',
+    name: 'News Microphone',
+    quip: 'Live at five. Asks the hard questions. Mostly "how do you feel?"',
+    defaultColor: '#3b6fd8',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g transform={`rotate(-12 ${x} ${y})`}>
+          <rect x={x - 4} y={y - 60} width={16} height={70} rx={6} {...f('#3d3d44')} />
+          <rect x={x - 12} y={y - 74} width={32} height={22} rx={3} {...f(c.color)} strokeWidth={2} />
+          <text x={x + 4} y={y - 58} textAnchor="middle" fontFamily="'Luckiest Guy', 'Arial Black', sans-serif" fontSize={12} fill="#fff">
+            TV
+          </text>
+          <circle cx={x + 4} cy={y - 90} r={18} {...f('#9aa3ad')} />
+          <path d={`M ${x - 8} ${y - 98} L ${x + 16} ${y - 82} M ${x - 8} ${y - 84} L ${x + 16} ${y - 98}`} stroke="#6b7078" strokeWidth={2} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'net',
+    name: 'Butterfly Net',
+    quip: 'Has caught zero butterflies. One sandwich. Two regrets.',
+    defaultColor: '#a5713d',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <path d={`M ${x + 2} ${y + 14} L ${x + 34} ${y - 150}`} stroke={O} strokeWidth={11} strokeLinecap="round" />
+          <path d={`M ${x + 2} ${y + 14} L ${x + 34} ${y - 150}`} stroke={c.color} strokeWidth={6} strokeLinecap="round" />
+          <path d={`M ${x + 6} ${y - 196} Q ${x + 30} ${y - 120} ${x + 74} ${y - 150} Q ${x + 92} ${y - 196} ${x + 60} ${y - 214} Z`} fill="#ffffff" opacity={0.75} stroke={O} strokeWidth={2} strokeDasharray="5 4" />
+          <ellipse cx={x + 50} cy={y - 186} rx={44} ry={26} transform={`rotate(-30 ${x + 50} ${y - 186})`} fill="none" stroke={O} strokeWidth={5} />
+        </g>
+      );
+    },
+  },
 ];
 
 /* --------------------------------------------------------------- sidekicks */

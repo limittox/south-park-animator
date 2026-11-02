@@ -41,7 +41,7 @@ export const GESTURE_LIST: VocabEntry<GestureId>[] = [
 export const ACTION_LIST: VocabEntry<ActionId>[] = [
   { id: 'jump', label: 'Jump', desc: 'hops straight up once (excitement, surprise)' },
   { id: 'shake', label: 'Tremble', desc: 'shivers in place (fear, cold, fury)' },
-  { id: 'faint', label: 'Faint / fall', desc: 'topples over flat and stays down for the rest of the scene' },
+  { id: 'faint', label: 'Faint / fall', desc: 'topples over flat and stays down until their next action or move (for good if there is none)' },
   { id: 'spin', label: 'Spin', desc: 'spins around once' },
   { id: 'bounce', label: 'Bounce', desc: 'bounces up and down a few times (giddy)' },
 ];

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { FrameSvg } from './render/FrameSvg';
 import { parseScript, SAMPLE_SCRIPT } from './episode/parseScript';
 import { PROMPT_EXAMPLE, PROMPT_PLACES, scriptWritingPrompt } from './episode/writingPrompt';
 import { stripCodeFences } from './lib/clipboard';
@@ -10,7 +13,7 @@ import { extractJson } from './ai/openrouter';
 import { envelope, processVoice, resample, timeStretch, trimSilence } from './audio/dsp';
 import { directionMode, speechFormat, speechRequest } from './audio/voices';
 import { poseArms, restArms } from './character/pose';
-import { getGeo } from './character/geometry';
+import { getGeo, seatedGeo } from './character/geometry';
 import { DEFAULT_CHARACTER } from './data/defaults';
 import type { Episode } from './episode/types';
 
@@ -56,6 +59,94 @@ describe('parseScript', () => {
       ['kid', 'Nowhere.', undefined],
     ]);
     expect(ep.cast.find((c) => c.id === 'mom')?.look.body).not.toBe('kid');
+  });
+});
+
+describe('parseScript stage business', () => {
+  it('sits, stands, runs, passes props and rides in cars', () => {
+    const ep = parseScript(`INT. LIVING ROOM - NIGHT
+Dad sits on the couch. The kids sit on the floor.
+DAD: Remote.
+BENNY: Here.
+Benny hands the remote to Dad.
+DAD: Thanks.
+Dad stands up.
+Priya runs off.
+PRIYA: Bye!
+
+EXT. MAIN STREET - DAY
+Mom drives up in her car.
+MOM: Get in, Benny!
+Benny picks up a snowball.
+Benny gets in the car.
+They drive off.`);
+    const [home, street] = ep.scenes;
+    const block = (s: typeof home, id: string) => s.blocking.find((b) => b.who === id)!;
+    // Sitting before the first line is how the scene starts.
+    expect(block(home, 'dad').sit).toBe('couch');
+    expect(block(home, 'benny').sit).toBe('floor');
+    expect(block(home, 'priya').sit).toBe('floor');
+    const give = home.beats.find((b) => b.give)!;
+    expect(give).toMatchObject({ who: 'benny', give: 'dad', hold: 'remote' });
+    expect(home.beats.some((b) => b.moves?.some((m) => m.who === 'dad' && m.kind === 'stand'))).toBe(true);
+    expect(home.beats.flatMap((b) => b.moves ?? []).find((m) => m.who === 'priya')).toMatchObject({ kind: 'exit', run: true });
+
+    expect(street.vehicles).toEqual([{ id: 'car-1', type: 'car', x: 800, offstage: true }]);
+    expect(block(street, 'mom').in).toBe('car-1');
+    const moves = street.beats.flatMap((b) => b.moves ?? []);
+    expect(moves).toContainEqual({ who: 'car-1', kind: 'enter', x: 800 });
+    expect(moves).toContainEqual({ who: 'benny', kind: 'getIn', on: 'car-1' });
+    expect(moves).toContainEqual({ who: 'car-1', kind: 'exit' });
+    expect(street.beats.find((b) => b.hold)).toMatchObject({ who: 'benny', hold: 'snowball' });
+  });
+
+  it('reads screenplay-style descriptions the way they are meant', () => {
+    const ep = parseScript(`EXT. KENNY HOUSE - DAY
+REPORTER stands outside the house. REPORTER, a TV journalist holding a microphone.
+REPORTER: Tom, I'm outside.
+
+INT. CLINIC - DAY
+CARTMAN sits at a desk; BUTTERS wears a lab coat; RANDY waits beside a tray, holding his phone.
+CARTMAN: Next!
+RANDY: Me.
+PHONE (O.S.): Who is calling?
+CARTMAN collapses.
+CARTMAN jumps.
+
+INT. LIVING ROOM - DAY
+RANDY and MARVIN sit on the couch in Stan's living room.
+MAYOR MCDANIELS (O.S.): Testing is mandatory.
+There is a flash and Randy vanishes. STAN appears.
+STAN: Dad?`);
+    const [outside, clinic, home] = ep.scenes;
+    expect(outside.set).toMatchObject({ kind: 'kit', place: 'exterior' });
+    expect(outside.beats.find((b) => b.hold)).toMatchObject({ who: 'reporter', hold: 'microphone' });
+    // Only Cartman sits, at a desk the built set gets; "his phone" is a prop, not the PHONE character.
+    expect(clinic.blocking.filter((b) => b.sit).map((b) => b.who)).toEqual(['cartman']);
+    expect(clinic.set.kind === 'kit' && clinic.set.pieces.some((p) => p.type === 'desk')).toBe(true);
+    expect(clinic.blocking.find((b) => b.who === 'phone')?.offstage).toBe(true);
+    expect(clinic.beats.find((b) => b.hold)).toMatchObject({ who: 'randy', hold: 'phone' });
+    // Stan's living room doesn't put Stan in it; he appears later, after Randy vanishes in a flash.
+    expect(home.blocking.find((b) => b.who === 'stan')?.offstage).toBe(true);
+    expect(home.beats.flatMap((b) => b.moves ?? [])).toEqual(expect.arrayContaining([expect.objectContaining({ who: 'randy', kind: 'vanish' }), expect.objectContaining({ who: 'stan', kind: 'appear' })]));
+    expect(home.beats.find((b) => b.moves?.some((m) => m.kind === 'vanish'))?.effect).toBe('flash');
+    expect(ep.cast.map((c) => c.name)).toContain('Mayor McDaniels');
+
+    // A faint lasts until they next do something.
+    ep.titleCard = false;
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[1];
+    const jump = sc.beats.find((b) => b.beat.action === 'jump')!;
+    const cartman = (t: number) => (sampleEpisode(c, sc.start + t, new Map()) as SceneFrame).actors.find((a) => a.castId === 'cartman')!;
+    expect(cartman(jump.start - 0.05).rotate).toBe(-90);
+    expect(cartman(jump.start + 0.1).rotate).toBe(0);
+  });
+
+  it('seats the sample classroom kids at their desks', () => {
+    const classroom = parseScript(SAMPLE_SCRIPT).scenes[1];
+    const seated = classroom.blocking.filter((b) => b.sit);
+    expect(seated.map((b) => b.who).sort()).toEqual(['benny', 'priya']);
+    expect(seated.every((b) => b.sit === 'desk')).toBe(true);
   });
 });
 
@@ -213,6 +304,163 @@ describe('timeline', () => {
     expect(close.x).toBeGreaterThanOrEqual(0);
     expect(close.y + close.h).toBeLessThanOrEqual(1000);
     expect(close.w / close.h).toBeCloseTo(16 / 9);
+  });
+});
+
+describe('stage business: running, sitting, props and vehicles', () => {
+  /** One scene, no title card, sampled by scene time. */
+  const stage = (scene: Record<string, unknown>, cast: unknown[] = [{ name: 'Dad', look: { body: 'adult' } }, { name: 'Kid', look: { body: 'kid', held: 'none' } }]) => {
+    const ep = normalizeEpisode({ cast, scenes: [scene] }, '');
+    ep.titleCard = false;
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[0];
+    const frame = (t: number) => sampleEpisode(c, sc.start + t, new Map()) as SceneFrame;
+    const who = (t: number, id: string) => frame(t).actors.find((a) => a.castId === id);
+    return { ep, sc, frame, who };
+  };
+
+  it('runs faster than it walks, leaning into it', () => {
+    const go = (run: boolean) => stage({ blocking: [{ who: 'Kid', x: 200 }], beats: [{ who: 'Kid', moves: [{ who: 'Kid', kind: 'walk', x: 1300, run }] }] });
+    const walk = go(false);
+    const run = go(true);
+    expect(run.sc.beats[0].end).toBeLessThan(walk.sc.beats[0].end / 1.8);
+    const mid = run.who(run.sc.beats[0].start + 0.3, 'kid')!;
+    expect(mid.rotate).toBeGreaterThan(0);
+    expect(mid.arms).toBeTruthy();
+  });
+
+  it('sits on the couch: walks back to it, grown-ups drop their hips, kids get lifted on', () => {
+    const { sc, who, frame } = stage({
+      set: { kind: 'preset', preset: 'livingroom' },
+      blocking: [{ who: 'Dad', x: 300 }, { who: 'Kid', x: 1300 }],
+      beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'sit', on: 'the couch' }, { who: 'Kid', kind: 'sit', on: 'sofa' }] }, { who: 'Dad', text: 'Ahh.' }, { who: 'Dad', moves: [{ who: 'Dad', kind: 'stand' }] }, { who: 'Dad', text: 'Bedtime.' }],
+    });
+    const seated = sc.beats[1].start + 0.1;
+    const dad = who(seated, 'dad')!;
+    const kid = who(seated, 'kid')!;
+    expect(dad.y).toBe(700);
+    expect(dad.hipY).toBeGreaterThan(getGeo('adult', 'round').legTop);
+    expect(Math.abs(dad.x - 800)).toBeLessThan(260);
+    expect(kid.hipY).toBeUndefined();
+    expect(kid.lift).toBeGreaterThan(80);
+    // Side by side, not on top of each other.
+    expect(Math.abs(dad.x - kid.x)).toBeGreaterThan(150);
+    // Mid-walk back to the couch, the actors are still drawn back to front.
+    const ys = frame(sc.beats[0].start + 0.3).actors.map((a) => a.y);
+    expect(ys).toEqual([...ys].sort((a, b) => a - b));
+    expect(ys[0]).toBeLessThan(sc.groundY);
+    expect(who(sc.beats[3].start + 0.1, 'dad')!.hipY).toBeUndefined();
+  });
+
+  it('sits on the floor when there is nothing to sit on, and behind tables that cover them', () => {
+    const floor = stage({ set: { kind: 'preset', preset: 'busstop' }, blocking: [{ who: 'Kid', x: 600, sit: 'floor' }], beats: [{ who: 'Kid', text: 'Brr.' }] });
+    expect(floor.who(0.5, 'kid')!.hipY).toBeGreaterThan(getGeo('kid', 'round').legTop);
+    const lunch = stage({ set: { kind: 'preset', preset: 'cafeteria' }, blocking: [{ who: 'Kid', x: 200, sit: 'table' }], beats: [{ who: 'Kid', text: 'Mystery meat again.' }] });
+    const kid = lunch.who(0.5, 'kid')!;
+    expect(kid.cover).toBe('table-1');
+    expect(kid.y).toBe(910);
+    const kit = stage({
+      set: { kind: 'kit', place: 'interior', pieces: [{ id: 'chair-1', type: 'chair', x: 400 }, { id: 'bench-1', type: 'bench', x: 1200 }] },
+      blocking: [{ who: 'Dad', x: 1100 }],
+      beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'sit', on: 'chair' }] }],
+    });
+    expect(kit.who(kit.sc.duration - 0.1, 'dad')!.x).toBe(400);
+  });
+
+  it('picks props up and hands them over halfway through the beat', () => {
+    const { sc, who } = stage({
+      blocking: [{ who: 'Dad', x: 600, hold: 'money' }, { who: 'Kid', x: 900 }],
+      beats: [{ who: 'Dad', text: 'Here.', give: 'Kid' }, { who: 'Kid', text: 'Sweet!', hold: 'soda' }],
+    });
+    const b = sc.beats[0];
+    expect(who(b.start + 0.1, 'dad')!.c.held).toBe('cash');
+    expect(who(b.start + 0.1, 'kid')!.c.held).toBe('none');
+    expect(who(b.start + 0.3, 'dad')!.arms).toBeTruthy();
+    expect(who(b.start + 0.6, 'dad')!.c.held).toBe('none');
+    expect(who(b.start + 0.6, 'kid')!.c.held).toBe('cash');
+    expect(who(sc.beats[1].start + 0.1, 'kid')!.c.held).toBe('soda');
+  });
+
+  it('drives a car in with someone inside, lets them out, picks someone up and drives off', () => {
+    const { sc, who, frame } = stage({
+      set: { kind: 'preset', preset: 'mainstreet' },
+      vehicles: [{ type: 'car', x: 800, offstage: true }],
+      blocking: [{ who: 'Dad', in: 'car' }, { who: 'Kid', x: 300 }],
+      beats: [
+        { moves: [{ who: 'the car', kind: 'drive in', x: 800 }] },
+        { who: 'Dad', moves: [{ who: 'Dad', kind: 'get out' }] },
+        { who: 'Kid', moves: [{ who: 'Kid', kind: 'get in', on: 'car' }] },
+        { moves: [{ who: 'car', kind: 'drive off' }] },
+      ],
+    });
+    const [arrive, out, inn, off] = sc.beats;
+    expect(frame(0).vehicles).toHaveLength(0);
+    expect(who(0, 'dad')).toBeUndefined();
+    const driving = frame(arrive.start + 0.3);
+    expect(driving.vehicles[0].x).toBeLessThan(800);
+    expect(who(arrive.start + 0.3, 'dad')!.riding).toBe('car');
+    expect(who(out.end + 0.05, 'dad')!.riding).toBeUndefined();
+    expect(who(inn.end + 0.05, 'kid')!.riding).toBe('car');
+    // The car waits for the kid to climb in before it leaves.
+    expect(off.start).toBeGreaterThanOrEqual(inn.end);
+    expect(frame(sc.duration - 0.01).vehicles).toHaveLength(0);
+    expect(who(sc.duration - 0.01, 'kid')).toBeUndefined();
+  });
+
+  it('normalizes how people describe it', () => {
+    const ep = normalizeEpisode(
+      {
+        cast: [{ name: 'Dad' }, { name: 'The Cashier' }],
+        scenes: [
+          {
+            vehicles: [{ type: 'School Bus', x: 700 }, { type: 'spaceship' }],
+            blocking: [{ who: 'Dad', sit: true, hold: 'a present' }, { who: 'The Cashier', vehicle: 'the bus' }],
+            beats: [
+              { who: 'Dad', moves: [{ who: 'Dad', kind: 'Run In', x: 2000 }, { who: 'the bus', kind: 'Drive_Off' }, { who: 'the bus', kind: 'sit' }] },
+              { who: 'Dad', give: 'cashier', hold: 'groceries' },
+            ],
+          },
+        ],
+      },
+      '',
+    );
+    const s = ep.scenes[0];
+    expect(s.vehicles).toEqual([{ id: 'bus', type: 'bus', x: 700 }]);
+    expect(s.blocking[0]).toMatchObject({ sit: 'seat', hold: 'gift' });
+    expect(s.blocking[1].in).toBe('bus');
+    expect(s.beats[0].moves).toEqual([
+      { who: 'dad', kind: 'enter', x: 1460, run: true },
+      { who: 'bus', kind: 'exit' },
+    ]);
+    expect(s.beats[1]).toMatchObject({ give: 'the-cashier', hold: 'bag' });
+  });
+
+  it('draws passengers inside their vehicle and tables over the people sitting at them, the same way every time', () => {
+    const { sc, frame } = stage({
+      set: { kind: 'preset', preset: 'cafeteria' },
+      vehicles: [{ type: 'police', x: 800, lane: 'front' }],
+      blocking: [{ who: 'Dad', in: 'police' }, { who: 'Kid', x: 200, sit: 'table' }],
+      beats: [{ who: 'Dad', text: 'Freeze!' }],
+    });
+    const at = sc.beats[0].start + 0.2;
+    const markup = () => renderToStaticMarkup(createElement(FrameSvg, { frame: frame(at) }));
+    const svg = new DOMParser().parseFromString(markup(), 'image/svg+xml');
+    const clip = svg.querySelector('clipPath[id^="veh"]')!;
+    const inside = svg.querySelector(`g[clip-path="url(#${clip.id})"]`)!;
+    expect(inside.querySelectorAll('.sp-char')).toHaveLength(1);
+    // The kid, then the lunch table drawn again over them.
+    const kid = [...svg.querySelectorAll('.sp-char')].find((g) => !inside.contains(g))!;
+    expect(kid.parentElement!.parentElement!.nextElementSibling?.getAttribute('class')).toBe('sp-scene');
+    // Frame-identical markup is what lets the exporter skip redrawing.
+    expect(markup()).toBe(markup());
+  });
+
+  it('sitting shortens the legs and keeps the feet on the floor', () => {
+    const g = getGeo('adult', 'round');
+    const s = seatedGeo(g, g.legTop + 80);
+    expect(s.legBottom).toBe(g.legBottom);
+    expect(s.headCy - g.headCy).toBe(80);
+    expect(seatedGeo(g, 10_000).legTop).toBe(g.legBottom - 6);
   });
 });
 

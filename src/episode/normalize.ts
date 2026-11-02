@@ -1,5 +1,5 @@
 import type { CharacterState } from '../types';
-import type { Beat, Blocking, CastMember, Episode, Move, Scene, SetSpec, Shot, VoiceSpec } from './types';
+import type { Beat, Blocking, CastMember, Episode, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, VoiceSpec } from './types';
 import { ACTION_IDS, EFFECT_IDS, GESTURE_IDS, MOOD_IDS, SFX_IDS, SHOT_IDS, WEATHER_IDS } from './catalog';
 import { CATEGORIES } from '../data/catalog';
 import { DEFAULT_CHARACTER, normalizeCharacter } from '../data/defaults';
@@ -219,17 +219,173 @@ function normalizeShot(input: unknown, cast: CastMember[]): Shot | undefined {
   return { type, ...(on?.length ? { on } : {}), ...(input.push === true ? { push: true } : {}) };
 }
 
-function normalizeMove(input: unknown, cast: CastMember[], fallbackWho?: string): Move | null {
-  if (!isObj(input)) return null;
-  const who = resolveCast(cast, input.who) ?? fallbackWho;
-  const kind = oneOf(input.kind, ['walk', 'enter', 'exit', 'appear', 'vanish'] as const);
-  if (!who || !kind) return null;
-  const x = num(input.x);
-  const side = oneOf(input.side, ['left', 'right'] as const);
-  return { who, kind, ...(x !== undefined ? { x: clamp(x, 140, 1460) } : {}), ...(side ? { side } : {}) };
+/** Move kinds as the LLM (or a person) might spell them, mapped to a kind plus "run". */
+const MOVE_ALIASES: Record<string, { kind: Move['kind']; run?: boolean }> = {
+  walk: { kind: 'walk' },
+  move: { kind: 'walk' },
+  go: { kind: 'walk' },
+  drive: { kind: 'walk' },
+  run: { kind: 'walk', run: true },
+  enter: { kind: 'enter' },
+  arrive: { kind: 'enter' },
+  drivein: { kind: 'enter' },
+  pullup: { kind: 'enter' },
+  runin: { kind: 'enter', run: true },
+  exit: { kind: 'exit' },
+  leave: { kind: 'exit' },
+  driveoff: { kind: 'exit' },
+  driveaway: { kind: 'exit' },
+  driveout: { kind: 'exit' },
+  runoff: { kind: 'exit', run: true },
+  runout: { kind: 'exit', run: true },
+  runaway: { kind: 'exit', run: true },
+  appear: { kind: 'appear' },
+  vanish: { kind: 'vanish' },
+  disappear: { kind: 'vanish' },
+  sit: { kind: 'sit' },
+  sitdown: { kind: 'sit' },
+  stand: { kind: 'stand' },
+  standup: { kind: 'stand' },
+  getup: { kind: 'stand' },
+  getin: { kind: 'getIn' },
+  getinto: { kind: 'getIn' },
+  geton: { kind: 'getIn' },
+  board: { kind: 'getIn' },
+  getout: { kind: 'getOut' },
+  getoff: { kind: 'getOut' },
+  alight: { kind: 'getOut' },
+};
+
+const VEHICLE_ALIASES: Record<string, VehicleType> = {
+  car: 'car',
+  sedan: 'car',
+  van: 'car',
+  truck: 'car',
+  taxi: 'car',
+  minivan: 'car',
+  police: 'police',
+  policecar: 'police',
+  copcar: 'police',
+  cruiser: 'police',
+  squadcar: 'police',
+  bus: 'bus',
+  schoolbus: 'bus',
+};
+const squash = (v: string) => v.toLowerCase().replace(/[^a-z]/g, '');
+
+/** A vehicle id from an id, its type ("the bus") or the only vehicle there is. */
+function resolveVehicle(vehicles: Vehicle[], ref: unknown): string | undefined {
+  if (typeof ref !== 'string' || !ref.trim()) return vehicles.length === 1 ? vehicles[0].id : undefined;
+  const r = ref.trim().toLowerCase();
+  const byId = vehicles.find((v) => v.id.toLowerCase() === r || v.id === slugify(ref));
+  if (byId) return byId.id;
+  const type = VEHICLE_ALIASES[squash(r.replace(/^(the|a|his|her|their)\s+/, ''))];
+  return type ? vehicles.find((v) => v.type === type)?.id : undefined;
 }
 
-export function normalizeBeat(input: unknown, cast: CastMember[]): Beat | null {
+const PROP_ALIASES: Record<string, string> = {
+  nothing: 'none',
+  empty: 'none',
+  money: 'cash',
+  dollars: 'cash',
+  bills: 'cash',
+  present: 'gift',
+  giftbox: 'gift',
+  envelope: 'letter',
+  note: 'letter',
+  loveletter: 'letter',
+  cellphone: 'phone',
+  smartphone: 'phone',
+  mobile: 'phone',
+  tvremote: 'remote',
+  remotecontrol: 'remote',
+  drink: 'soda',
+  cup: 'soda',
+  pop: 'soda',
+  groceries: 'bag',
+  grocerybag: 'bag',
+  shoppingbag: 'bag',
+  chips: 'snack',
+  snacks: 'snack',
+  sandwich: 'snack',
+  burger: 'hotdog',
+  ball: 'football',
+  mug: 'coffee',
+  rubberchicken: 'chicken',
+  toiletpaper: 'tp',
+  gamecontroller: 'controller',
+  teddybear: 'teddy',
+  icecreamcone: 'icecream',
+  cone: 'icecream',
+  protestsign: 'sign',
+  placard: 'sign',
+  stick: 'cane',
+  bottle: 'beer',
+  booze: 'beer',
+  pick: 'pickaxe',
+  pickax: 'pickaxe',
+  qtip: 'swab',
+  test: 'swab',
+  covidtest: 'swab',
+  mic: 'microphone',
+  butterflynet: 'net',
+};
+
+/** A held-item id from an id, a name ("Fresh Fish") or a common word for it ("money"). */
+export function propId(v: unknown): string | undefined {
+  if (typeof v !== 'string' || !v.trim()) return undefined;
+  const s = squash(v.replace(/^(a|an|the|some|his|her|their)\s+/i, ''));
+  const items = CATEGORIES.held.items;
+  const hit = items.find((i) => i.id === s || squash(i.name) === s) ?? items.find((i) => i.id === PROP_ALIASES[s]);
+  return hit?.id ?? items.find((i) => i.id === s.replace(/e?s$/, ''))?.id;
+}
+
+function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], fallbackWho?: string): Move | null {
+  if (!isObj(input)) return null;
+  // Vehicles first: loose name matching would turn "the bus" into "The Cashier".
+  const vehicle = typeof input.who === 'string' && input.who.trim() ? resolveVehicle(vehicles, input.who) : undefined;
+  const who = vehicle ?? resolveCast(cast, input.who) ?? fallbackWho;
+  const alias = typeof input.kind === 'string' ? MOVE_ALIASES[squash(input.kind)] : undefined;
+  if (!who || !alias) return null;
+  const { kind } = alias;
+  // Vehicles only drive.
+  if (vehicle && !['walk', 'enter', 'exit', 'appear', 'vanish'].includes(kind)) return null;
+  const x = num(input.x);
+  const side = oneOf(input.side, ['left', 'right'] as const);
+  const run = !vehicle && (alias.run || input.run === true || /^run/i.test(String(input.speed ?? input.pace ?? '')));
+  const move: Move = { who, kind, ...(x !== undefined ? { x: clamp(x, vehicle ? 0 : 140, vehicle ? 1600 : 1460) } : {}), ...(side ? { side } : {}), ...(run ? { run: true } : {}) };
+  if (kind === 'getIn') {
+    const v = resolveVehicle(vehicles, input.on ?? input.vehicle ?? input.into);
+    if (!v) return null;
+    move.on = v;
+  } else if (kind === 'sit') {
+    const on = str(input.on ?? input.seat, 40);
+    if (on) move.on = on;
+  }
+  return move;
+}
+
+function normalizeVehicle(input: unknown, taken: Set<string>): Vehicle | null {
+  if (!isObj(input)) return null;
+  const type = typeof input.type === 'string' ? VEHICLE_ALIASES[squash(input.type)] : undefined;
+  if (!type) return null;
+  let id = slugify(str(input.id, 40) ?? type);
+  while (taken.has(id)) id += '-2';
+  taken.add(id);
+  const color = str(input.color, 7);
+  const lane = oneOf(input.lane, ['back', 'front'] as const);
+  return {
+    id,
+    type,
+    x: clamp(num(input.x) ?? 800, 0, 1600),
+    ...(color && HEX.test(color) ? { color: color.toLowerCase() } : {}),
+    ...(input.offstage === true ? { offstage: true } : {}),
+    ...(input.flip === true ? { flip: true } : {}),
+    ...(lane === 'front' ? { lane } : {}),
+  };
+}
+
+export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehicle[] = []): Beat | null {
   if (!isObj(input)) return null;
   const who = resolveCast(cast, input.who);
   const text = str(input.text, 1200);
@@ -254,9 +410,13 @@ export function normalizeBeat(input: unknown, cast: CastMember[]): Beat | null {
   const action = oneOf(input.action, ACTION_IDS);
   if (action) beat.action = action;
   if (Array.isArray(input.moves)) {
-    const moves = input.moves.map((m) => normalizeMove(m, cast, who)).filter((m): m is Move => !!m);
+    const moves = input.moves.map((m) => normalizeMove(m, cast, vehicles, who)).filter((m): m is Move => !!m);
     if (moves.length) beat.moves = moves;
   }
+  const hold = propId(input.hold);
+  if (hold && who) beat.hold = hold;
+  const give = resolveCast(cast, input.give);
+  if (give && who && give !== who) beat.give = give;
   const lookAt = resolveCast(cast, input.lookAt);
   if (lookAt && lookAt !== who) beat.lookAt = lookAt;
   const shot = normalizeShot(input.shot, cast);
@@ -273,14 +433,18 @@ export function normalizeBeat(input: unknown, cast: CastMember[]): Beat | null {
   if (pauseAfter !== undefined) beat.pauseAfter = clamp(pauseAfter, 0, 10);
   // A line needs a speaker; a beat needs to do *something*.
   if (beat.text && !beat.who) return null;
-  const doesSomething = beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture;
+  const doesSomething =
+    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give;
   return doesSomething ? beat : null;
 }
 
-function normalizeBlocking(input: unknown, cast: CastMember[]): Blocking | null {
+function normalizeBlocking(input: unknown, cast: CastMember[], vehicles: Vehicle[]): Blocking | null {
   if (!isObj(input)) return null;
   const who = resolveCast(cast, input.who);
   if (!who) return null;
+  const sit = input.sit === true ? 'seat' : str(input.sit ?? input.seat, 40);
+  const ride = input.in !== undefined || input.vehicle !== undefined ? resolveVehicle(vehicles, input.in ?? input.vehicle) : undefined;
+  const hold = propId(input.hold);
   return {
     who,
     x: clamp(num(input.x) ?? 800, 140, 1460),
@@ -288,18 +452,22 @@ function normalizeBlocking(input: unknown, cast: CastMember[]): Blocking | null 
     mood: oneOf(input.mood, MOOD_IDS) ?? 'happy',
     ...(input.offstage === true ? { offstage: true } : {}),
     ...(input.flip === true ? { flip: true } : {}),
+    ...(ride ? { in: ride } : sit ? { sit } : {}),
+    ...(hold ? { hold } : {}),
   };
 }
 
 export function normalizeScene(input: unknown, cast: CastMember[], index: number): Scene | null {
   if (!isObj(input)) return null;
-  const beats = Array.isArray(input.beats) ? input.beats.map((b) => normalizeBeat(b, cast)).filter((b): b is Beat => !!b) : [];
+  const takenVehicles = new Set<string>();
+  const vehicles = Array.isArray(input.vehicles) ? input.vehicles.map((v) => normalizeVehicle(v, takenVehicles)).filter((v): v is Vehicle => !!v).slice(0, 4) : [];
+  const beats = Array.isArray(input.beats) ? input.beats.map((b) => normalizeBeat(b, cast, vehicles)).filter((b): b is Beat => !!b) : [];
   const seenBeat = new Set<string>();
   for (const b of beats) {
     if (seenBeat.has(b.id)) b.id = newId('b');
     seenBeat.add(b.id);
   }
-  const blocking = Array.isArray(input.blocking) ? input.blocking.map((b) => normalizeBlocking(b, cast)).filter((b): b is Blocking => !!b) : [];
+  const blocking = Array.isArray(input.blocking) ? input.blocking.map((b) => normalizeBlocking(b, cast, vehicles)).filter((b): b is Blocking => !!b) : [];
   const dedup = blocking.filter((b, i) => blocking.findIndex((x) => x.who === b.who) === i);
   return {
     id: str(input.id, 40) ?? newId('s'),
@@ -309,6 +477,7 @@ export function normalizeScene(input: unknown, cast: CastMember[], index: number
     weather: oneOf(input.weather, WEATHER_IDS) ?? 'none',
     blocking: dedup,
     beats,
+    ...(vehicles.length ? { vehicles } : {}),
     hold: clamp(num(input.hold) ?? (index === 0 ? 0.6 : 1.2), 0, 8),
     sting: typeof input.sting === 'boolean' ? input.sting : index > 0,
   };
