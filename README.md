@@ -41,7 +41,7 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 - Undo and redo (Ctrl+Z / Ctrl+Y); episodes autosave to IndexedDB.
 
 **Export**
-- Frame-exact offline rendering to MP4 (H.264 + AAC, or VP9/Opus if those aren't available) with mediabunny and WebCodecs, at 720p or 1080p, with optional burned-in subtitles. It runs at about real time or faster while its tab is in front (browsers slow down background tabs). Each frame is rasterized to an `ImageBitmap` that's closed straight away, so memory stays flat however long the episode is.
+- Frame-exact offline rendering to MP4 (H.264 + AAC, or VP9/Opus if those aren't available) with mediabunny and WebCodecs, at 720p or 1080p, with optional burned-in subtitles. It runs at about real time or faster while its tab is in front (browsers slow down background tabs). Each frame is rasterized to an `ImageBitmap` that's closed straight away, so memory stays flat however long the episode is. Cut-out animation holds its poses, so a frame identical to the one before isn't redrawn (about two frames in three).
 
 ## Running it
 

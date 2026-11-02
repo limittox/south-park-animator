@@ -123,14 +123,19 @@ export async function exportEpisode({ compiled, clips, lines, height, fps = 30, 
     const css = `<style>${await inlineFonts()}${FLAT_CSS}</style>`;
     const total = Math.ceil(compiled.duration * fps);
     let audioSent = 0;
+    let drawn = '';
     for (let i = 0; i < total; i++) {
       if (signal?.aborted) throw new DOMException('Export cancelled.', 'AbortError');
       const t = i / fps;
       const frame = sampleEpisode(compiled, t, clips);
       const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
-      g.fillStyle = '#000';
-      g.fillRect(0, 0, width, height);
-      await drawSvg(g, markup.replace(/^<svg([^>]*)>/, `<svg$1>${css}`), width, height);
+      // Cut-out animation holds its poses, so most frames repeat the last picture: the canvas still has it.
+      if (markup !== drawn) {
+        g.fillStyle = '#000';
+        g.fillRect(0, 0, width, height);
+        await drawSvg(g, markup.replace(/^<svg([^>]*)>/, `<svg$1>${css}`), width, height);
+        drawn = markup;
+      }
       await video.add(t, 1 / fps);
       // Feed audio in one-second slices alongside the pictures so the muxer can interleave.
       if (audio && mixed) {
