@@ -134,7 +134,6 @@ export default function App() {
       {modal === 'export' && compiled && (
         <ExportModal
           compiled={compiled}
-          clips={bank.clips}
           lines={bank.lines}
           missingVoices={settings.apiKey ? bank.missing : 0}
           voicing={bank.status.running}

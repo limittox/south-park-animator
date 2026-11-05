@@ -32,7 +32,7 @@ const SceneThumb = memo(function SceneThumb({ scene, cast }: { scene: Scene; cas
     const castMap = new Map(cast.map((c) => [c.id, c]));
     const sc = compileScene(scene, 0, 0, castMap, new Map());
     const ep = { episode: {} as Episode, cast: castMap, titleDuration: 0, scenes: [sc], duration: sc.duration } as CompiledEpisode;
-    return { ...sampleScene(sc, ep, Math.max(0.01, scene.hold), new Map()), camera: { x: 0, y: 100, w: 1600, h: 900 } };
+    return { ...sampleScene(sc, ep, Math.max(0.01, scene.hold)), camera: { x: 0, y: 100, w: 1600, h: 900 } };
   }, [scene, cast]);
   return <FrameSvg frame={frame} className="thumb-svg" aria-hidden />;
 });
@@ -210,7 +210,6 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
         <StagePlayer
           ref={player}
           compiled={compiled}
-          clips={bank.clips}
           lines={bank.lines}
           subtitles={settings.subtitles}
           editing={tab === 'set' ? 'set' : 'actors'}

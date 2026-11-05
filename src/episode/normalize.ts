@@ -249,12 +249,26 @@ function normalizeShot(input: unknown, cast: CastMember[]): Shot | undefined {
 }
 
 /** Move kinds as the LLM (or a person) might spell them, mapped to a kind plus "run". */
-const MOVE_ALIASES: Record<string, { kind: Move['kind']; run?: boolean }> = {
+const MOVE_ALIASES: Record<string, { kind: Move['kind']; run?: boolean; sneak?: boolean }> = {
   walk: { kind: 'walk' },
   move: { kind: 'walk' },
   go: { kind: 'walk' },
   drive: { kind: 'walk' },
   run: { kind: 'walk', run: true },
+  sneak: { kind: 'walk', sneak: true },
+  tiptoe: { kind: 'walk', sneak: true },
+  creep: { kind: 'walk', sneak: true },
+  prowl: { kind: 'walk', sneak: true },
+  sneakin: { kind: 'enter', sneak: true },
+  sneakout: { kind: 'exit', sneak: true },
+  sneakoff: { kind: 'exit', sneak: true },
+  approach: { kind: 'approach' },
+  walkup: { kind: 'approach' },
+  walkupto: { kind: 'approach' },
+  lie: { kind: 'lie' },
+  liedown: { kind: 'lie' },
+  lay: { kind: 'lie' },
+  laydown: { kind: 'lie' },
   enter: { kind: 'enter' },
   arrive: { kind: 'enter' },
   drivein: { kind: 'enter' },
@@ -366,7 +380,7 @@ export function propId(v: unknown): string | undefined {
   const s = squash(v.replace(/^(a|an|the|some|his|her|their)\s+/i, ''));
   const items = CATEGORIES.held.items;
   const hit = items.find((i) => i.id === s || squash(i.name) === s) ?? items.find((i) => i.id === PROP_ALIASES[s]);
-  return hit?.id ?? items.find((i) => i.id === s.replace(/e?s$/, ''))?.id;
+  return hit?.id ?? items.find((i) => i.id === s.replace(/s$/, '') || i.id === s.replace(/es$/, ''))?.id;
 }
 
 function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], fallbackWho?: string): Move | null {
@@ -376,18 +390,25 @@ function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], 
   const who = vehicle ?? resolveCast(cast, input.who) ?? fallbackWho;
   const alias = typeof input.kind === 'string' ? MOVE_ALIASES[squash(input.kind)] : undefined;
   if (!who || !alias) return null;
-  const { kind } = alias;
   // Vehicles only drive.
-  if (vehicle && !['walk', 'enter', 'exit', 'appear', 'vanish'].includes(kind)) return null;
+  if (vehicle && !['walk', 'enter', 'exit', 'appear', 'vanish'].includes(alias.kind)) return null;
   const x = num(input.x);
+  // Walking to a person, not a spot, is walking up to them.
+  const target = !vehicle && (alias.kind === 'walk' || alias.kind === 'approach') ? resolveCast(cast, input.on ?? input.to) : undefined;
+  const kind: Move['kind'] = target && x === undefined ? 'approach' : alias.kind;
+  if (kind === 'approach' && (!target || target === who)) return null;
   const side = oneOf(input.side, ['left', 'right'] as const);
-  const run = !vehicle && (alias.run || input.run === true || /^run/i.test(String(input.speed ?? input.pace ?? '')));
-  const move: Move = { who, kind, ...(x !== undefined ? { x: clamp(x, vehicle ? 0 : 140, vehicle ? 1600 : 1460) } : {}), ...(side ? { side } : {}), ...(run ? { run: true } : {}) };
+  const pace = String(input.speed ?? input.pace ?? '');
+  const run = !vehicle && (alias.run || input.run === true || /^run/i.test(pace));
+  const sneak = !vehicle && !run && (alias.sneak || input.sneak === true || /^(sneak|creep|tiptoe)/i.test(pace));
+  const move: Move = { who, kind, ...(x !== undefined ? { x: clamp(x, vehicle ? 0 : 140, vehicle ? 1600 : 1460) } : {}), ...(side ? { side } : {}), ...(run ? { run: true } : {}), ...(sneak ? { sneak: true } : {}) };
   if (kind === 'getIn') {
     const v = resolveVehicle(vehicles, input.on ?? input.vehicle ?? input.into);
     if (!v) return null;
     move.on = v;
-  } else if (kind === 'sit') {
+  } else if (kind === 'approach') {
+    move.on = target;
+  } else if (kind === 'sit' || kind === 'lie') {
     const on = str(input.on ?? input.seat, 40);
     if (on) move.on = on;
   }
@@ -438,6 +459,8 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   if (gesture && gesture !== 'none') beat.gesture = gesture;
   const action = oneOf(input.action, ACTION_IDS);
   if (action) beat.action = action;
+  const also = Array.isArray(input.also) ? [...new Set(input.also.map((x) => resolveCast(cast, x)))].filter((x): x is string => !!x && x !== who) : [];
+  if (also.length && who) beat.also = also;
   if (Array.isArray(input.moves)) {
     const moves = input.moves.map((m) => normalizeMove(m, cast, vehicles, who)).filter((m): m is Move => !!m);
     if (moves.length) beat.moves = moves;
@@ -446,6 +469,8 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   if (hold && who) beat.hold = hold;
   const give = resolveCast(cast, input.give);
   if (give && who && give !== who) beat.give = give;
+  const hug = resolveCast(cast, input.hug);
+  if (hug && who && hug !== who) beat.hug = hug;
   const lookAt = resolveCast(cast, input.lookAt);
   if (lookAt && lookAt !== who) beat.lookAt = lookAt;
   const shot = normalizeShot(input.shot, cast);
@@ -463,7 +488,7 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   // A line needs a speaker; a beat needs to do *something*.
   if (beat.text && !beat.who) return null;
   const doesSomething =
-    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.lookAt;
+    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt;
   return doesSomething ? beat : null;
 }
 
@@ -472,6 +497,7 @@ function normalizeBlocking(input: unknown, cast: CastMember[], vehicles: Vehicle
   const who = resolveCast(cast, input.who);
   if (!who) return null;
   const sit = input.sit === true ? 'seat' : str(input.sit ?? input.seat, 40);
+  const lie = input.lie === true ? 'floor' : str(input.lie, 40);
   const ride = input.in !== undefined || input.vehicle !== undefined ? resolveVehicle(vehicles, input.in ?? input.vehicle) : undefined;
   const hold = propId(input.hold);
   return {
@@ -481,7 +507,7 @@ function normalizeBlocking(input: unknown, cast: CastMember[], vehicles: Vehicle
     mood: oneOf(input.mood, MOOD_IDS) ?? 'happy',
     ...(input.offstage === true ? { offstage: true } : {}),
     ...(input.flip === true ? { flip: true } : {}),
-    ...(ride ? { in: ride } : sit ? { sit } : {}),
+    ...(ride ? { in: ride } : sit ? { sit } : lie ? { lie } : {}),
     ...(hold ? { hold } : {}),
   };
 }

@@ -1,7 +1,9 @@
 import { memo, useId, type ReactNode, type Ref, type SVGProps } from 'react';
 import type { SetSpec, Weather } from '../episode/types';
-import { FRAME_H, FRAME_W, type ActorFrame, type Camera, type Frame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
+import { FRAME_H, FRAME_W, type ActorFrame, type Camera, type Frame, type PropFrame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
 import { CharacterGroup } from '../character/Character';
+import { getGeo, handPos } from '../character/geometry';
+import { HELD } from '../character/parts/held';
 import { getScene } from '../scenes/backgrounds';
 import { renderKitSet } from '../sets/kit';
 import { getVehicleDef, wheel } from '../sets/vehicles';
@@ -32,10 +34,24 @@ export function actorTransform(a: ActorFrame): string {
 export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
   return (
     <g transform={actorTransform(a)}>
-      <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} hipY={a.hipY} />
+      <CharacterGroup c={a.c} talk={a.talk} mouthShape={a.mouth} turn={a.turn} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} tears={a.tears} sweat={a.sweat} vomit={a.vomit} hipY={a.hipY} />
     </g>
   );
 });
+
+/** A prop on its own, drawn as it would be in the hand, with the hand's spot at (x, y). */
+function FlyingProp({ p }: { p: PropFrame }) {
+  const prefix = `prop${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const g = getGeo(p.look.body, p.look.headShape);
+  const [hx, hy] = handPos(g, 1);
+  let n = 0;
+  const art = HELD.find((h) => h.id === p.item)?.render?.({ c: p.look, g, color: p.color, uid: (name) => `${prefix}-${name}-${n++}`, talk: 0 });
+  return (
+    <g className="sp-char" transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) rotate(${p.rotate.toFixed(1)}) scale(${p.scale}) translate(${-hx} ${-hy})`}>
+      {art}
+    </g>
+  );
+}
 
 /** The table or desk someone sits behind, drawn again over them. */
 const SeatCover = memo(function SeatCover({ set, seat }: { set: SetSpec; seat: string }) {
@@ -235,6 +251,9 @@ function SceneContent({ frame, renderActor, sceneOverlay }: Pick<FrameSvgProps, 
     <>
       <SetLayer set={set} layer="back" />
       {items.map((i) => i.node)}
+      {frame.props.map((p) => (
+        <FlyingProp key={p.key} p={p} />
+      ))}
       <SetLayer set={set} layer="front" />
       <WeatherLayer weather={frame.weather} t={frame.scene.start + frame.t} />
       {sceneOverlay}

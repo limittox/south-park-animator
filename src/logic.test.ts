@@ -6,7 +6,7 @@ import { parseScript, SAMPLE_SCRIPT } from './episode/parseScript';
 import { PROMPT_EXAMPLE, PROMPT_PLACES, scriptWritingPrompt } from './episode/writingPrompt';
 import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
-import { cameraFor, compileEpisode, estimateLineSeconds, FPS, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
+import { audioCues, cameraFor, compileEpisode, estimateLineSeconds, FPS, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
 import { repositionActor, setMoodAt } from './episode/edit';
 import { applyCrew, applyEdit } from './ai/director';
 import { extractJson } from './ai/openrouter';
@@ -15,6 +15,8 @@ import { directionMode, speechFormat, speechRequest } from './audio/voices';
 import { poseArms, restArms } from './character/pose';
 import { getGeo, seatedGeo } from './character/geometry';
 import { CharacterGroup } from './character/Character';
+import { talkingMouth } from './character/parts/face';
+import { mouthTrack, sounds } from './episode/lipSync';
 import { DEFAULT_CHARACTER } from './data/defaults';
 import type { Episode } from './episode/types';
 
@@ -138,7 +140,7 @@ STAN: Dad?`);
     const c = compileEpisode(ep, new Map());
     const sc = c.scenes[1];
     const jump = sc.beats.find((b) => b.beat.action === 'jump')!;
-    const cartman = (t: number) => (sampleEpisode(c, sc.start + t, new Map()) as SceneFrame).actors.find((a) => a.castId === 'cartman')!;
+    const cartman = (t: number) => (sampleEpisode(c, sc.start + t) as SceneFrame).actors.find((a) => a.castId === 'cartman')!;
     expect(cartman(jump.start - 0.05).rotate).toBe(-90);
     expect(cartman(jump.start + 0.1).rotate).toBe(0);
   });
@@ -220,6 +222,34 @@ GUS: Hi.`);
       { type: 'wide', pan: true },
     ]);
     expect(ep.scenes.map((s) => s.transition)).toEqual([undefined, 'fade', 'dissolve']);
+  });
+
+  it('promises acting words the parser understands', () => {
+    const prompt = scriptWritingPrompt();
+    for (const words of ['dances', 'sneaks in', 'tiptoes', 'walks up to', 'hugs', 'cries', 'sweats', 'vomits', 'covers his ears', 'crosses her arms', 'puts her hands on her hips', 'shrugs', 'lie down', 'drink', 'Gus throws a snowball at Tilly.', 'Gus and Tilly dance.']) {
+      expect(prompt).toContain(words);
+    }
+    const beats = parseScript(`EXT. MAIN STREET - DAY
+GUS: Hi.
+TILLY: Hi.
+Gus dances.
+Gus sneaks in.
+Gus tiptoes.
+Gus walks up to Tilly.
+Gus hugs Tilly.
+Gus cries.
+Gus sweats.
+Gus vomits.
+Gus covers his ears.
+Tilly crosses her arms.
+Tilly puts her hands on her hips.
+Gus shrugs.
+Gus lies down on the floor.
+Gus drinks a soda.
+Gus throws a snowball at Tilly.
+Gus and Tilly dance.`).scenes[0].beats.filter((b) => !b.text);
+    expect(beats).toHaveLength(16);
+    expect(beats.map((b) => b.action ?? b.gesture ?? b.mood ?? b.moves?.[0].kind ?? (b.hug ? 'hug' : ''))).toEqual(['dance', 'enter', 'walk', 'approach', 'hug', 'cry', 'nervous', 'vomit', 'coverEars', 'cross', 'hipHands', 'shrug', 'lie', 'drink', 'throw', 'dance']);
   });
 
   it('strips code fences from a pasted script', () => {
@@ -339,10 +369,10 @@ describe('timeline', () => {
   it('samples the title card, then the scene with the speaker talking', () => {
     const ep = sample();
     const c = compileEpisode(ep, new Map());
-    expect(sampleEpisode(c, 0.5, new Map())?.kind).toBe('title');
+    expect(sampleEpisode(c, 0.5)?.kind).toBe('title');
     const sc = c.scenes[0];
     const line = sc.beats.find((b) => b.beat.text)!;
-    const f = sampleEpisode(c, sc.start + line.start + 0.2, new Map()) as SceneFrame;
+    const f = sampleEpisode(c, sc.start + line.start + 0.2) as SceneFrame;
     expect(f.kind).toBe('scene');
     const speaker = f.actors.find((a) => a.castId === line.beat.who)!;
     expect(speaker).toBeTruthy();
@@ -362,7 +392,7 @@ describe('timeline', () => {
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
     const sc = c.scenes[0];
-    const at = (t: number) => (sampleEpisode(c, sc.start + t, new Map()) as SceneFrame).actors.find((a) => a.castId === 'b');
+    const at = (t: number) => (sampleEpisode(c, sc.start + t) as SceneFrame).actors.find((a) => a.castId === 'b');
     expect(at(0)).toBeUndefined();
     const mid = at(sc.beats[0].start + 0.3)!;
     expect(mid.x).toBeGreaterThan(1100);
@@ -373,7 +403,7 @@ describe('timeline', () => {
   it('frames close-ups tighter than wide shots and keeps them inside the set', () => {
     const ep = sample();
     const c = compileEpisode(ep, new Map());
-    const f = sampleEpisode(c, c.scenes[0].start + 2, new Map()) as SceneFrame;
+    const f = sampleEpisode(c, c.scenes[0].start + 2) as SceneFrame;
     const close = cameraFor({ type: 'close' }, f.actors, f.actors[0].castId);
     expect(close.w).toBeLessThan(WIDE.w / 1.5);
     expect(close.x).toBeGreaterThanOrEqual(0);
@@ -389,7 +419,7 @@ describe('stage business: running, sitting, props and vehicles', () => {
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
     const sc = c.scenes[0];
-    const frame = (t: number) => sampleEpisode(c, sc.start + t, new Map()) as SceneFrame;
+    const frame = (t: number) => sampleEpisode(c, sc.start + t) as SceneFrame;
     const who = (t: number, id: string) => frame(t).actors.find((a) => a.castId === id);
     return { ep, sc, frame, who };
   };
@@ -732,7 +762,7 @@ describe("the show's timing", () => {
     expect(FPS).toBe(24);
     expect(POSE_FPS).toBe(12);
     const c = walker();
-    const x = (frame: number) => (sampleEpisode(c, frame / FPS, new Map()) as SceneFrame).actors[0].x;
+    const x = (frame: number) => (sampleEpisode(c, frame / FPS) as SceneFrame).actors[0].x;
     const first = Math.round(c.scenes[0].beats[0].start * FPS) + 4;
     for (let f = first; f < first + 12; f += 2) {
       expect(x(f + 1)).toBe(x(f));
@@ -761,7 +791,7 @@ describe("the show's timing", () => {
     env.fill(1, 1, 5);
     const clips: ClipMap = new Map([['hi', { duration: 1, env }]]);
     const c = compileEpisode(ep, clips);
-    const talk = (dt: number) => (sampleEpisode(c, c.scenes[0].beats[0].start + dt, clips) as SceneFrame).actors[0].talk;
+    const talk = (dt: number) => (sampleEpisode(c, c.scenes[0].beats[0].start + dt) as SceneFrame).actors[0].talk;
     expect(talk(0)).toBeGreaterThan(0);
     expect(talk(0.25)).toBe(0);
   });
@@ -771,7 +801,7 @@ describe("the show's timing", () => {
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
     const start = c.scenes[0].beats[0].start;
-    const frames = [1, 2, 3, 4].map((i) => sampleEpisode(c, start + i / POSE_FPS, new Map()) as SceneFrame);
+    const frames = [1, 2, 3, 4].map((i) => sampleEpisode(c, start + i / POSE_FPS) as SceneFrame);
     const moves = frames.map((f) => f.actors[0].jitter);
     expect(moves[0]).toBe(-moves[1]);
     expect(moves[1]).toBe(-moves[2]);
@@ -794,7 +824,7 @@ describe('camera moves', () => {
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
     const beat = c.scenes[0].beats[1];
-    return { beat, frame: (dt: number) => sampleEpisode(c, beat.start + dt, new Map()) as SceneFrame };
+    return { beat, frame: (dt: number) => sampleEpisode(c, beat.start + dt) as SceneFrame };
   };
 
   it('cuts straight to a shot unless it pans', () => {
@@ -834,7 +864,7 @@ describe('camera moves', () => {
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
     const [walk, , line] = c.scenes[0].beats;
-    const at = (t: number) => sampleEpisode(c, t, new Map()) as SceneFrame;
+    const at = (t: number) => sampleEpisode(c, t) as SceneFrame;
     const stepped = at(walk.start + 1);
     const later = at(walk.start + 1.5);
     expect(later.camera.x).toBeGreaterThan(stepped.camera.x);
@@ -854,7 +884,7 @@ describe('scene transitions', () => {
     const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ set: { kind: 'preset', preset: 'pond' }, blocking: [{ who: 'A', x: 800 }], beats: [{ who: 'A', text: 'First.' }] }, { transition, set: { kind: 'preset', preset: 'classroom' }, blocking: [{ who: 'A', x: 800 }], beats: [{ who: 'A', text: 'Second.' }] }] }, '');
     ep.titleCard = titleCard;
     const c = compileEpisode(ep, new Map());
-    return { c, join: c.scenes[1].start, at: (t: number) => sampleEpisode(c, t, new Map()) as SceneFrame };
+    return { c, join: c.scenes[1].start, at: (t: number) => sampleEpisode(c, t) as SceneFrame };
   };
 
   it('cuts by default', () => {
@@ -880,10 +910,10 @@ describe('scene transitions', () => {
   it('fades the title card out into a first scene that fades up', () => {
     const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ transition: 'fade', beats: [{ who: 'A', text: 'Hi.' }] }] }, '');
     const c = compileEpisode(ep, new Map());
-    const title = (t: number) => sampleEpisode(c, t, new Map()) as TitleFrame;
+    const title = (t: number) => sampleEpisode(c, t) as TitleFrame;
     expect(title(1).fade).toBe(0);
     expect(title(c.titleDuration - 0.25).fade).toBeCloseTo(0.5, 1);
-    expect((sampleEpisode(c, c.titleDuration, new Map()) as SceneFrame).fade).toBe(1);
+    expect((sampleEpisode(c, c.titleDuration) as SceneFrame).fade).toBe(1);
   });
 
   it('dissolves with the last scene on top, carrying on, until it has melted away', () => {
@@ -919,7 +949,7 @@ describe('eyes', () => {
     const ep = normalizeEpisode({ cast: [{ name: 'A' }, { name: 'B' }], scenes: [{ blocking: [{ who: 'A', x: 400, ...extra }, { who: 'B', x: 1200 }], beats }] }, '');
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
-    return { c, who: (t: number, id: string) => (sampleEpisode(c, t, new Map()) as SceneFrame).actors.find((a) => a.castId === id)! };
+    return { c, who: (t: number, id: string) => (sampleEpisode(c, t) as SceneFrame).actors.find((a) => a.castId === id)! };
   };
 
   it('points them at whoever is talking', () => {
@@ -947,7 +977,7 @@ describe('eyes', () => {
     const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ blocking: [{ who: 'A', x: 800 }], beats: [{ who: 'A', duration: 20 }] }] }, '');
     ep.titleCard = false;
     const c = compileEpisode(ep, new Map());
-    const gaze = (i: number) => (sampleEpisode(c, i / POSE_FPS, new Map()) as SceneFrame).actors[0].gazeX;
+    const gaze = (i: number) => (sampleEpisode(c, i / POSE_FPS) as SceneFrame).actors[0].gazeX;
     const seen = Array.from({ length: 240 }, (_, i) => gaze(i));
     expect(seen.filter((g) => g !== 0).length).toBeGreaterThan(10);
     expect(seen.filter((g) => g === 0).length).toBeGreaterThan(100);
@@ -960,5 +990,387 @@ describe('eyes', () => {
     expect(draw('classic', 1)).toContain('translate(15.0 0.0)');
     expect(draw('hearts', 1)).not.toContain('translate(15.0');
     expect(draw('dead', 1)).not.toContain('translate(15.0');
+  });
+});
+
+describe('mouth shapes', () => {
+  const loud = (n: number) => new Float32Array(n).fill(1);
+
+  it('reads the sounds of a line, dropping silent letters', () => {
+    expect(sounds('moo').map((s) => s.shape)).toEqual([null, 'oo']);
+    expect(sounds('Fee').map((s) => s.shape)).toEqual(['fv', 'ee']);
+    expect(sounds('note').map((s) => s.shape)).toEqual(['th', 'oh', 'th']);
+    expect(sounds('1982')).toEqual([]);
+  });
+
+  it('steps through the sounds in order, closing the lips on m, b and p', () => {
+    const track = mouthTrack('map', loud(60), 1, 12, 60);
+    expect(track).toHaveLength(12);
+    expect(track[0].level).toBe(0);
+    expect(track[5]).toEqual({ level: 1, shape: 'ah' });
+    expect(track[11].level).toBe(0);
+  });
+
+  it('waits through a pause in the audio instead of running ahead of it', () => {
+    const env = loud(120);
+    env.fill(0, 30, 90);
+    const track = mouthTrack('aaaa oooo', env, 2, 12, 60);
+    expect(track[3].shape).toBe('ah');
+    expect(track.slice(6, 18).every((m) => m.level === 0)).toBe(true);
+    expect(track[20].shape).toBe('oo');
+  });
+
+  it('keeps the mouth shut when there is no sound, and open on a line with no letters', () => {
+    expect(mouthTrack('hello', new Float32Array(60), 1, 12, 60).every((m) => m.level === 0)).toBe(true);
+    expect(mouthTrack('1982', loud(60), 1, 12, 60)[0]).toEqual({ level: 1, shape: 'ah' });
+  });
+
+  it('changes shape along a line in the timeline, from the audio when there is some', () => {
+    const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ blocking: [{ who: 'A', x: 800 }], beats: [{ id: 'hi', who: 'A', text: 'Oh me oh my we see' }] }] }, '');
+    ep.titleCard = false;
+    const c = compileEpisode(ep, new Map([['hi', { duration: 2, env: loud(120) }]]));
+    const start = c.scenes[0].beats[0].start;
+    const seen = new Set(Array.from({ length: 24 }, (_, i) => (sampleEpisode(c, start + i / POSE_FPS) as SceneFrame).actors[0]).filter((a) => a.talk).map((a) => a.mouth));
+    expect(seen.size).toBeGreaterThan(2);
+  });
+
+  it('draws each shape differently, with teeth where they show', () => {
+    const shapes = ['ah', 'eh', 'ee', 'oh', 'oo', 'fv', 'th'] as const;
+    const drawn = shapes.map((s) => renderToStaticMarkup(createElement('g', null, talkingMouth(1, s))));
+    expect(new Set(drawn).size).toBe(shapes.length);
+    expect(drawn[2]).toContain('#fff');
+    expect(drawn[0]).not.toContain('#fff');
+  });
+});
+
+describe('acting', () => {
+  const play = (scene: Record<string, unknown>, cast: unknown[] = [{ name: 'Dad', look: { body: 'adult', held: 'none' } }, { name: 'Kid', look: { body: 'kid', held: 'none' } }]) => {
+    const ep = normalizeEpisode({ cast, scenes: [scene] }, '');
+    ep.titleCard = false;
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[0];
+    const frame = (t: number) => sampleEpisode(c, sc.start + t) as SceneFrame;
+    return { c, sc, frame, who: (t: number, id: string) => frame(t).actors.find((a) => a.castId === id)! };
+  };
+
+  it('runs tears and sweat for as long as the mood lasts', () => {
+    const { sc, who } = play({ blocking: [{ who: 'Kid', x: 800 }], beats: [{ who: 'Kid', mood: 'cry', duration: 2 }, { who: 'Kid', mood: 'nervous', duration: 2 }, { who: 'Kid', mood: 'happy', duration: 1 }] });
+    const [cry, nervous, happy] = sc.beats;
+    const tears = [0, 2, 4, 6].map((i) => who(cry.start + i / POSE_FPS, 'kid').tears);
+    expect(tears.every(Boolean)).toBe(true);
+    expect(new Set(tears).size).toBe(4);
+    expect(who(cry.start + 1, 'kid').c.mouth).toBe('wail');
+    expect(who(cry.start + 1, 'kid').sweat).toBe(0);
+    expect(who(nervous.start + 1, 'kid').sweat).toBeGreaterThan(0);
+    expect(who(nervous.start + 1, 'kid').tears).toBe(0);
+    expect(who(happy.start + 0.5, 'kid').sweat).toBe(0);
+  });
+
+  it('reads crying and sweating from acting notes and directions', () => {
+    const ep = parseScript('INT. KITCHEN - DAY\nDEX: (sobbing) Why?\nPRIYA: (nervous) Because.\nDex bursts into tears.\nPriya starts sweating.');
+    const beats = ep.scenes[0].beats;
+    expect(beats.map((b) => b.mood)).toEqual(['cry', 'nervous', 'cry', 'nervous']);
+  });
+
+  it('vomits with a sick face, an open mouth, a lean and the sound', () => {
+    const { c, sc, who } = play({ blocking: [{ who: 'Dad', x: 500 }, { who: 'Kid', x: 1100 }], beats: [{ who: 'Dad', action: 'vomit' }, { who: 'Kid', text: 'Gross.' }] });
+    const [sick, line] = sc.beats;
+    expect(sick.end - sick.start).toBeCloseTo(1.5);
+    const dad = who(sick.start + 0.5, 'dad');
+    expect(dad.vomit).toBeGreaterThan(0);
+    expect(dad.c.eyes).toBe('tired');
+    expect(dad.talk).toBe(1);
+    expect(dad.rotate).not.toBe(0);
+    expect(dad.turn).not.toBe(0);
+    expect(who(line.start + 0.1, 'dad').vomit).toBe(0);
+    expect(audioCues(c).filter((q) => q.sfx === 'vomit')).toHaveLength(1);
+    expect(renderToStaticMarkup(createElement('svg', null, createElement(CharacterGroup, { c: DEFAULT_CHARACTER, vomit: 2, turn: 1 })))).toContain('#a9c23f');
+  });
+
+  it('dances through a loop of poses until the beat ends, and everyone named joins in', () => {
+    const { sc, who } = play({ blocking: [{ who: 'Dad', x: 500 }, { who: 'Kid', x: 1100 }], beats: [{ who: 'Dad', action: 'dance', also: ['Kid'] }, { who: 'Kid', text: 'Woo.' }] });
+    const [dance, line] = sc.beats;
+    expect(dance.end - dance.start).toBeCloseTo(3);
+    const steps = [0, 3, 6, 9].map((i) => who(dance.start + i / POSE_FPS, 'dad'));
+    expect(steps.map((s) => s.rotate)).toEqual([-9, 0, 9, 0]);
+    expect(steps[1].lift).toBeGreaterThan(steps[0].lift);
+    expect(steps[0].arms?.[0].hand[1]).toBeLessThan(steps[0].arms![1].hand[1]);
+    expect(steps[2].arms?.[1].hand[1]).toBeLessThan(steps[2].arms![0].hand[1]);
+    expect(who(dance.start + 0.5, 'kid').rotate).toBe(who(dance.start + 0.5, 'dad').rotate);
+    expect(who(line.start + 0.1, 'dad').rotate).toBe(0);
+  });
+
+  it('covers the ears with both hands, over the head', () => {
+    const g = getGeo('kid', 'round');
+    const [left, right] = poseArms(g, 'coverEars', 1, 0);
+    expect(left.over && right.over).toBe(true);
+    expect(left.hand[0]).toBeLessThan(g.headCx - g.headRx * 0.6);
+    expect(right.hand[0]).toBeGreaterThan(g.headCx + g.headRx * 0.6);
+    expect(Math.abs(left.hand[1] - g.headCy)).toBeLessThan(g.headRy * 0.5);
+  });
+
+  it('eats and drinks with the prop hand at the mouth, on whichever side they face', () => {
+    for (const body of ['kid', 'adult']) {
+      const g = getGeo(body, 'round');
+      for (const lead of [-1, 1] as const) {
+        const [other, hand] = poseArms(g, 'drink', lead, 0);
+        expect(other.over).toBe(false);
+        expect(hand.over).toBe(true);
+        // Out on the side they face, with the top of the cup tipped back in toward the mouth.
+        expect(Math.sign(hand.hand[0] - g.headCx)).toBe(lead);
+        expect(Math.sign(hand.tilt!)).toBe(-lead);
+        expect(hand.hand[1]).toBeGreaterThan(g.headCy);
+      }
+      const bites = [0, 0.25, 0.5, 0.75].map((t) => poseArms(g, 'eat', 1, t)[1].hand[1]);
+      expect(new Set(bites).size).toBe(2);
+    }
+  });
+
+  it('chews while eating, and talks over it', () => {
+    const { sc, who } = play({ blocking: [{ who: 'Kid', x: 800, hold: 'pizza' }], beats: [{ who: 'Kid', gesture: 'eat', duration: 2 }] });
+    const start = sc.beats[0].start;
+    const mouth = [0, 2, 4, 6].map((i) => who(start + i / POSE_FPS, 'kid').talk);
+    expect(new Set(mouth).size).toBe(2);
+  });
+
+  it('sneaks slower than it walks, crouched, leaning in, hands up', () => {
+    const go = (sneak: boolean) => play({ blocking: [{ who: 'Dad', x: 300 }], beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'walk', x: 1000, sneak }] }] });
+    const walk = go(false);
+    const sneak = go(true);
+    const length = (s: typeof walk) => s.sc.beats[0].end - s.sc.beats[0].start;
+    expect(length(sneak)).toBeGreaterThan(length(walk) * 1.8);
+    const dad = sneak.who(sneak.sc.beats[0].start + 0.5, 'dad');
+    expect(dad.hipY).toBeGreaterThan(getGeo('adult', 'round').legTop);
+    expect(dad.rotate).toBeGreaterThan(0);
+    expect(dad.arms).toBeTruthy();
+    expect(walk.who(walk.sc.beats[0].start + 0.5, 'dad').hipY).toBeUndefined();
+  });
+
+  it('prowls across the stage when it is not told where to go', () => {
+    const { sc, who } = play({ blocking: [{ who: 'Dad', x: 300 }], beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'sneak' }] }] });
+    expect(who(sc.duration - 0.1, 'dad').x).toBe(720);
+  });
+
+  it('walks up to someone and stops beside them, from either side', () => {
+    for (const [from, side] of [[300, -1], [1400, 1]]) {
+      const { sc, who } = play({ blocking: [{ who: 'Dad', x: from }, { who: 'Kid', x: 800 }], beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'approach', on: 'Kid' }] }] });
+      expect(who(sc.duration - 0.1, 'dad').x).toBe(800 + side * 240);
+    }
+  });
+
+  it('takes a walk to a person as walking up to them', () => {
+    const ep = normalizeEpisode({ cast: [{ name: 'A' }, { name: 'B' }], scenes: [{ beats: [{ who: 'A', moves: [{ who: 'A', kind: 'walk', on: 'B' }, { who: 'A', kind: 'approach', on: 'A' }, { who: 'A', kind: 'approach' }, { who: 'A', kind: 'creep', x: 500 }] }] }] }, '');
+    expect(ep.scenes[0].beats[0].moves).toEqual([{ who: 'a', kind: 'approach', on: 'b' }, { who: 'a', kind: 'walk', x: 500, sneak: true }]);
+  });
+
+  it('lies down along a couch and stays there until getting up', () => {
+    const { sc, who } = play({
+      set: { kind: 'preset', preset: 'livingroom' },
+      blocking: [{ who: 'Dad', x: 300 }],
+      beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'lie', on: 'couch' }] }, { who: 'Dad', text: 'Ugh.' }, { who: 'Dad', moves: [{ who: 'Dad', kind: 'stand' }] }, { who: 'Dad', text: 'Better.' }],
+    });
+    const lying = who(sc.beats[1].start + 0.1, 'dad');
+    expect(lying.rotate).toBe(-90);
+    expect(lying.y).toBeLessThan(700);
+    expect(lying.hipY).toBeUndefined();
+    // Stretched out from the feet, leftwards, across the middle of the seat.
+    expect(lying.x).toBeGreaterThan(800);
+    expect(who(sc.beats[3].start + 0.1, 'dad').rotate).toBe(0);
+  });
+
+  it('starts a scene lying down, on the floor if there is nothing else', () => {
+    const { who } = play({ set: { kind: 'preset', preset: 'busstop' }, blocking: [{ who: 'Kid', x: 600, lie: true }], beats: [{ who: 'Kid', text: 'Brr.' }] });
+    const kid = who(0.5, 'kid');
+    expect(kid.rotate).toBe(-90);
+    expect(kid.y).toBe(who(0.5, 'kid').y);
+  });
+
+  it('turns a sitter into someone lying down on the same seat', () => {
+    const { sc, who } = play({ set: { kind: 'preset', preset: 'livingroom' }, blocking: [{ who: 'Dad', x: 800, sit: 'couch' }], beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'lie', on: 'couch' }] }] });
+    expect(who(0.05, 'dad').rotate).toBe(0);
+    expect(who(sc.duration - 0.1, 'dad').rotate).toBe(-90);
+  });
+
+  it('frames a close-up on the head of someone lying down, not their feet', () => {
+    const { sc, frame } = play({ set: { kind: 'preset', preset: 'livingroom' }, blocking: [{ who: 'Dad', x: 800, lie: 'couch' }], beats: [{ who: 'Dad', text: 'Ugh.', shot: { type: 'close', on: ['Dad'] } }] });
+    const f = frame(sc.beats[0].start + 0.1);
+    const dad = f.actors[0];
+    expect(f.camera.x + f.camera.w / 2).toBeLessThan(dad.x - 100);
+  });
+
+  it('hugs: walks up, both arms go out, and they stay together', () => {
+    const { sc, who } = play({ blocking: [{ who: 'Dad', x: 300 }, { who: 'Kid', x: 1200 }], beats: [{ who: 'Dad', hug: 'Kid' }, { who: 'Kid', text: 'Aw.' }] });
+    const [hug, line] = sc.beats;
+    const close = hug.end - 0.5;
+    const dad = who(close, 'dad');
+    const kid = who(close, 'kid');
+    expect(Math.abs(dad.x - kid.x)).toBe(150);
+    expect(dad.arms).toBeTruthy();
+    expect(kid.arms).toBeTruthy();
+    expect(dad.turn).toBeGreaterThan(0);
+    expect(kid.turn).toBeLessThan(0);
+    expect(dad.rotate).toBeGreaterThan(0);
+    expect(hug.end - hug.start).toBeGreaterThan(1.4 + 700 / 380);
+    expect(who(line.start + 0.3, 'dad').arms).toBeUndefined();
+  });
+
+  describe('throwing', () => {
+    const toss = (extra: Record<string, unknown>, hold = 'snowball') =>
+      play({ blocking: [{ who: 'Dad', x: 300, ...(hold ? { hold } : {}) }, { who: 'Kid', x: 1200 }], beats: [{ who: 'Dad', action: 'throw', ...extra }, { who: 'Kid', text: 'Ow!' }] });
+
+    it('winds up, lets go, and sends the prop in an arc to the target', () => {
+      const { c, sc, who, frame } = toss({ lookAt: 'Kid' });
+      const { start } = sc.beats[0];
+      expect(who(start + 0.1, 'dad').c.held).toBe('snowball');
+      expect(who(start + 0.1, 'dad').arms?.[1].hand[1]).toBeLessThan(who(start + 0.4, 'dad').arms![1].hand[1]);
+      expect(frame(start + 0.1).props).toEqual([]);
+      expect(who(start + 0.34, 'dad').c.held).toBe('none');
+      const mid = frame(start + 0.5).props[0];
+      expect(mid).toMatchObject({ item: 'snowball' });
+      expect(mid.x).toBeGreaterThan(300);
+      expect(mid.x).toBeLessThan(1200);
+      expect(mid.y).toBeLessThan(frame(start + 0.3).props[0].y);
+      expect(who(start + 0.3, 'dad').turn).toBeGreaterThan(0);
+      expect(frame(start + 1.5).props).toEqual([]);
+      const hits = audioCues(c).filter((q) => q.sfx === 'slap');
+      expect(hits).toHaveLength(1);
+      expect(hits[0].t).toBeGreaterThan(sc.start + start + 0.7);
+      expect(audioCues(c).some((q) => q.sfx === 'whoosh')).toBe(true);
+    });
+
+    it('homes in on where the head really is, even on someone lying down', () => {
+      const { sc, frame, who } = play({ set: { kind: 'preset', preset: 'livingroom' }, blocking: [{ who: 'Kid', x: 300, hold: 'snowball' }, { who: 'Dad', x: 800, lie: 'couch' }], beats: [{ who: 'Kid', action: 'throw', lookAt: 'Dad' }] });
+      const lastPose = sc.flights[0].t1 - 0.05;
+      const prop = frame(lastPose).props[0];
+      const dad = who(lastPose, 'dad');
+      expect(prop.y).toBeGreaterThan(dad.y - 200);
+      expect(prop.x).toBeLessThan(dad.x);
+    });
+
+    it('sails out of shot when there is nobody to hit', () => {
+      const { c, sc, frame } = toss({});
+      const { start } = sc.beats[0];
+      expect(frame(start + 0.9).props[0].x).toBeGreaterThan(1200);
+      expect(audioCues(c).some((q) => q.sfx === 'slap')).toBe(false);
+    });
+
+    it('only throws what is in the hand', () => {
+      const { sc, frame, who } = toss({ lookAt: 'Kid' }, '');
+      const { start } = sc.beats[0];
+      expect(frame(start + 0.5).props).toEqual([]);
+      expect(who(start + 0.1, 'dad').arms).toBeTruthy();
+    });
+
+    it('takes up the prop on the same beat, and lets a group throw together', () => {
+      const { sc, frame } = play({ blocking: [{ who: 'Dad', x: 300 }, { who: 'Kid', x: 600 }], beats: [{ who: 'Dad', action: 'throw', hold: 'football', also: ['Kid'] }] });
+      expect(frame(sc.beats[0].start + 0.5).props.map((p) => p.item)).toEqual(['football', 'football']);
+    });
+
+    it('draws the prop in the air', () => {
+      const { sc, frame } = toss({ lookAt: 'Kid' });
+      const f = frame(sc.beats[0].start + 0.5);
+      const flying = renderToStaticMarkup(createElement(FrameSvg, { frame: f, xmlns: 'http://www.w3.org/2000/svg' }));
+      const still = renderToStaticMarkup(createElement(FrameSvg, { frame: { ...f, props: [] }, xmlns: 'http://www.w3.org/2000/svg' }));
+      expect(flying.length).toBeGreaterThan(still.length);
+      expect(flying).toContain('#f2f7ff');
+      expect(still).not.toContain('#f2f7ff');
+    });
+  });
+});
+
+describe('Quick build reads acting', () => {
+  const direct = (lines: string) => parseScript(`INT. KITCHEN - DAY\nDEX: Hi.\nPRIYA: Yo.\nBENNY: Sup.\n${lines}`).scenes[0].beats.filter((b) => !b.text);
+
+  it('lets everyone named at the start act together', () => {
+    const [raise] = direct('Dex, Priya and Benny raise their pickaxes over their heads.');
+    expect(raise).toMatchObject({ who: 'dex', also: ['priya', 'benny'], gesture: 'armsUp', hold: 'pickaxe' });
+  });
+
+  it('works out who a group is once the scene is known', () => {
+    const [dance] = direct('Everyone dances.');
+    expect(dance).toMatchObject({ who: 'dex', also: ['priya', 'benny'], action: 'dance' });
+  });
+
+  it('keeps the person something is done to out of it', () => {
+    const [point] = direct('Dex points at Priya.');
+    expect(point.also).toBeUndefined();
+    const [snowball] = direct('Dex and Priya throw snowballs at Benny.');
+    expect(snowball).toMatchObject({ who: 'dex', also: ['priya'], action: 'throw', hold: 'snowball', lookAt: 'benny' });
+  });
+
+  it("doesn't take a character's name for what they do", () => {
+    const ep = parseScript('INT. GYM - DAY\nDANCE MASTER: Hi.\nDANCE MASTER spins.\nThe Dance Master sits on a chair.');
+    const [spin, sit] = ep.scenes[0].beats.filter((b) => !b.text);
+    expect(spin.action).toBe('spin');
+    expect(sit.action).toBeUndefined();
+  });
+
+  it('tells throwing from throwing up, throwing a party and handing over', () => {
+    expect(direct('Dex throws up.')[0].action).toBe('vomit');
+    expect(direct('Dex throws a party.')).toEqual([]);
+    expect(direct('Dex throws his hands up.')[0]).toMatchObject({ gesture: 'armsUp' });
+    expect(direct('Dex throws a rock at Priya.')[0]).toMatchObject({ action: 'throw', hold: 'snowball', lookAt: 'priya' });
+    const [toss] = direct('Dex tosses the football to Priya.');
+    expect(toss).toMatchObject({ give: 'priya', hold: 'football' });
+    expect(toss.action).toBeUndefined();
+  });
+
+  it('picks the right drink and food, and takes "a drink" for a noun', () => {
+    expect(direct('Dex drinks a coffee.')[0]).toMatchObject({ gesture: 'drink', hold: 'coffee' });
+    expect(direct('Dex drinks beer from a bottle.')[0]).toMatchObject({ gesture: 'drink', hold: 'beer' });
+    expect(direct('Dex sips something.')[0]).toMatchObject({ gesture: 'drink', hold: 'soda' });
+    expect(direct('Dex eats a hotdog.')[0]).toMatchObject({ gesture: 'eat', hold: 'hotdog' });
+    expect(direct('Dex eats.')[0]).toMatchObject({ gesture: 'eat', hold: 'snack' });
+    const [held] = direct('Dex holds a drink.');
+    expect(held.hold).toBe('soda');
+    expect(held.gesture).toBeUndefined();
+  });
+
+  it('sneaks in, out and up to people', () => {
+    expect(direct('Dex sneaks in.')[0].moves).toEqual([expect.objectContaining({ who: 'dex', kind: 'enter', sneak: true })]);
+    expect(direct('Dex tiptoes out.')[0].moves).toEqual([expect.objectContaining({ who: 'dex', kind: 'exit', sneak: true })]);
+    expect(direct('Dex creeps up on Priya.')[0].moves).toEqual([{ who: 'dex', kind: 'approach', on: 'priya', sneak: true }]);
+    expect(direct('Dex prowls around.')[0].moves).toEqual([{ who: 'dex', kind: 'walk', sneak: true }]);
+    expect(direct('Dex runs to Priya.')[0].moves).toEqual([{ who: 'dex', kind: 'approach', on: 'priya', run: true }]);
+  });
+
+  it('lies people down, adding the furniture, and starts them there if nobody has spoken', () => {
+    const ep = parseScript('INT. BEDROOM - NIGHT\nDex lies hungover on the bed.\nDEX: Ugh.\nPRIYA: Hi.\nPriya lies down on the floor.');
+    const scene = ep.scenes[0];
+    expect(scene.blocking.find((b) => b.who === 'dex')).toMatchObject({ lie: 'bed' });
+    expect(scene.set.kind === 'kit' && scene.set.pieces.some((p) => p.type === 'bed')).toBe(true);
+    expect(scene.beats.flatMap((b) => b.moves ?? [])).toEqual([{ who: 'priya', kind: 'lie', on: 'floor' }]);
+  });
+
+  it("doesn't take a lie for lying down", () => {
+    expect(direct('Dex lies to Priya.')).toEqual([]);
+  });
+
+  it('hugs one way or both', () => {
+    expect(direct('Dex hugs Priya.')[0]).toMatchObject({ who: 'dex', hug: 'priya' });
+    const [both] = direct('Dex and Priya hug.');
+    expect(both).toMatchObject({ who: 'dex', hug: 'priya' });
+    expect(both.also).toBeUndefined();
+  });
+
+  it('reads arm poses, and only trembles when someone actually trembles', () => {
+    const says = (line: string) => direct(line)[0];
+    expect(says('Dex covers his ears.').gesture).toBe('coverEars');
+    expect(says('Dex shrugs.').gesture).toBe('shrug');
+    expect(says('Dex crosses his arms.').gesture).toBe('cross');
+    expect(says('Dex puts his hands on his hips.').gesture).toBe('hipHands');
+    expect(says('Dex shakes his fist.')).toMatchObject({ gesture: 'fists' });
+    expect(says('Dex shakes his fist.').action).toBeUndefined();
+    expect(direct('Dex shakes his head.')).toEqual([]);
+    expect(says('Dex shakes.').action).toBe('shake');
+  });
+
+  it('keeps group and hug fields from the director, and drops people who are not there', () => {
+    const ep = normalizeEpisode({ cast: [{ name: 'A' }, { name: 'B' }], scenes: [{ blocking: [{ who: 'A', lie: 'bed' }, { who: 'B', lie: true }], beats: [{ who: 'A', action: 'dance', also: ['B', 'A', 'Nobody', 'B'] }, { who: 'A', hug: 'B' }, { who: 'A', hug: 'A' }] }] }, '');
+    const [dance, hug] = ep.scenes[0].beats;
+    expect(dance.also).toEqual(['b']);
+    expect(hug.hug).toBe('b');
+    expect(ep.scenes[0].beats).toHaveLength(2);
+    expect(ep.scenes[0].blocking.map((b) => b.lie)).toEqual(['bed', 'floor']);
   });
 });

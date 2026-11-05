@@ -20,6 +20,8 @@ export const MOOD_LIST: VocabEntry<MoodId>[] = [
   { id: 'love', label: 'Lovestruck', desc: 'heart eyes, kissy mouth' },
   { id: 'deadpan', label: 'Deadpan', desc: 'sleepy eyes, flat mouth, unimpressed' },
   { id: 'crazy', label: 'Unhinged', desc: 'mismatched pupils, grimace' },
+  { id: 'cry', label: 'Crying', desc: 'sobbing, tears running down the cheeks' },
+  { id: 'nervous', label: 'Sweating', desc: 'wide eyes, grimace, beads of sweat flying off' },
 ];
 
 export const GESTURE_LIST: VocabEntry<GestureId>[] = [
@@ -36,6 +38,9 @@ export const GESTURE_LIST: VocabEntry<GestureId>[] = [
   { id: 'cross', label: 'Arms crossed', desc: 'arms folded: stubborn, unimpressed' },
   { id: 'thinking', label: 'Thinking', desc: 'hand to chin: pondering' },
   { id: 'grab', label: 'Reach', desc: 'one arm reaching out to grab or give something' },
+  { id: 'coverEars', label: 'Cover ears', desc: 'both hands clamped over the ears' },
+  { id: 'eat', label: 'Eat', desc: 'hand to mouth and back, chewing (bites whatever they hold)' },
+  { id: 'drink', label: 'Drink', desc: 'hand at the mouth, tipping back whatever they hold' },
 ];
 
 export const ACTION_LIST: VocabEntry<ActionId>[] = [
@@ -44,6 +49,9 @@ export const ACTION_LIST: VocabEntry<ActionId>[] = [
   { id: 'faint', label: 'Faint / fall', desc: 'topples over flat and stays down until their next action or move (for good if there is none)' },
   { id: 'spin', label: 'Spin', desc: 'spins around once' },
   { id: 'bounce', label: 'Bounce', desc: 'bounces up and down a few times (giddy)' },
+  { id: 'dance', label: 'Dance', desc: 'dances from side to side, arms going, for the whole beat' },
+  { id: 'vomit', label: 'Vomit', desc: 'leans over and throws up, with the sound' },
+  { id: 'throw', label: 'Throw', desc: 'winds up and throws whatever they hold at "lookAt", or out of shot' },
 ];
 
 export const SHOT_LIST: VocabEntry<ShotType>[] = [
@@ -67,6 +75,7 @@ export const SFX_LIST: VocabEntry<SfxId>[] = [
   { id: 'sting', label: 'Guitar sting', desc: 'short acoustic guitar riff (scene changes)' },
   { id: 'doorbell', label: 'Doorbell', desc: 'ding-dong' },
   { id: 'cheer', label: 'Cheer', desc: 'small crowd cheering' },
+  { id: 'vomit', label: 'Vomit', desc: 'gross retching' },
 ];
 
 export const EFFECT_LIST: VocabEntry<ScreenEffect>[] = [

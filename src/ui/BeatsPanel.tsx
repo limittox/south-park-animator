@@ -127,7 +127,7 @@ function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: Ca
               value={m.kind}
               onChange={(e) => {
                 const kind = e.target.value as Move['kind'];
-                set(i, { kind, on: kind === 'getIn' ? vehicles[0]?.id : kind === 'sit' ? m.on : undefined });
+                set(i, { kind, on: kind === 'getIn' ? vehicles[0]?.id : kind === 'sit' || kind === 'lie' ? m.on : kind === 'approach' ? cast.find((c) => c.id !== m.who)?.id : undefined });
               }}
               aria-label="Move"
             >
@@ -136,7 +136,9 @@ function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: Ca
               <option value="exit">{vehicle ? 'drives off' : 'exits'}</option>
               <option value="appear">appears at</option>
               <option value="vanish">vanishes</option>
+              {!vehicle && <option value="approach">walks up to</option>}
               {!vehicle && <option value="sit">sits on</option>}
+              {!vehicle && <option value="lie">lies on</option>}
               {!vehicle && <option value="stand">stands up</option>}
               {!vehicle && vehicles.length > 0 && <option value="getIn">gets in</option>}
               {!vehicle && vehicles.length > 0 && <option value="getOut">gets out</option>}
@@ -151,7 +153,8 @@ function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: Ca
                 <option value="right">from/to right</option>
               </select>
             )}
-            {m.kind === 'sit' && (
+            {m.kind === 'approach' && <CastSelect cast={cast.filter((c) => c.id !== m.who)} value={m.on} onChange={(v) => set(i, { on: v })} />}
+            {(m.kind === 'sit' || m.kind === 'lie') && (
               <select value={m.on ?? ''} onChange={(e) => set(i, { on: e.target.value || undefined })} aria-label="Seat">
                 <option value="">{seats.length ? 'nearest seat' : 'the floor'}</option>
                 {seats.map((s) => (
@@ -171,10 +174,15 @@ function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: Ca
                 ))}
               </select>
             )}
-            {!vehicle && (m.kind === 'walk' || m.kind === 'enter' || m.kind === 'exit' || m.kind === 'sit' || m.kind === 'getIn') && (
-              <label className="check" title="Run instead of walk">
-                <input type="checkbox" checked={!!m.run} onChange={(e) => set(i, { run: e.target.checked || undefined })} /> run
-              </label>
+            {!vehicle && (m.kind === 'walk' || m.kind === 'enter' || m.kind === 'exit' || m.kind === 'sit' || m.kind === 'lie' || m.kind === 'approach' || m.kind === 'getIn') && (
+              <>
+                <label className="check" title="Run instead of walk">
+                  <input type="checkbox" checked={!!m.run} onChange={(e) => set(i, { run: e.target.checked || undefined, sneak: undefined })} /> run
+                </label>
+                <label className="check" title="Creep along, crouched">
+                  <input type="checkbox" checked={!!m.sneak} onChange={(e) => set(i, { sneak: e.target.checked || undefined, run: undefined })} /> sneak
+                </label>
+              </>
             )}
             <button className="icon-btn tiny" onClick={() => onChange(moves.filter((_, j) => j !== i))} aria-label="Remove move">
               ✕
@@ -280,6 +288,8 @@ function BeatCard(props: {
             beat.moves?.length ? `${beat.moves.length} move${beat.moves.length > 1 ? 's' : ''}` : '',
             beat.hold ? `holds ${HELD.find((h) => h.id === beat.hold)?.name.toLowerCase() ?? beat.hold}` : '',
             beat.give ? `hands to ${ep.cast.find((c) => c.id === beat.give)?.name ?? beat.give}` : '',
+            beat.hug ? `hugs ${ep.cast.find((c) => c.id === beat.hug)?.name ?? beat.hug}` : '',
+            beat.also?.length ? `+${beat.also.length} together` : '',
             beat.pauseAfter ? `${beat.pauseAfter}s pause` : '',
           ]
             .filter(Boolean)
@@ -347,6 +357,25 @@ function BeatCard(props: {
             Hands it to
             <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.give} onChange={(v) => set({ give: v })} allowNone />
           </label>
+          <label>
+            Hugs
+            <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.hug} onChange={(v) => set({ hug: v })} allowNone />
+          </label>
+          <div className="span2">
+            <span className="lbl">Does it together with</span>
+            <div className="chips">
+              {ep.cast
+                .filter((c) => c.id !== beat.who)
+                .map((c) => {
+                  const on = beat.also?.includes(c.id) ?? false;
+                  return (
+                    <button key={c.id} className="chip-btn" aria-pressed={on} onClick={() => set({ also: on ? beat.also?.filter((x) => x !== c.id) : [...(beat.also ?? []), c.id] })}>
+                      {c.name}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
           <label className="span2" title={isLine ? undefined : 'Just the eyes move: a side-eye'}>
             Looks at
             <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.lookAt} onChange={(v) => set({ lookAt: v })} allowNone />

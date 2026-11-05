@@ -1,5 +1,5 @@
 import { memo, useId, type ReactNode } from 'react';
-import type { CategoryId, CharacterState, RenderCtx } from '../types';
+import type { CategoryId, CharacterState, MouthShape, RenderCtx } from '../types';
 import { ADULT_FACE_FIT, armGeo, armPath, CANADIAN_SPLIT_Y, eyeFit, FACE_FIT, frameViewBox, getGeo, HEAD_RX, HEAD_RY, HEAD_SHAPES, handPos, seatedGeo } from './geometry';
 import { isRest, restArms, type ArmsPose, type ArmState } from './pose';
 import { ink, O } from './parts/common';
@@ -9,6 +9,7 @@ import { HATS } from './parts/hats';
 import { FACE_GEAR, GLASSES } from './parts/glasses';
 import { BOTTOMS, NECKWEAR, SHOES, TOPS, type TopDef } from './parts/clothes';
 import { HELD, SIDEKICKS } from './parts/held';
+import { sweatFx, tearsFx, vomitFx } from './parts/fx';
 
 function byId<T extends { id: string }>(list: T[], id: string): T {
   return list.find((x) => x.id === id) ?? list[0];
@@ -18,6 +19,8 @@ export interface CharacterProps {
   c: CharacterState;
   /** Mouth openness while talking, 0..1. */
   talk?: number;
+  /** The shape the mouth makes while it's open. */
+  mouthShape?: MouthShape;
   /** Three-quarter turn, -1 (facing the viewer's left) to 1 (right). The face slides across the head, like the show. */
   turn?: number;
   /** Posed arms (see pose.ts). Defaults to arms hanging at rest. */
@@ -27,13 +30,17 @@ export interface CharacterProps {
   /** Where the pupils point, -1..1 across and down. */
   gazeX?: number;
   gazeY?: number;
+  /** Crying, sweating or being sick: 0 for not, otherwise a step 1-4 that moves it along. */
+  tears?: number;
+  sweat?: number;
+  vomit?: number;
   /** Sitting: where the hips are (character coordinates); see seatedGeo. */
   hipY?: number;
   onPartClick?: (cat: CategoryId) => void;
 }
 
 /** A whole character as an SVG <g>, in character coordinates (ground at y = 480). */
-export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn = 0, arms: pose, blink = false, gazeX = 0, gazeY = 0, hipY, onPartClick }: CharacterProps) {
+export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthShape, turn = 0, arms: pose, blink = false, gazeX = 0, gazeY = 0, tears = 0, sweat = 0, vomit = 0, hipY, onPartClick }: CharacterProps) {
   const rawId = useId();
   const prefix = 'c' + rawId.replace(/[^a-zA-Z0-9]/g, '');
   let counter = 0;
@@ -169,7 +176,10 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
   const heldMove = Math.abs(heldDx) + Math.abs(heldDy) > 0.5 ? `translate(${heldDx.toFixed(1)} ${heldDy.toFixed(1)})` : '';
   // Kids' heads are huge next to their hands: tall props lean out so the head doesn't hide them.
   const heldLean = held.lean && !g.isAdult ? `rotate(${held.lean} ${restHand[0]} ${restHand[1]})` : '';
-  const heldT = `${heldMove} ${heldLean}`.trim() || undefined;
+  const heldTilt = arms[1].tilt ? `rotate(${arms[1].tilt.toFixed(1)} ${restHand[0]} ${restHand[1]})` : '';
+  const heldT = `${heldMove} ${heldLean} ${heldTilt}`.trim() || undefined;
+  // A prop brought up to the face goes in front of it, with the hand.
+  const heldNode = held.render && part('held', <g transform={heldT}>{held.render(ctx(c.heldColor))}</g>);
 
   /* ---- head contents (head coordinates) ---- */
   const fit = (t: string, children: ReactNode) => <g transform={t}>{children}</g>;
@@ -207,10 +217,11 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
       if (canadian) {
         // the split line *is* the mouth
       } else {
-        out.push(part('mouth', fit(FIT.mouth, mouthOpen ? talkingMouth(talk) : mouth.render(ctx(c.hairColor))), 'mouth'));
+        out.push(part('mouth', fit(FIT.mouth, mouthOpen ? talkingMouth(talk, mouthShape) : mouth.render(ctx(c.hairColor))), 'mouth'));
       }
       if (fhair.over) out.push(part('facialHair', fit(FIT.mouth, fhair.over(ctx(c.hairColor))), 'fh-over'));
       if (!hat.eyesOver) out.push(part('eyes', fit(EYES_FIT, eyesNode()), 'eyes'));
+      if (tears) out.push(<g key="tears" transform={FIT.detail}>{tearsFx(tears)}</g>);
     }
     if (gear.render) out.push(part('faceGear', fit(FIT.gear, gear.render(ctx(c.hairColor))), 'gear'));
     return out;
@@ -237,6 +248,7 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
       )}
       {hat.front && part('hat', <g transform={swayT}><g transform={hatT}>{hat.front(ctx(c.hatColor))}</g></g>, 'hat')}
       {hat.eyesOver && !photo && <g transform={faceT}>{part('eyes', fit(EYES_FIT, eyesNode()), 'eyes-over')}</g>}
+      {sweat > 0 && sweatFx(sweat)}
     </>
   );
 
@@ -308,13 +320,15 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
           {armColor}
         </>,
       )}
-      {held.render && part('held', <g transform={heldT}>{held.render(ctx(c.heldColor))}</g>)}
+      {!arms[1].over && heldNode}
       {part('top', hands)}
       {top.over && part('top', top.over(ctx(c.topColor)))}
       {neck.front && !neck.overHead && part('neck', neck.front(ctx(c.neckColor)))}
       <g transform={headT}>{head}</g>
       {neck.front && neck.overHead && part('neck', neck.front(ctx(c.neckColor)))}
+      {arms[1].over && heldNode}
       {over.length > 0 && part('top', <>{armsVisible && over.map(armStrip)}{over.map(handOf)}</>, 'over-arms')}
+      {vomit > 0 && vomitFx(g, look < 0 ? -1 : 1, vomit)}
     </g>
   );
 });

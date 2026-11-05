@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { AudioBufferSource, BufferTarget, CanvasSource, getFirstEncodableAudioCodec, getFirstEncodableVideoCodec, Mp4OutputFormat, Output, QUALITY_HIGH } from 'mediabunny';
 import displayFontUrl from '@fontsource/luckiest-guy/files/luckiest-guy-latin-400-normal.woff2?url';
 import bodyFontUrl from '@fontsource/nunito/files/nunito-latin-900-normal.woff2?url';
-import { audioCues, FPS, sampleEpisode, type ClipMap, type CompiledEpisode } from '../episode/timeline';
+import { audioCues, FPS, sampleEpisode, type CompiledEpisode } from '../episode/timeline';
 import { FLAT_CSS } from '../character/flat';
 import { playSfx } from '../audio/sfx';
 import { toAudioBuffer, type VoicedLine } from '../audio/voices';
@@ -89,7 +89,6 @@ export interface ExportProgress {
 
 export interface ExportOptions {
   compiled: CompiledEpisode;
-  clips: ClipMap;
   lines: ReadonlyMap<string, VoicedLine>;
   height: 720 | 1080;
   fps?: number;
@@ -98,7 +97,7 @@ export interface ExportOptions {
   signal?: AbortSignal;
 }
 
-export async function exportEpisode({ compiled, clips, lines, height, fps = FPS, subtitles, onProgress, signal }: ExportOptions): Promise<Blob> {
+export async function exportEpisode({ compiled, lines, height, fps = FPS, subtitles, onProgress, signal }: ExportOptions): Promise<Blob> {
   const width = Math.round((height * 16) / 9 / 2) * 2;
   const videoCodec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width, height });
   if (!videoCodec) throw new Error("This browser can't encode video. Try a recent Chrome or Edge.");
@@ -127,7 +126,7 @@ export async function exportEpisode({ compiled, clips, lines, height, fps = FPS,
     for (let i = 0; i < total; i++) {
       if (signal?.aborted) throw new DOMException('Export cancelled.', 'AbortError');
       const t = i / fps;
-      const frame = sampleEpisode(compiled, t, clips);
+      const frame = sampleEpisode(compiled, t);
       const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
       // Cut-out animation holds its poses, so most frames repeat the last picture: the canvas still has it.
       if (markup !== drawn) {

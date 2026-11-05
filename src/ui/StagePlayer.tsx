@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { KitSet } from '../episode/types';
-import { audioCues, frameTime, locate, sampleEpisode, type ActorFrame, type ClipMap, type CompiledEpisode } from '../episode/timeline';
+import { audioCues, frameTime, locate, sampleEpisode, type ActorFrame, type CompiledEpisode } from '../episode/timeline';
 import { PlaybackEngine } from '../audio/engine';
 import type { VoicedLine } from '../audio/voices';
 import { FrameSvg } from '../render/FrameSvg';
@@ -16,7 +16,6 @@ export interface PlayerHandle {
 
 interface Props {
   compiled: CompiledEpisode;
-  clips: ClipMap;
   lines: ReadonlyMap<string, VoicedLine>;
   subtitles: boolean;
   editing: 'actors' | 'set';
@@ -32,7 +31,7 @@ interface Props {
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
 export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
-  { compiled, clips, lines, subtitles, editing, selectedActor, onSelectActor, onLocate, onDragActor, onDragPiece, tools },
+  { compiled, lines, subtitles, editing, selectedActor, onSelectActor, onLocate, onDragActor, onDragPiece, tools },
   ref,
 ) {
   const [t, setT] = useState(0);
@@ -141,7 +140,7 @@ export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
     return () => window.removeEventListener('keydown', onKey);
   }, [playing, pause, startAt, seek]);
 
-  const frame = useMemo(() => sampleEpisode(compiled, t, clips), [compiled, t, clips]);
+  const frame = useMemo(() => sampleEpisode(compiled, t), [compiled, t]);
   const sceneFrame = frame?.kind === 'scene' ? frame : null;
   const setEdit = editing === 'set' && !playing && sceneFrame?.scene.scene.set.kind === 'kit';
 

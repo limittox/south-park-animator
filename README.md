@@ -24,10 +24,12 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 **Animation**
 - One pure timeline (`src/episode/timeline.ts`) turns the episode into frames. The player and the exporter both sample it, so what you see is what you export.
 - 24 frames a second with characters and props posed every second frame, the way the show is animated. Beats start on a pose, so lines, cuts and actions land the moment the picture changes; camera moves and fades run on every frame.
-- Stop-motion hop walks, entrances and exits, blinks, a talking bob, 12 moods, 13 arm gestures (wave, point, facepalm, flail…), jumps, spins, trembles and faints.
-- Running: faster, quicker hops, a forward lean and pumping arms.
+- Stop-motion hop walks, entrances and exits, blinks, a talking bob, 14 moods, 16 arm gestures (wave, point, facepalm, flail, cover ears…), jumps, spins, trembles and faints.
+- Lip sync with seven mouth shapes plus closed lips. The words say which shape comes next and the audio says when, so pauses in the speech keep them lined up.
+- Acting: dancing, crying with running tears, sweating, vomiting, eating and chewing, drinking, hugging, and lying down on couches, beds and floors. Several people can do the same thing at once.
+- Running: faster, quicker hops, a forward lean and pumping arms. Sneaking: slow, crouched, hands up. Characters can also walk up to someone instead of to a spot.
 - Sitting on couches, chairs, benches, beds, logs and the floor, or behind tables and desks (which are drawn again over the sitters). Grown-ups sink into the seat with their knees toward the camera; little kids are lifted onto it, legs dangling. Several people share a seat side by side.
-- Props: 35 things to hold (phones, cash, gifts, love letters, sodas, snowballs, pickaxes, beers, swabs, microphones, butterfly nets…), picked up, put away or handed from one character to another mid-line.
+- Props: 35 things to hold (phones, cash, gifts, love letters, sodas, snowballs, pickaxes, beers, swabs, microphones, butterfly nets…), picked up, put away, handed from one character to another mid-line, or thrown, flying in an arc to someone's head or out of shot.
 - Vehicles: a car, a police car with flashing lights and the yellow school bus drive in and off, juddering on spinning wheels, with passengers showing through the windows. People get in and out; the bus can pull up in front of everyone.
 - Listeners turn toward whoever is talking. Talkers face the person they address. Pupils move on their own: they point at whoever matters, wander in quiet moments, and a silent look is a side-eye with no head turn.
 - Hard camera cuts between wide, medium and close-up shots framed from where people stand, plus pans between shots, shots that follow someone across the set, slow push-ins, screen shake and flashes.

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ItemBase, Render, RenderCtx } from '../../types';
+import type { ItemBase, MouthShape, Render, RenderCtx } from '../../types';
 import { shade } from '../../lib/color';
 import { edge, heartPath, ink, Mirror, O, starPath } from './common';
 import { HEAD_SHAPES } from '../geometry';
@@ -462,6 +462,12 @@ export const MOUTHS: HeadPart[] = [
       </g>
     ),
   },
+  {
+    id: 'wail',
+    name: 'Wailing',
+    quip: 'Lost at Mario Kart. Will be inconsolable until snack time.',
+    render: () => <path d="M -25 78 Q -20 50 0 50 Q 20 50 25 78 Q 0 66 -25 78 Z" fill={MOUTH_DARK} {...ink} />,
+  },
   { id: 'wavy', name: 'Queasy', quip: 'Ate the cafeteria meatloaf. Twice. On a dare.', render: () => <path d="M -20 62 q 5 -7 10 0 t 10 0 t 10 0 t 10 0" fill="none" {...ink} strokeWidth={3.5} /> },
   {
     id: 'kissy',
@@ -493,16 +499,45 @@ export const MOUTHS: HeadPart[] = [
   },
 ];
 
-/** Generic open mouth used while a character is talking. */
-export function talkingMouth(open: number): ReactNode {
-  const ry = 6 + 10 * open;
-  return (
+const TEETH = '#fff';
+
+/** The mouth for a sound while a character is talking; `open` is how far, 0.5 or 1. */
+export function talkingMouth(open: number, shape: MouthShape = 'ah'): ReactNode {
+  const hole = (rx: number, ry: number, inside: ReactNode) => (
     <g>
-      <ellipse cx={0} cy={64} rx={15} ry={ry} fill={MOUTH_DARK} />
-      <ellipse cx={0} cy={64 + ry * 0.55} rx={9} ry={ry * 0.35} fill={TONGUE} />
-      <ellipse cx={0} cy={64} rx={15} ry={ry} {...edge} />
+      <ellipse cx={0} cy={64} rx={rx} ry={ry} fill={MOUTH_DARK} />
+      {inside}
+      <ellipse cx={0} cy={64} rx={rx} ry={ry} {...edge} />
     </g>
   );
+  switch (shape) {
+    case 'eh': {
+      const ry = 4 + 8 * open;
+      return hole(19, ry, <ellipse cx={0} cy={64 - ry * 0.6} rx={13} ry={ry * 0.32} fill={TEETH} />);
+    }
+    case 'ee': {
+      const ry = 3.5 + 3.5 * open;
+      return hole(21, ry, <><ellipse cx={0} cy={64} rx={19} ry={ry - 1} fill={TEETH} /><path d="M -18 64 L 18 64" stroke={O} strokeWidth={1.6} /></>);
+    }
+    case 'oh': {
+      const ry = 9 + 7 * open;
+      return hole(11 + 2 * open, ry, <ellipse cx={0} cy={64 + ry * 0.6} rx={6} ry={ry * 0.25} fill={TONGUE} />);
+    }
+    case 'oo':
+      return hole(6.5 + open, 6 + 3 * open, null);
+    case 'fv': {
+      const ry = 5 + 3 * open;
+      return hole(15, ry, <ellipse cx={0} cy={64 - ry * 0.35} rx={12} ry={ry * 0.6} fill={TEETH} />);
+    }
+    case 'th': {
+      const ry = 5 + 7 * open;
+      return hole(14, ry, <ellipse cx={0} cy={64 - ry * 0.25} rx={8} ry={ry * 0.5} fill={TONGUE} />);
+    }
+    default: {
+      const ry = 6 + 10 * open;
+      return hole(15, ry, <ellipse cx={0} cy={64 + ry * 0.55} rx={9} ry={ry * 0.35} fill={TONGUE} />);
+    }
+  }
 }
 
 /* ---------------------------------------------------------------- noses */
@@ -838,6 +873,8 @@ export const MOODS: MoodDef[] = [
   { id: 'angry', name: 'Furious', quip: 'Somebody touched their stuff.', set: { eyes: 'angry', brows: 'angry', mouth: 'frown' } },
   { id: 'rage', name: 'Screaming', quip: 'Storming off home in a huff. Will be back in five minutes for snacks.', set: { eyes: 'angry', brows: 'angry', mouth: 'shout' } },
   { id: 'sad', name: 'Bummed', quip: 'Dropped their ice cream. On a puppy. Both were sad.', set: { eyes: 'sad', brows: 'worried', mouth: 'frown' } },
+  { id: 'cry', name: 'Sobbing', quip: 'Their sandwich was cut into squares, not triangles.', set: { eyes: 'sad', brows: 'worried', mouth: 'wail' } },
+  { id: 'nervous', name: 'Sweating', quip: 'Definitely not hiding anything. Why would you even ask?', set: { eyes: 'wide', brows: 'worried', mouth: 'grimace' } },
   { id: 'shock', name: 'Shocked', quip: 'Did they just say that on network TV?', set: { eyes: 'wide', brows: 'raised', mouth: 'oshock' } },
   { id: 'smug', name: 'Smug', quip: 'Told you so. Told you so. Told you so.', set: { eyes: 'shifty', brows: 'raised', mouth: 'smug' } },
   { id: 'evil', name: 'Evil Plotting', quip: 'Planning revenge on whoever invented homework.', set: { eyes: 'demon', brows: 'angry', mouth: 'fangs' } },

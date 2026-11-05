@@ -189,6 +189,27 @@ export function playSfx(ctx: Ctx, dest: AudioNode, id: string, when: number): vo
       lfo.stop(t + 1.6);
       break;
     }
+    case 'vomit': {
+      // A wet retch, then the rest of it.
+      const g = env(ctx, dest, t, 0.5, 0.05, 1.1);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.setValueAtTime(320, t);
+      f.frequency.exponentialRampToValueAtTime(160, t + 1.1);
+      f.Q.value = 2;
+      f.connect(g);
+      const o = osc(ctx, 'sawtooth', 120, t, 1.1, f, 70);
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.type = 'square';
+      lfo.frequency.value = 13;
+      depth.gain.value = 30;
+      lfo.connect(depth).connect(o.frequency);
+      lfo.start(t);
+      lfo.stop(t + 1.1);
+      noise(ctx, t + 0.15, 0.9, env(ctx, dest, t + 0.15, 0.22, 0.04, 0.9), 'lowpass', 900, 300);
+      break;
+    }
     case 'sting': {
       const src = ctx.createBufferSource();
       src.buffer = stingBuffer(ctx);
@@ -205,5 +226,5 @@ export function playSfx(ctx: Ctx, dest: AudioNode, id: string, when: number): vo
 
 /** Rough length of each effect, so the player knows when it has finished. */
 export function sfxDuration(id: string): number {
-  return id === 'sting' ? 2.4 : id === 'explosion' ? 2 : id === 'cheer' ? 1.6 : id === 'doorbell' ? 1.4 : 1;
+  return id === 'sting' ? 2.4 : id === 'explosion' ? 2 : id === 'cheer' ? 1.6 : id === 'doorbell' ? 1.4 : id === 'vomit' ? 1.2 : 1;
 }

@@ -6,6 +6,8 @@ import { armGeo, handPos, type ArmGeo, type Pt } from './geometry';
 export interface ArmState extends ArmGeo {
   hand: Pt;
   over: boolean;
+  /** Degrees the prop in this hand tips over. */
+  tilt?: number;
 }
 
 /** Index 0 is the viewer's left arm (side -1), index 1 the right (side 1). */
@@ -74,6 +76,7 @@ function swing(g: BodyGeo, side: -1 | 1, deg: number, r: number): Pt {
  * one-armed gestures (waving, pointing), normally the side the character is facing.
  */
 export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number, talk = 0): ArmsPose {
+  const mouth: Pt = [g.headCx + lead * g.headRx * 0.14, g.headCy + g.headRy * (g.isAdult ? 0.52 : 0.74)];
   const arm = (side: -1 | 1): ArmState => {
     const isLead = side === lead;
     switch (gesture) {
@@ -105,6 +108,17 @@ export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number
         const bob = Math.sin(t * TAU * 2.2) * 8 + talk * 10;
         return reach(g, side, swing(g, side, 62 + bob, 0.86), 0.26, 'down');
       }
+      case 'coverEars':
+        return reach(g, side, [g.headCx + side * g.headRx * 0.96, g.headCy + g.headRy * 0.12], 0.3, 'out', true);
+      // Food goes in with the prop hand: up to the mouth and back for a bite, up and tipped for a drink.
+      case 'eat': {
+        if (side !== 1) return restArm(g, side);
+        const away = Math.floor(t * 4) % 2 ? 1 : 0;
+        return reach(g, side, [mouth[0] + lead * away * 16, mouth[1] + away * 30], 0.16, 'out', true);
+      }
+      // Props sit above the hand, so a drink is held low and out to the side, tipped in toward the mouth.
+      case 'drink':
+        return side === 1 ? { ...reach(g, side, [mouth[0] + lead * g.headRx * 0.5, mouth[1] + g.headRy * 0.22], 0.16, 'out', true), tilt: lead * -62 } : restArm(g, side);
       case 'cross': {
         // Folded across the chest; on kids that's below the chin, the only bit of chest the head doesn't cover.
         const y = g.isAdult ? g.torsoTop + (g.torsoBottom - g.torsoTop) * 0.38 : g.torsoBottom - 32;
@@ -123,6 +137,40 @@ export function runArms(g: BodyGeo, t: number): ArmsPose {
   return [arm(-1), arm(1)];
 }
 
+/** Dancing: four poses, one arm up, both out, the other arm up, both out. */
+export function danceArms(g: BodyGeo, step: number): ArmsPose {
+  const up = (side: -1 | 1) => reach(g, side, swing(g, side, 150, 1.05), 0.12, 'out');
+  const out = (side: -1 | 1) => reach(g, side, swing(g, side, 84, 0.95), 0.2, 'down');
+  const low = (side: -1 | 1) => reach(g, side, swing(g, side, 32, 0.9), 0.3, 'down');
+  if (step === 0) return [up(-1), low(1)];
+  return step === 2 ? [low(-1), up(1)] : [out(-1), out(1)];
+}
+
+/** Tiptoeing: both hands up in front, the leading one a little higher, bobbing with each step. */
+export function sneakArms(g: BodyGeo, lead: -1 | 1, t: number): ArmsPose {
+  const bob = Math.floor(t * 3) % 2 ? 7 : 0;
+  // A kid's chest starts below the chin; anything higher is behind that big head.
+  const chest = g.isAdult ? g.shoulderY + 24 : g.headCy + g.headRy + 8;
+  const arm = (side: -1 | 1): ArmState => reach(g, side, [g.cx + lead * (g.shoulder + (side === lead ? 26 : -10)), chest + (side === lead ? 0 : 12) + bob], 0.42, 'down');
+  return [arm(-1), arm(1)];
+}
+
+/** Both arms out toward the person they're holding. */
+export function hugArms(g: BodyGeo, toward: -1 | 1): ArmsPose {
+  const arm = (side: -1 | 1): ArmState => {
+    const len = dist(armGeo(g, side).start, handPos(g, side));
+    return reach(g, side, [g.cx + toward * (g.shoulder + len * 0.8), g.shoulderY + (side === toward ? 10 : -12)], 0.1, 'down');
+  };
+  return [arm(-1), arm(1)];
+}
+
+/** A throw with the prop hand (side 1): straight up and back, then flung out toward `toward`. `t` runs from the wind-up. */
+export function throwArms(g: BodyGeo, toward: -1 | 1, t: number, release: number): ArmsPose {
+  const len = dist(armGeo(g, 1).start, handPos(g, 1));
+  if (t < release) return [restArm(g, -1), reach(g, 1, swing(g, 1, 172, 1.05), 0.14, 'out')];
+  return [restArm(g, -1), reach(g, 1, [g.cx + toward * (g.shoulder + len * 0.9), g.shoulderY - 8], 0.05, 'down')];
+}
+
 /** Handing something over: the prop hand (side 1) reaches out toward `toward`, across the body if need be. */
 export function handOverArms(g: BodyGeo, toward: -1 | 1): ArmsPose {
   const s = armGeo(g, 1).start;
@@ -139,6 +187,7 @@ function lerpArm(a: ArmState, b: ArmState, k: number): ArmState {
     end: lerpPt(a.end, b.end, k),
     hand: lerpPt(a.hand, b.hand, k),
     over: k < 0.5 ? a.over : b.over,
+    tilt: (b.tilt ?? 0) * k,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ClipMap, CompiledEpisode } from '../episode/timeline';
+import type { CompiledEpisode } from '../episode/timeline';
 import type { VoicedLine } from '../audio/voices';
 import type { ExportProgress } from '../render/exportVideo';
 import { downloadBlob, safeFileName } from '../lib/download';
@@ -8,7 +8,6 @@ import { Modal } from './Modal';
 
 interface Props {
   compiled: CompiledEpisode;
-  clips: ClipMap;
   lines: ReadonlyMap<string, VoicedLine>;
   missingVoices: number;
   voicing: boolean;
@@ -18,7 +17,7 @@ interface Props {
 
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
 
-export function ExportModal({ compiled, clips, lines, missingVoices, voicing, onVoice, onClose }: Props) {
+export function ExportModal({ compiled, lines, missingVoices, voicing, onVoice, onClose }: Props) {
   const s = useSettings();
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [result, setResult] = useState<{ url: string; blob: Blob } | null>(null);
@@ -43,7 +42,7 @@ export function ExportModal({ compiled, clips, lines, missingVoices, voicing, on
     try {
       // The encoder and the static renderer load only when someone exports.
       const { exportEpisode } = await import('../render/exportVideo');
-      const blob = await exportEpisode({ compiled, clips, lines, height: s.exportHeight, subtitles: s.subtitles, onProgress: setProgress, signal: ctrl.signal });
+      const blob = await exportEpisode({ compiled, lines, height: s.exportHeight, subtitles: s.subtitles, onProgress: setProgress, signal: ctrl.signal });
       setResult({ blob, url: URL.createObjectURL(blob) });
     } catch (e) {
       if (!ctrl.signal.aborted) setError((e as Error).message);

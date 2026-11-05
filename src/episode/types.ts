@@ -54,7 +54,9 @@ export type MoodId =
   | 'sick'
   | 'love'
   | 'deadpan'
-  | 'crazy';
+  | 'crazy'
+  | 'cry'
+  | 'nervous';
 
 export type GestureId =
   | 'none'
@@ -69,10 +71,13 @@ export type GestureId =
   | 'explain'
   | 'cross'
   | 'thinking'
-  | 'grab';
+  | 'grab'
+  | 'coverEars'
+  | 'eat'
+  | 'drink';
 
 /** One-shot body actions. Entrances and exits are moves, not actions. */
-export type ActionId = 'jump' | 'shake' | 'faint' | 'spin' | 'bounce';
+export type ActionId = 'jump' | 'shake' | 'faint' | 'spin' | 'bounce' | 'dance' | 'vomit' | 'throw';
 
 export type ShotType = 'wide' | 'medium' | 'close';
 
@@ -88,7 +93,7 @@ export interface Shot {
   follow?: boolean;
 }
 
-export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'stand' | 'getIn' | 'getOut';
+export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'lie' | 'stand' | 'approach' | 'getIn' | 'getOut';
 
 export interface Move {
   /** Cast id, or a vehicle id: vehicles drive with walk / enter / exit / appear / vanish. */
@@ -98,9 +103,11 @@ export interface Move {
   x?: number;
   /** Side of the screen for enter / exit. */
   side?: 'left' | 'right';
-  /** Run instead of walk (walk / enter / exit / sit). */
+  /** Run instead of walk (walk / enter / exit / sit / approach). */
   run?: boolean;
-  /** sit: a seat id or type ("couch", "bench", "chair-2"), or "floor". getIn: the vehicle id. */
+  /** Creep along, crouched, instead of walking. Without an x, a walk heads across the stage. */
+  sneak?: boolean;
+  /** sit / lie: a seat id or type ("couch", "bench", "chair-2"), or "floor". getIn: the vehicle id. approach: the cast id to walk up to. */
   on?: string;
 }
 
@@ -118,7 +125,8 @@ export type SfxId =
   | 'explosion'
   | 'sting'
   | 'doorbell'
-  | 'cheer';
+  | 'cheer'
+  | 'vomit';
 
 export type ScreenEffect = 'shake' | 'flash';
 
@@ -139,14 +147,18 @@ export interface Beat {
   reactions?: Record<string, MoodId>;
   /** Arm pose of `who` during the beat. */
   gesture?: GestureId;
-  /** One-shot body action of `who` at the start of the beat. */
+  /** One-shot body action of `who` at the start of the beat. "throw" sends their prop at `lookAt`. */
   action?: ActionId;
+  /** Cast ids who do the same gesture, action and hold at the same time. */
+  also?: string[];
   /** Movements that start with this beat (can run while someone talks). */
   moves?: Move[];
   /** Prop `who` holds from this beat on (a held item id; "none" puts it away). */
   hold?: string;
   /** Cast id `who` hands their prop to during this beat. */
   give?: string;
+  /** Cast id `who` walks up to and hugs. */
+  hug?: string;
   /** Cast id `who` looks at; defaults to the nearest other character. On a silent beat only their eyes move: a side-eye. */
   lookAt?: string;
   /** Camera cut at the start of the beat. Leave out to keep the previous shot. */
@@ -175,6 +187,8 @@ export interface Blocking {
   flip?: boolean;
   /** Seated when the scene starts: a seat id or type, or "floor". */
   sit?: string;
+  /** Lying down when the scene starts: a seat id or type, or "floor". */
+  lie?: string;
   /** Riding in this vehicle when the scene starts. */
   in?: string;
   /** Prop in hand when the scene starts, instead of the one in their look. */

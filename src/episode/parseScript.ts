@@ -34,6 +34,7 @@ interface RawMove {
   side?: string;
   x?: number;
   run?: boolean;
+  sneak?: boolean;
   on?: string;
 }
 
@@ -50,6 +51,8 @@ interface RawBeat {
   gesture?: string;
   hold?: string;
   give?: string;
+  hug?: string;
+  also?: string[];
   lookAt?: string;
   caption?: string;
 }
@@ -59,7 +62,7 @@ interface RawScene {
   description: string;
   set: { kind: 'preset'; preset: string } | { kind: 'kit'; place: 'interior' | 'exterior'; time: string; pieces: unknown[] };
   weather: string;
-  blocking: { who: string; x: number; depth: number; mood: MoodId; offstage?: boolean; sit?: string; in?: string }[];
+  blocking: { who: string; x: number; depth: number; mood: MoodId; offstage?: boolean; sit?: string; lie?: string; in?: string }[];
   beats: RawBeat[];
   vehicles: { id: string; type: string; x: number; offstage: boolean; lane?: 'front' }[];
   /** Who starts the scene inside which vehicle. */
@@ -86,13 +89,40 @@ const SEAT_PIECES: Record<string, string> = { couch: 'couch', chair: 'chair', ar
 
 /** "hands the remote to Dad", "gives Priya the money". */
 const GIVE_PROP = /\b(?:hands?|gives?|passes?|offers?|tosses)\s+(?:[a-z][\w.]*\s+)?(?:a|an|the|his|her|their|some)\s+([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
-const PROP_VERB = /\b(?:picks? up|grabs?|takes? out|pulls? out|holds? up|holds|is holding|holding|clutches|clutching|carries|carrying|eats?|drinks?|sips?|reads?|waves? around|opens?)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
+const PROP_VERB = /\b(?:picks? up|grabs?|takes? out|pulls? out|holds? up|holds|is holding|holding|clutches|clutching|carries|carrying|eats?|drinks?|sips?|reads?|waves? around|opens?|raises?|lifts?|brandish(?:es)?|swings?|with)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
+const THROW = /\b(?:throws?|hurls?|chucks?|lobs?|flings?|tosses)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
+
+/** A direction opening with several names: "Stan, Kyle and Butters". They all do what it says next. */
+const TOGETHER = /^(?:the\s+)?[A-Z][\w.'’-]*(?:\s+[A-Z][\w.'’-]*)*(?:(?:,\s*(?:and\s+)?|\s+and\s+)[A-Z][\w.'’-]*(?:\s+[A-Z][\w.'’-]*)*)+/;
+const LIES = /\b(?:lies?|lying|lays?|laying|sprawls?|sprawled|sleeps?|sleeping|naps?|napping|asleep|passed out)\b/i;
+const SNEAKS = /\b(?:sneaks?|sneaking|tiptoes?|tiptoeing|creeps?|creeping|prowls?|prowling|slinks?|slinking|skulks?|skulking)\b/i;
+const EATS = /\b(?:eats?|eating|chews?|chewing|munch(?:es|ing)?|bites? into|wolfs? down)\b/i;
+/** Drinking, not "a drink". */
+const DRINKS = /(?<!\b(?:a|an|the|his|her|their|of|with) )\b(?:drinks?|drinking|sips?|sipping|chugs?|chugging|gulps?|swigs?)\b/i;
+
+/** Arm poses, the first match winning. */
+const GESTURE_WORDS: [RegExp, string][] = [
+  [/\bpoints?\b/i, 'point'],
+  [/\bwaves?\b/i, 'wave'],
+  [/\b(?:covers?|covering|plugs?|plugging)\s+(?:\w+\s+)?ears\b|\bhands? over (?:\w+ )?ears\b/i, 'coverEars'],
+  [/\bfacepalms?\b|\bhead in (?:\w+ )?hands\b/i, 'facepalm'],
+  [/\bshrugs?\b/i, 'shrug'],
+  [/\b(?:crosses|crossing|folds?|folding)\s+(?:\w+\s+)?arms\b|\barms (?:crossed|folded)\b/i, 'cross'],
+  [/\bhands? on (?:\w+ )?hips\b/i, 'hipHands'],
+  [/\b(?:shakes?|shaking|raises?|clenches)\s+(?:\w+\s+)?fists?\b/i, 'fists'],
+  [/\bflails?\b|\bflailing\b|\bpanics\b/i, 'flail'],
+  [/\b(?:raises?|lifts?|throws?|puts?|holds?)\s+(?:\w+\s+)+(?:up|over (?:\w+ )?heads?)\b|\barms (?:up|in the air)\b/i, 'armsUp'],
+  [/\b(?:strokes?|rubs?|scratches)\s+(?:\w+\s+)?(?:chin|head)\b|\bponders?\b/i, 'thinking'],
+  [/\breach(?:es|ing)?\b/i, 'grab'],
+];
 
 const MOOD_WORDS: [RegExp, MoodId][] = [
   [/\b(scream|screaming|yell|yelling|shout|shouting|furious|rage|enraged)\b/i, 'rage'],
   [/\b(angry|annoyed|mad|irritated|frustrated|stern)\b/i, 'angry'],
-  [/\b(sad|crying|cries|sob|sobbing|depressed|upset|tearful)\b/i, 'sad'],
-  [/\b(shock|shocked|surprised|gasp|gasps|stunned|horrified|scared|terrified|nervous|afraid)\b/i, 'shock'],
+  [/\b(crying|cries|sob|sobbing|weeping|bawling|tearful)\b/i, 'cry'],
+  [/\b(sad|depressed|upset)\b/i, 'sad'],
+  [/\b(nervous|anxious|worried|sweating|sweaty|panicking)\b/i, 'nervous'],
+  [/\b(shock|shocked|surprised|gasp|gasps|stunned|horrified|scared|terrified|afraid)\b/i, 'shock'],
   [/\b(happy|excited|triumphant|cheerful|delighted|thrilled|joyful|ecstatic)\b/i, 'joy'],
   [/\b(sarcastic|smug|sly|smirking|knowing|condescending)\b/i, 'smug'],
   [/\b(evil|scheming|sinister|menacing)\b/i, 'evil'],
@@ -161,6 +191,19 @@ function propIn(text: string): string | undefined {
   return undefined;
 }
 
+/** What a direction throws, if it does: "throws a snowball at Priya". A party, a fit or their hands don't count. */
+function thrownIn(text: string, target: boolean): string | undefined {
+  const m = THROW.exec(text);
+  if (!m || /\b(?:hands?|arms?|up|it|them|fit|party|punch)\b/i.test(m[1])) return undefined;
+  // Tossing something *to* someone is handing it over.
+  if (/^toss/i.test(m[0]) && /\bto\b/i.test(text)) return undefined;
+  for (const w of [m[1], ...m[1].split(/\s+/)]) {
+    const id = propId(w);
+    if (id && id !== 'none') return id;
+  }
+  return target ? 'snowball' : undefined;
+}
+
 /** On-screen text in a direction. */
 function captionIn(text: string): string | undefined {
   const line = text.trim();
@@ -219,28 +262,38 @@ function vehicleBeat(text: string, subjects: string[], group: string | null, sce
 function actionBeat(direction: string, known: string[], scene: RawScene): RawBeat | null {
   // What a caption says isn't something happening on stage.
   const caption = captionIn(direction);
-  const text = caption ? direction.replace(caption, '') : direction;
+  const line = caption ? direction.replace(caption, '') : direction;
   // Subjects in the order the direction names them: "Dex hands the money to Priya". Names count as written
   // ("Stan", "STAN"): not the word "phone" for a character called Phone, and not "Stan's living room".
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const at = (n: string) => text.search(new RegExp(`\\b(?:${esc(n)}|${esc(n.toUpperCase())})\\b(?!['’]s\\b)`));
+  const at = (n: string) => line.search(new RegExp(`\\b(?:${esc(n)}|${esc(n.toUpperCase())})\\b(?!['’]s\\b)`));
   const subjects = known.filter((n) => at(n) >= 0).sort((a, b) => at(a) - at(b));
+  // Names aren't verbs: "Dance Master spins."
+  const text = subjects.reduce((t, n) => t.replace(new RegExp(`\\b(?:${esc(n)}|${esc(n.toUpperCase())})\\b`, 'g'), ''), line);
   const group = subjects.length ? null : KID_WORDS.test(text) ? KIDS : ALL_WORDS.test(text) ? EVERYONE : null;
   const vehicle = vehicleBeat(text, subjects, group, scene);
   if (vehicle) return vehicle;
+  // "Stan and Kyle throw snowballs at Cartman": two people do it, to the third.
+  const together = TOGETHER.exec(line)?.[0].length ?? 0;
+  const crowd = subjects.slice(1).filter((s) => at(s) < together);
+  const object = subjects.slice(1).find((s) => at(s) >= together);
   const beat: RawBeat = {};
   const who = subjects[0];
   if (caption) beat.caption = caption;
   const shot = cameraIn(text, subjects);
   if (shot) beat.shot = shot;
   const run = /\b(runs?|running|dash(es)?|sprints?|races?|rushes|bolts?)\b/i.test(text);
-  if (/\b(enters?|walks? in|comes? in|arrives?|runs? in|shows? up|steps? in|rushes in|bursts? in)\b/i.test(text)) {
-    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'enter', ...(run ? { run } : {}) }));
-  } else if (/\b(leaves?|exits?|walks? (off|out|away)|storms? off|runs? (off|away|out)|goes? home|bolts?|flees)\b/i.test(text)) {
-    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'exit', ...(run ? { run } : {}) }));
+  const sneak = SNEAKS.test(text);
+  const pace = run ? { run } : sneak ? { sneak } : {};
+  const seat = SEAT_WORDS.exec(text)?.[1]?.toLowerCase();
+  const on = seat === 'sofa' ? 'couch' : seat === 'campfire' ? 'log' : seat?.replace(/s$/, '');
+  if (/\b(enters?|walks? in|comes? in|arrives?|runs? in|shows? up|steps? in|rushes in|bursts? in|(?:sneaks?|creeps?|tiptoes?|slinks?|prowls?) in)\b/i.test(text)) {
+    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'enter', ...pace }));
+  } else if (/\b(leaves?|exits?|walks? (off|out|away)|storms? off|runs? (off|away|out)|goes? home|bolts?|flees|(?:sneaks?|creeps?|tiptoes?|slinks?|prowls?) (?:off|out|away))\b/i.test(text)) {
+    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'exit', ...pace }));
+  } else if (LIES.test(text) && (on || /\b(?:down|flat|asleep|sleeps?|sleeping)\b/i.test(text))) {
+    beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'lie', on: on ?? 'floor' }));
   } else if (/\b(sits?|sitting|sat|takes? a seat|plops? down|flops? down)\b/i.test(text)) {
-    const seat = SEAT_WORDS.exec(text)?.[1]?.toLowerCase();
-    const on = seat === 'sofa' ? 'couch' : seat === 'campfire' ? 'log' : seat?.replace(/s$/, '');
     beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'sit', ...(on ? { on } : {}) }));
   } else if (/\b(stands? up|gets? up|jumps? up(?! and down)|rises|leaps? up)\b/i.test(text)) {
     beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'stand' }));
@@ -248,18 +301,30 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
     beat.moves = subjects.map((s) => ({ who: s, kind: 'vanish' }));
   } else if (/\b(appears?|pops? up|materiali[sz]es?)\b/i.test(text)) {
     beat.moves = subjects.map((s) => ({ who: s, kind: 'appear' }));
+  } else if (object && /\b(?:walks?|runs?|goes|moves?|steps?|rushes|races?|dashes|sneaks?|creeps?|tiptoes?)\s+(?:\w+\s+)?(?:to|toward|towards|behind|up on)\b|\bapproach(?:es)?\b/i.test(text)) {
+    beat.moves = [{ who, kind: 'approach', on: object, ...pace }];
+  } else if (sneak) {
+    beat.moves = subjects.map((s) => ({ who: s, kind: 'walk', sneak }));
   }
-  const prop = propIn(text);
-  const giving = /\b(hands?|gives?|passes?|offers?|tosses)\b/i.test(text);
+  const thrown = thrownIn(text, !!object);
+  const drinks = DRINKS.test(text);
+  const eats = EATS.test(text);
+  const prop = thrown ?? propIn(text) ?? (drinks ? (/\b(?:beers?|bottles?|booze|whiskey|wine)\b/i.test(text) ? 'beer' : 'soda') : eats ? 'snack' : undefined);
+  const giving = !thrown && /\b(hands?|gives?|passes?|offers?|tosses)\b/i.test(text);
   if (giving && subjects.length >= 2) {
     beat.give = subjects[1];
     if (prop) beat.hold = prop;
   } else if (prop) beat.hold = prop;
   else if (/\b(drops?|puts? (it |them )?(down|away)|throws? (it )?away|pockets?)\b/i.test(text)) beat.hold = 'none';
   if (/\b(faints?|passes out|collapses?|falls? (over|down)|dies)\b/i.test(text)) beat.action = 'faint';
+  else if (/\b(vomits?|vomiting|pukes?|puking|barfs?|barfing|throws? up|throwing up)\b/i.test(text)) beat.action = 'vomit';
+  else if (thrown) {
+    beat.action = 'throw';
+    if (object) beat.lookAt = object;
+  } else if (/\b(dances?|breakdances?|boogies|twerks?)\b|(?<!for )\bdancing\b/i.test(text)) beat.action = 'dance';
   else if (/\b(bounces?|bouncing|(?:jumps?|jumping|hops?|hopping) up and down)\b/i.test(text)) beat.action = 'bounce';
   else if (/\b(jumps?|leaps?)\b/i.test(text)) beat.action = 'jump';
-  else if (/\b(shakes?|trembles?|shivers?)\b/i.test(text)) beat.action = 'shake';
+  else if (/\b(shakes?(?! (?:\w+ )?(?:head|fists?|hands?))|trembles?|shivers?)\b/i.test(text)) beat.action = 'shake';
   else if (/\b(spins?|twirls?)\b/i.test(text)) beat.action = 'spin';
   if (/\bexplo(des?|sion)\b/i.test(text)) {
     beat.sfx = 'explosion';
@@ -273,13 +338,18 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   else if (/\b(crowd cheers|cheers|applauds|applause)\b/i.test(text)) beat.sfx = 'cheer';
   else if (/\bpops?\b/i.test(text)) beat.sfx = 'pop';
   if (/\bflash(es)?\b/i.test(text) && !beat.effect) beat.effect = 'flash';
-  if (/\bwaves?\b/i.test(text)) beat.gesture = 'wave';
-  if (/\bpoints?\b/i.test(text)) beat.gesture = 'point';
-  if (subjects.length >= 2 && /\b(?:looks?|glances?|stares?|glares?|peeks?)\s+(?:\w+\s+)?at\b|\bside-?eyes\b/i.test(text)) beat.lookAt = subjects[1];
+  beat.gesture = drinks ? 'drink' : eats ? 'eat' : GESTURE_WORDS.find(([re]) => re.test(text))?.[1];
+  if (object && /\b(?:looks?|glances?|stares?|glares?|peeks?)\s+(?:\w+\s+)?at\b|\bside-?eyes\b/i.test(text)) beat.lookAt = object;
+  if (subjects.length >= 2 && /\b(?:hugs?|hugging|embraces?)\b/i.test(text)) beat.hug = object ?? subjects[1];
+  if (/\b(?:cries|crying|sobs|sobbing|weeps|weeping|bawls|bawling|bursts? into tears|in tears)\b/i.test(text)) beat.mood = 'cry';
+  else if (/\b(?:sweats?|sweating)\b/i.test(text)) beat.mood = 'nervous';
+  // Several people, or a group that's worked out once we know who's in the scene.
+  const team = group ? [group] : crowd;
+  if (team.length && !beat.hug && (beat.action || beat.gesture || beat.hold)) beat.also = team;
   if (/\bsnow(ing|s)?\b/i.test(text) && /\b(start|begin|it'?s)\b/i.test(text)) scene.weather = 'snow';
   if (!beat.moves?.length) delete beat.moves;
-  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.caption && !beat.shot && !beat.lookAt) return null;
-  if ((beat.hold || beat.give) && !who) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot ? { ...beat, hold: undefined, give: undefined } : null;
+  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.hug && !beat.mood && !beat.caption && !beat.shot && !beat.lookAt) return null;
+  if ((beat.hold || beat.give) && !who && !beat.also) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot ? { ...beat, hold: undefined, give: undefined } : null;
   if (who) beat.who = who;
   return beat;
 }
@@ -409,24 +479,32 @@ export function parseScript(script: string): Episode {
       if (!b.moves?.some((m) => m.who.startsWith('*'))) continue;
       b.moves = b.moves.flatMap((m) => (m.who.startsWith('*') ? (m.who === KIDS && kids.length ? kids : present).map((p) => ({ ...m, who: p })) : [m]));
     }
+    for (const b of s.beats) {
+      if (!b.also?.some((w) => w.startsWith('*'))) continue;
+      const team = b.also.flatMap((w) => (w === KIDS && kids.length ? kids : w.startsWith('*') ? present : [w]));
+      b.who ??= team[0];
+      b.also = team.filter((w) => w !== b.who);
+    }
     // Sitting down before anyone has said a word is how the scene starts.
     const firstLine = s.beats.findIndex((b) => b.text);
     const seated = new Map<string, string>();
+    const lying = new Set<string>();
     s.beats.forEach((b, i) => {
       if (firstLine >= 0 && i > firstLine) return;
       b.moves = b.moves?.filter((m) => {
         const earlier = s.beats.slice(0, i).some((pb) => pb.moves?.some((pm) => pm.who === m.who));
-        if (m.kind !== 'sit' || earlier) return true;
+        if ((m.kind !== 'sit' && m.kind !== 'lie') || earlier) return true;
         seated.set(m.who, m.on ?? 'seat');
+        if (m.kind === 'lie') lying.add(m.who);
         return false;
       });
       if (b.moves && !b.moves.length) delete b.moves;
     });
-    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.caption || b.shot || b.lookAt);
+    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.hug || b.mood || b.caption || b.shot || b.lookAt);
     // A built set gets the furniture people sit on: "sit at a table" in a bar needs a table.
     const set = s.set;
     if (set.kind === 'kit') {
-      const asked = [...seated.values(), ...s.beats.flatMap((b) => b.moves ?? []).filter((m) => m.kind === 'sit').map((m) => m.on ?? 'seat')];
+      const asked = [...seated.values(), ...s.beats.flatMap((b) => b.moves ?? []).filter((m) => m.kind === 'sit' || m.kind === 'lie').map((m) => m.on ?? 'seat')];
       [...new Set(asked)]
         .filter((k) => k !== 'floor' && k !== 'ground')
         .forEach((k, i) => {
@@ -448,7 +526,7 @@ export function parseScript(script: string): Episode {
       const entersLater = arrives && (firstLine === -1 || firstMoveIdx < firstLine);
       if (arrives) firstMove.x = x;
       const sit = seated.get(p);
-      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater ? { offstage: true } : {}), ...(sit ? { sit } : {}) });
+      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater ? { offstage: true } : {}), ...(sit ? (lying.has(p) ? { lie: sit } : { sit }) : {}) });
     });
     for (const [p, v] of s.riders) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', in: v });
     for (const p of s.offscreen) if (!onstage.includes(p)) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', offstage: true });

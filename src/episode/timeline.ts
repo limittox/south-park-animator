@@ -1,7 +1,7 @@
-import type { CharacterState } from '../types';
+import type { CharacterState, MouthShape } from '../types';
 import type { ActionId, Beat, CastMember, Episode, GestureId, MoodId, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, Weather } from './types';
 import { getGeo, GROUND_Y, seatedGeo } from '../character/geometry';
-import { handOverArms, lerpArms, poseArms, restArms, runArms, type ArmsPose } from '../character/pose';
+import { danceArms, handOverArms, hugArms, lerpArms, poseArms, restArms, runArms, sneakArms, throwArms, type ArmsPose } from '../character/pose';
 import { MOODS } from '../character/parts/face';
 import { HELD } from '../character/parts/held';
 import { getScene, SCENE_H, SCENE_W } from '../scenes/backgrounds';
@@ -9,6 +9,7 @@ import { kitGroundY } from '../sets/kit';
 import { getVehicleDef } from '../sets/vehicles';
 import { seeded } from '../character/parts/common';
 import { findSeat, pickSlot, seatSlots, seatsOf, type SeatSpot } from './seats';
+import { mouthTrack, type MouthPose } from './lipSync';
 
 /*
  * The timeline turns an episode into time-stamped tracks, then samples them into frames.
@@ -33,6 +34,19 @@ const BASE_SCALE = 1.15;
 const GESTURE_BLEND = 0.12;
 const RUN_SPEED = 880;
 const RUN_HOP = 3 / POSE_FPS;
+const SNEAK_SPEED = 190;
+const SNEAK_HOP = 6 / POSE_FPS;
+/** Walking up to someone stops this far from them; a hug closes most of it. */
+const NEAR_GAP = 240;
+const HUG_GAP = 150;
+const HUG_TIME = 1.4;
+const DANCE_TIME = 3;
+/** Each dance pose is held this long. */
+const DANCE_STEP = 3 / POSE_FPS;
+const VOMIT_TIME = 1.5;
+/** A throw: the arm goes back, lets go at WIND_UP, and follows through until THROW_TIME. */
+const WIND_UP = 3 / POSE_FPS;
+const THROW_TIME = 7 / POSE_FPS;
 /** Sitting down or getting up. */
 const SIT_TIME = 0.22;
 const DRIVE_SPEED = 760;
@@ -89,12 +103,33 @@ interface MoveSeg {
   y1: number;
   kind: Move['kind'];
   run: boolean;
+  sneak?: boolean;
 }
 
 /** Sitting from `t` on (hips `h` above the feet, maybe behind a table), or standing again (null). */
 interface Posture {
   t: number;
-  seat: { h: number; cover?: string } | null;
+  seat: { h: number; cover?: string; lie?: boolean } | null;
+}
+
+/** A prop in the air after someone throws it. */
+interface Flight {
+  t0: number;
+  t1: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** How high it arcs above the straight line. */
+  arc: number;
+  /** -1 or 1, the way it's going. */
+  dir: number;
+  item: string;
+  color: string;
+  look: CharacterState;
+  /** Cast id it's aimed at; it homes in on their head, wherever that is by then. Otherwise it sails out of shot. */
+  at?: string;
+  beatId: string;
 }
 
 interface ActorTrack {
@@ -114,8 +149,10 @@ interface ActorTrack {
   handoffs: { t0: number; t1: number; toward: string }[];
   moods: { t: number; mood: MoodId }[];
   gestures: { t0: number; t1: number; gesture: GestureId }[];
-  actions: { t: number; action: ActionId }[];
-  talks: { t0: number; t1: number; beatId: string; lookAt?: string }[];
+  actions: { t: number; t1: number; action: ActionId }[];
+  talks: { t0: number; t1: number; beatId: string; lookAt?: string; mouth: MouthPose[] }[];
+  hugs: { t0: number; t1: number; toward: string }[];
+  throws: { t0: number; t1: number; toward?: string; dir: number }[];
   blinks: number[];
   /** Silent beats where only the eyes slide over to someone. */
   sideEyes: { t0: number; t1: number; at: string }[];
@@ -141,6 +178,7 @@ export interface CompiledScene {
   tracks: ActorTrack[];
   vehicles: VehicleTrack[];
   shots: { t: number; shot: Shot; beat?: CompiledBeat }[];
+  flights: Flight[];
 }
 
 export interface CompiledEpisode {
@@ -188,6 +226,9 @@ function beatLength(beat: Beat, clips: ClipMap, moveTime: number): number {
   if (beat.action) d = Math.max(d, 0.9);
   if (beat.give) d = Math.max(d, HANDOFF);
   if (beat.shot?.pan) d = Math.max(d, PAN_TIME);
+  if (beat.action === 'dance') d = Math.max(d, DANCE_TIME);
+  if (beat.action === 'vomit') d = Math.max(d, VOMIT_TIME);
+  if (beat.action === 'throw') d = Math.max(d, 1.3);
   return Math.max(d, moveTime);
 }
 
@@ -199,14 +240,14 @@ function placeOn(moves: MoveSeg[], x: number, y: number, visible: boolean, t: nu
     if (t < m.t1) {
       let k = (t - m.t0) / (m.t1 - m.t0);
       if (smooth) k = ease(k);
-      return { x: m.x0 + (m.x1 - m.x0) * k, y: m.y0 + (m.y1 - m.y0) * k, visible: true, moving: true, dir: Math.sign(m.x1 - m.x0) || dir || 1, moveT: t - m.t0, run: m.run };
+      return { x: m.x0 + (m.x1 - m.x0) * k, y: m.y0 + (m.y1 - m.y0) * k, visible: true, moving: true, dir: Math.sign(m.x1 - m.x0) || dir || 1, moveT: t - m.t0, run: m.run, sneak: !!m.sneak };
     }
     x = m.x1;
     y = m.y1;
     visible = m.kind !== 'exit' && m.kind !== 'vanish';
     if (m.x1 !== m.x0) dir = Math.sign(m.x1 - m.x0);
   }
-  return { x, y, visible, moving: false, dir, moveT: 0, run: false };
+  return { x, y, visible, moving: false, dir, moveT: 0, run: false, sneak: false };
 }
 
 const vehicleAt = (vt: VehicleTrack, t: number) => placeOn(vt.moves, vt.vehicle.x, vt.y, !vt.vehicle.offstage, t, true);
@@ -241,8 +282,8 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     sitters.get(spot.id)!.add(who);
   };
   const blockedX = (who: string) => scene.blocking.find((b) => b.who === who)?.x ?? SCENE_W / 2;
-  for (const b of scene.blocking) if (b.sit) willSit(b.who, findSeat(spots, b.sit, b.x));
-  for (const beat of scene.beats) for (const m of beat.moves ?? []) if (m.kind === 'sit') willSit(m.who, findSeat(spots, m.on, m.x ?? blockedX(m.who)));
+  for (const b of scene.blocking) if (b.sit || b.lie) willSit(b.who, findSeat(spots, b.sit ?? b.lie, b.x));
+  for (const beat of scene.beats) for (const m of beat.moves ?? []) if (m.kind === 'sit' || m.kind === 'lie') willSit(m.who, findSeat(spots, m.on, m.x ?? blockedX(m.who)));
   const crowd = (spot: SeatSpot) => sitters.get(spot.id)?.size ?? 0;
 
   // Everyone who is blocked, moves, speaks or is handed something gets a track. Unblocked speakers are spread across the stage.
@@ -273,6 +314,8 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         gestures: [],
         actions: [],
         talks: [],
+        hugs: [],
+        throws: [],
         blinks: [],
         sideEyes: [],
         glances: [],
@@ -285,6 +328,8 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
   for (const beat of scene.beats) {
     if (beat.who) ensure(beat.who);
     if (beat.give) ensure(beat.give);
+    if (beat.hug) ensure(beat.hug);
+    beat.also?.forEach(ensure);
     beat.moves?.forEach((m) => ensure(m.who));
   }
   // Characters whose first appearance is an entrance start off stage.
@@ -335,27 +380,29 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     visible: boolean;
     busyUntil: number;
     seat: { spot: SeatSpot; slot: number } | 'floor' | null;
+    lying: boolean;
     riding: Ride | null;
   }
   const pos = new Map<string, Pos>();
   for (const tr of tracks.values()) {
-    const p: Pos = { x: tr.startX, y: tr.startY, visible: tr.startVisible, busyUntil: 0, seat: null, riding: null };
+    const p: Pos = { x: tr.startX, y: tr.startY, visible: tr.startVisible, busyUntil: 0, seat: null, lying: false, riding: null };
     const b = scene.blocking.find((x) => x.who === tr.castId);
     if (b?.in && vehicles.has(b.in)) {
       const ride = { t0: -1, t1: Infinity, vehicle: b.in, slot: rideSlot(b.in) };
       tr.rides.push(ride);
       p.riding = ride;
-    } else if (b?.sit) {
-      const spot = findSeat(spots, b.sit, tr.startX);
+    } else if (b?.sit || b?.lie) {
+      p.lying = !b.sit;
+      const spot = findSeat(spots, b.sit ?? b.lie, tr.startX);
       if (spot) {
         const slot = pickSlot(spot, takenOn(spot.id), tr.startX, crowd(spot));
         takenOn(spot.id).add(slot);
-        tr.startX = p.x = seatSlots(spot, crowd(spot))[slot];
+        tr.startX = p.x = p.lying ? spot.x : seatSlots(spot, crowd(spot))[slot];
         tr.startY = p.y = spot.y;
-        tr.startSeat = { h: spot.h, ...(spot.cover ? { cover: spot.id } : {}) };
+        tr.startSeat = seatPosture(spot, p.lying);
         p.seat = { spot, slot };
       } else {
-        tr.startSeat = { h: 0 };
+        tr.startSeat = { h: 0, ...(p.lying ? { lie: true } : {}) };
         p.seat = 'floor';
       }
     }
@@ -392,14 +439,15 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     return t0 + dur;
   };
 
-  const act = (tr: ActorTrack, p: Pos, m: Move, t: number): number => {
+  const act = (tr: ActorTrack, p: Pos, m: Move, t: number, gap = NEAR_GAP): number => {
     let t0 = Math.max(t, p.busyUntil);
-    const speed = m.run ? RUN_SPEED : WALK_SPEED;
+    const speed = m.run ? RUN_SPEED : m.sneak ? SNEAK_SPEED : WALK_SPEED;
+    const pace = { run: !!m.run, ...(m.sneak ? { sneak: true } : {}) };
     const walkTo = (x1: number, y1: number) => {
       const d = Math.hypot(x1 - p.x, y1 - p.y);
       if (d < 4) return;
       const dur = Math.max(0.35, d / speed);
-      tr.moves.push({ t0, t1: t0 + dur, x0: p.x, x1, y0: p.y, y1, kind: 'walk', run: !!m.run });
+      tr.moves.push({ t0, t1: t0 + dur, x0: p.x, x1, y0: p.y, y1, kind: 'walk', ...pace });
       t0 += dur;
       p.x = x1;
       p.y = y1;
@@ -409,6 +457,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       tr.postures.push({ t: t0, seat: null });
       if (p.seat !== 'floor') seatTaken.get(p.seat.spot.id)?.delete(p.seat.slot);
       p.seat = null;
+      p.lying = false;
       if (animate) t0 += SIT_TIME;
     };
     const done = () => (p.busyUntil = t0);
@@ -447,22 +496,32 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         vbusy.set(vt.vehicle.id, Math.max(vbusy.get(vt.vehicle.id) ?? 0, t0));
         return done();
       }
-      case 'sit': {
+      case 'sit':
+      case 'lie': {
+        const lie = m.kind === 'lie';
         const spot = findSeat(spots, m.on, m.x ?? p.x);
-        if (p.seat && (spot ? p.seat !== 'floor' && p.seat.spot.id === spot.id : p.seat === 'floor')) return t0;
+        if (p.seat && p.lying === lie && (spot ? p.seat !== 'floor' && p.seat.spot.id === spot.id : p.seat === 'floor')) return t0;
         getUp(true);
         if (spot) {
           const slot = pickSlot(spot, takenOn(spot.id), m.x ?? p.x, crowd(spot));
           takenOn(spot.id).add(slot);
-          walkTo(seatSlots(spot, crowd(spot))[slot], spot.y);
-          tr.postures.push({ t: t0, seat: { h: spot.h, ...(spot.cover ? { cover: spot.id } : {}) } });
+          walkTo(lie ? spot.x : seatSlots(spot, crowd(spot))[slot], spot.y);
+          tr.postures.push({ t: t0, seat: seatPosture(spot, lie) });
           p.seat = { spot, slot };
         } else {
           if (m.x !== undefined) walkTo(clamp(m.x, 140, 1460), p.y);
-          tr.postures.push({ t: t0, seat: { h: 0 } });
+          tr.postures.push({ t: t0, seat: { h: 0, ...(lie ? { lie: true } : {}) } });
           p.seat = 'floor';
         }
+        p.lying = lie;
         t0 += SIT_TIME;
+        return done();
+      }
+      case 'approach': {
+        const other = m.on ? pos.get(m.on) : undefined;
+        if (!other?.visible) return t0;
+        getUp(true);
+        walkTo(clamp(other.x + (p.x <= other.x ? -gap : gap), 140, 1460), tr.baseY);
         return done();
       }
       case 'stand':
@@ -484,7 +543,8 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
           const side = m.side ?? (p.x < SCENE_W / 2 ? 'left' : 'right');
           x1 = side === 'left' ? OFF_LEFT : OFF_RIGHT;
         } else if (m.kind === 'walk') {
-          x1 = clamp(m.x ?? p.x, 140, 1460);
+          // Someone prowling with nowhere in particular to go heads across the stage.
+          x1 = clamp(m.x ?? (m.sneak ? p.x + (p.x < SCENE_W / 2 ? 420 : -420) : p.x), 140, 1460);
         } else if (m.kind === 'appear') {
           x0 = x1 = clamp(m.x ?? p.x, 140, 1460);
           y0 = y1;
@@ -492,12 +552,33 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
           y1 = y0;
         }
         const dur = m.kind === 'appear' || m.kind === 'vanish' ? 0 : Math.max(0.35, Math.hypot(x1 - x0, y1 - y0) / speed);
-        tr.moves.push({ t0, t1: t0 + dur, x0, x1, y0, y1, kind: m.kind, run: !!m.run });
+        tr.moves.push({ t0, t1: t0 + dur, x0, x1, y0, y1, kind: m.kind, ...pace });
         Object.assign(p, { x: x1, y: y1, visible: m.kind !== 'exit' && m.kind !== 'vanish' });
         t0 += dur;
         return done();
       }
     }
+  };
+
+  const flights: Flight[] = [];
+  /** Wind up, let go of whatever they're holding and send it at `at`, or out of shot if there's nobody to aim at. */
+  const fling = (tr: ActorTrack, t: number, at: string | undefined, beatId: string) => {
+    const p = pos.get(tr.castId);
+    const look = cast.get(tr.castId)?.look;
+    if (!p || !look) return;
+    const t0 = Math.max(t, p.busyUntil);
+    const aim = at && at !== tr.castId ? pos.get(at) : undefined;
+    const dir = aim ? Math.sign(aim.x - p.x) || 1 : p.x < SCENE_W / 2 ? 1 : -1;
+    tr.throws.push({ t0, t1: t0 + THROW_TIME, ...(aim ? { toward: at } : {}), dir });
+    const prop = holdAt(tr, look, t0);
+    if (prop.item === 'none') return;
+    const release = t0 + WIND_UP;
+    tr.holds.push({ t: release, item: 'none', color: prop.color });
+    // It leaves from the raised hand, beside the head.
+    const y0 = p.y - (GROUND_Y - getGeo(look.body, look.headShape).headCy) * BASE_SCALE * (1 - tr.depth * 0.28);
+    const x1 = aim ? aim.x : dir > 0 ? OFF_RIGHT : OFF_LEFT;
+    const span = Math.abs(x1 - p.x);
+    flights.push({ t0: release, t1: release + clamp(span / 1000, 0.45, 0.9), x0: p.x + dir * 90, y0, x1, y1: y0 - 60, arc: 80 + span * 0.14, dir, item: prop.item, color: prop.color, look: withHeld(look, prop.item, prop.color), ...(aim ? { at } : {}), beatId });
   };
 
   const beats: CompiledBeat[] = [];
@@ -512,6 +593,15 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       const until = vt ? drive(vt, m, t) : tr && p ? act(tr, p, m, t) : t;
       moveTime = Math.max(moveTime, until - t);
     }
+    // A hug starts by walking up to them.
+    const hugger = beat.who ? tracks.get(beat.who) : undefined;
+    const hugged = beat.hug && beat.hug !== beat.who ? tracks.get(beat.hug) : undefined;
+    const huggerAt = hugger && pos.get(hugger.castId);
+    let hugFrom = t;
+    if (hugger && hugged && huggerAt) {
+      hugFrom = act(hugger, huggerAt, { who: hugger.castId, kind: 'approach', on: hugged.castId }, t, HUG_GAP);
+      moveTime = Math.max(moveTime, hugFrom - t + HUG_TIME);
+    }
     const len = beatLength(beat, clips, moveTime);
     const end = t + len;
     const gap = beat.pauseAfter ?? (beat.text ? 0.24 : 0.12);
@@ -522,11 +612,22 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     const look = beat.who ? cast.get(beat.who)?.look : undefined;
     if (who && look) {
       if (beat.mood) who.moods.push({ t, mood: beat.mood });
-      if (beat.gesture && beat.gesture !== 'none') who.gestures.push({ t0: t, t1: Math.max(end, t + 0.9), gesture: beat.gesture });
-      if (beat.action) who.actions.push({ t, action: beat.action });
-      if (beat.text?.trim()) who.talks.push({ t0: t, t1: end, beatId: beat.id, lookAt: beat.lookAt });
-      else if (beat.lookAt) who.sideEyes.push({ t0: t, t1: cb.next, at: beat.lookAt });
-      if (beat.hold) who.holds.push({ t, item: beat.hold, color: propColor(look, beat.hold) });
+      if (beat.text?.trim()) {
+        const mouth = mouthTrack(beat.text, clips.get(beat.id)?.env ?? syntheticEnvelope(beat.text, len), len, POSE_FPS, ENV_FPS);
+        who.talks.push({ t0: t, t1: end, beatId: beat.id, lookAt: beat.lookAt, mouth });
+      } else if (beat.lookAt) who.sideEyes.push({ t0: t, t1: cb.next, at: beat.lookAt });
+      // Everyone doing it together.
+      for (const tr of [who, ...(beat.also ?? []).flatMap((id) => tracks.get(id) ?? [])]) {
+        const c = cast.get(tr.castId)?.look ?? look;
+        if (beat.gesture && beat.gesture !== 'none') tr.gestures.push({ t0: t, t1: Math.max(end, t + 0.9), gesture: beat.gesture });
+        if (beat.hold) tr.holds.push({ t, item: beat.hold, color: propColor(c, beat.hold) });
+        if (beat.action === 'throw') fling(tr, t, beat.lookAt, beat.id);
+        else if (beat.action) tr.actions.push({ t, t1: end, action: beat.action });
+      }
+      if (hugged) {
+        who.hugs.push({ t0: hugFrom, t1: end, toward: hugged.castId });
+        hugged.hugs.push({ t0: hugFrom, t1: end, toward: who.castId });
+      }
       const to = beat.give ? tracks.get(beat.give) : undefined;
       if (to && to !== who) {
         // Both reach out; the prop jumps from hand to hand halfway through.
@@ -558,7 +659,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     }
   }
 
-  return { scene, index, start, duration, groundY, beats, tracks: [...tracks.values()], vehicles: [...vehicles.values()], shots };
+  return { scene, index, start, duration, groundY, beats, tracks: [...tracks.values()], vehicles: [...vehicles.values()], shots, flights };
 }
 
 export function compileEpisode(episode: Episode, clips: ClipMap): CompiledEpisode {
@@ -593,7 +694,12 @@ export interface ActorFrame {
   flip: boolean;
   turn: number;
   talk: number;
+  mouth: MouthShape;
   blink: boolean;
+  /** Crying, sweating, being sick: 0 for not, otherwise a step 1-4 that moves it along. */
+  tears: number;
+  sweat: number;
+  vomit: number;
   /** Where the pupils point, -1..1 across and down. */
   gazeX: number;
   gazeY: number;
@@ -628,6 +734,18 @@ export interface VehicleFrame {
   lights: boolean;
 }
 
+/** A prop on its own, in the air. */
+export interface PropFrame {
+  key: string;
+  item: string;
+  color: string;
+  look: CharacterState;
+  x: number;
+  y: number;
+  rotate: number;
+  scale: number;
+}
+
 export interface SceneFrame {
   kind: 'scene';
   scene: CompiledScene;
@@ -637,6 +755,7 @@ export interface SceneFrame {
   /** Everyone on stage, passengers included (they carry `riding`). */
   actors: ActorFrame[];
   vehicles: VehicleFrame[];
+  props: PropFrame[];
   beat: CompiledBeat | null;
   caption: string | null;
   subtitle: { who: string; text: string } | null;
@@ -694,8 +813,8 @@ function lastAt<T extends { t: number }>(list: T[], t: number): T | undefined {
 
 const rideAt = (tr: ActorTrack, t: number) => tr.rides.find((r) => t >= r.t0 && t < r.t1);
 
-/** Hips above the feet (character units) at time t, easing in and out of seats; null when standing. */
-function seatAt(tr: ActorTrack, t: number, standHip: number, scale: number): { hip: number | null; cover?: string } {
+/** Hips above the feet (character units) at time t, easing in and out of seats; null when standing. `lie` runs 0 to 1 as they lie down on something `h` high. */
+function seatAt(tr: ActorTrack, t: number, standHip: number, scale: number): { hip: number | null; cover?: string; lie: number; h: number } {
   let cur = tr.startSeat;
   let from = tr.startSeat;
   let since = -Infinity;
@@ -706,10 +825,15 @@ function seatAt(tr: ActorTrack, t: number, standHip: number, scale: number): { h
     since = p.t;
   }
   const k = clamp((t - since) / SIT_TIME, 0, 1);
-  if (!cur && k >= 1) return { hip: null };
+  if (!cur && k >= 1) return { hip: null, lie: 0, h: 0 };
+  const lie = cur?.lie ? k : from?.lie ? 1 - k : 0;
+  const h = (cur?.lie ? cur : from)?.h ?? 0;
+  if (cur?.lie || from?.lie) return { hip: null, lie, h };
   const hipOf = (s: Posture['seat']) => (s ? seatHip(s.h / scale, standHip) : standHip);
-  return { hip: hipOf(from) + (hipOf(cur) - hipOf(from)) * k, cover: (cur ?? from)?.cover };
+  return { hip: hipOf(from) + (hipOf(cur) - hipOf(from)) * k, cover: (cur ?? from)?.cover, lie, h };
 }
+
+const seatPosture = (spot: SeatSpot, lie: boolean): Posture['seat'] => ({ h: spot.h, ...(lie ? { lie: true } : spot.cover ? { cover: spot.id } : {}) });
 
 /**
  * Hip height on a seat `h` high, for someone whose hips stand `legs` high. Paper furniture is big
@@ -746,21 +870,11 @@ function whereabouts(sc: CompiledScene, vehicles: VehicleFrame[], t: number): Ma
   return out;
 }
 
-function talkLevel(tr: ActorTrack, t: number, clips: ClipMap): { level: number; talk: ActorTrack['talks'][number] | null } {
+function talkAt(tr: ActorTrack, t: number): MouthPose & { talk: ActorTrack['talks'][number] | null } {
   for (const tk of tr.talks) {
-    if (t >= tk.t0 && t < tk.t1) {
-      const clip = clips.get(tk.beatId);
-      const env = clip?.env;
-      const i = Math.floor((t - tk.t0) * ENV_FPS + 1e-6);
-      // A pose stands for the whole stretch of sound until the next one, or quick syllables would fall between poses.
-      const span = env?.subarray(Math.min(i, env.length - 1), i + ENV_FPS / POSE_FPS);
-      const raw = span?.length ? span.reduce((a, b) => a + b, 0) / span.length : 0.5 + 0.5 * Math.sin((t - tk.t0) * 16);
-      // Cut-out mouths snap between a few shapes rather than easing.
-      const level = raw < 0.14 ? 0 : raw < 0.5 ? 0.5 : 1;
-      return { level, talk: tk };
-    }
+    if (t >= tk.t0 && t < tk.t1) return { ...tk.mouth[Math.min(tk.mouth.length - 1, Math.floor((t - tk.t0) * POSE_FPS + 1e-6))], talk: tk };
   }
-  return { level: 0, talk: null };
+  return { level: 0, shape: 'ah', talk: null };
 }
 
 function gestureAt(tr: ActorTrack, t: number): { gesture: GestureId; t0: number; t1: number } | null {
@@ -774,6 +888,8 @@ function actionAt(tr: ActorTrack, t: number) {
   let rotate = 0;
   let squash = 1;
   let jitter = 0;
+  let dance: number | undefined;
+  let vomit = 0;
   for (const a of tr.actions) {
     const dt = t - a.t;
     if (dt < 0) continue;
@@ -794,14 +910,27 @@ function actionAt(tr: ActorTrack, t: number) {
     } else if (a.action === 'shake' && dt < 1) {
       // Side to side on every pose.
       jitter = Math.round(dt * POSE_FPS) % 2 ? 5 : -5;
+    } else if (a.action === 'dance' && t < a.t1) {
+      // Lean left, up, lean right, up.
+      dance = Math.floor(dt / DANCE_STEP + 1e-6) % 4;
+      rotate = [-9, 0, 9, 0][dance];
+      jitter = [-16, 0, 16, 0][dance];
+      lift = dance % 2 ? 22 : 0;
+    } else if (a.action === 'vomit' && dt < VOMIT_TIME) {
+      vomit = 1 + (Math.floor(dt * 6 + 1e-6) % 4);
     }
   }
-  return { lift, rotate, squash, jitter };
+  return { lift, rotate, squash, jitter, dance, vomit };
 }
 
-function headBox(af: Pick<ActorFrame, 'x' | 'y' | 'scale' | 'c' | 'lift' | 'hipY'>) {
+function headBox(af: Pick<ActorFrame, 'x' | 'y' | 'scale' | 'c' | 'lift' | 'hipY' | 'rotate'>) {
   const g = seatedGeo(getGeo(af.c.body, af.c.headShape), af.hipY);
   const y = af.y - af.lift * af.scale;
+  // Flat on their back, the head is out to the side of the feet.
+  if (af.rotate <= -45) {
+    const r = Math.max(g.headRx, g.headRy) * af.scale;
+    return { cx: af.x - (GROUND_Y - g.headCy) * af.scale, cy: y, r, top: y - r * 1.6 };
+  }
   return {
     cx: af.x + (g.headCx - 200) * af.scale,
     cy: y + (g.headCy - GROUND_Y) * af.scale,
@@ -876,7 +1005,29 @@ function sampleVehicles(sc: CompiledScene, t: number): VehicleFrame[] {
   return out;
 }
 
-function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: ClipMap, vehicles: VehicleFrame[]): ActorFrame[] {
+/** Thrown props on their way. */
+function sampleProps(sc: CompiledScene, t: number, actors: ActorFrame[]): PropFrame[] {
+  return sc.flights
+    .filter((f) => t >= f.t0 && t < f.t1)
+    .map((f, i) => {
+      const k = (t - f.t0) / (f.t1 - f.t0);
+      const target = actors.find((a) => a.castId === f.at);
+      const head = target && headBox(target);
+      const [x1, y1] = head ? [head.cx, head.cy] : [f.x1, f.y1];
+      return {
+        key: `${f.beatId}-${i}`,
+        item: f.item,
+        color: f.color,
+        look: f.look,
+        x: f.x0 + (x1 - f.x0) * k,
+        y: f.y0 + (y1 - f.y0) * k - f.arc * 4 * k * (1 - k),
+        rotate: k * 540 * f.dir,
+        scale: BASE_SCALE,
+      };
+    });
+}
+
+function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicles: VehicleFrame[]): ActorFrame[] {
   const out: ActorFrame[] = [];
   const where = whereabouts(sc, vehicles, t);
   // Who is talking right now (everyone else looks at them).
@@ -895,11 +1046,17 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
     if (ride && !vehicle) continue;
     const place = placeOn(tr.moves, tr.startX, tr.startY, tr.startVisible, t);
     if (!ride && !place.visible) continue;
-    const mood = lastAt(tr.moods, t)?.mood ?? 'happy';
+    const act = actionAt(tr, t);
+    const mood = act.vomit ? 'sick' : lastAt(tr.moods, t)?.mood ?? 'happy';
     const prop = holdAt(tr, member.look, t);
     const c = withHeld(withMood(member.look, mood), prop.item, prop.color);
     const g0 = getGeo(c.body, c.headShape);
-    const { level, talk } = talkLevel(tr, t, clips);
+    const gs = gestureAt(tr, t);
+    const spoken = talkAt(tr, t);
+    const { talk } = spoken;
+    let { level, shape } = spoken;
+    if (act.vomit) [level, shape] = [1, 'ah'];
+    else if (!talk && gs?.gesture === 'eat') [level, shape] = [Math.floor((t - gs.t0) * 6 + 1e-6) % 2 ? 0.5 : 0, 'oh'];
     let scale = BASE_SCALE * (1 - tr.depth * 0.28);
     let x = place.x;
     let y = place.y;
@@ -908,13 +1065,20 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
     // Sitting: hips drop to the seat. Someone too small for it is lifted onto it instead, legs dangling.
     let hipY: number | undefined;
     let raise = 0;
-    const sit = ride ? { hip: null } : seatAt(tr, t, GROUND_Y - g0.legTop, scale);
+    const sit = ride ? { hip: null, lie: 0, h: 0 } : seatAt(tr, t, GROUND_Y - g0.legTop, scale);
     if (sit.hip !== null) {
       const hy = GROUND_Y - sit.hip;
       if (hy < g0.legTop) raise = g0.legTop - hy;
       else hipY = hy;
     }
+    // Sneaking is done crouched.
+    if (walking && place.sneak) hipY = g0.legTop + (g0.legBottom - g0.legTop) * 0.45;
     const g = seatedGeo(g0, hipY);
+    // Lying down: tipped over, feet at one end of the seat, stretched out along it and resting on top of it.
+    if (sit.lie) {
+      x += (sit.lie * (GROUND_Y - g0.headCy + g0.headRy) * scale) / 2;
+      if (sit.h) y -= sit.lie * (sit.h + g0.hip * 0.8 * scale);
+    }
 
     // Passengers sit in the vehicle with their heads in the windows.
     if (ride && vehicle) {
@@ -927,11 +1091,15 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
 
     // Facing: walkers face where they're going; talkers look at their target; listeners look at the talker; passengers face the road.
     const handoff = tr.handoffs.find((h) => t >= h.t0 && t < h.t1 + GESTURE_BLEND);
+    const hug = tr.hugs.find((h) => t >= h.t0 && t < h.t1 + GESTURE_BLEND);
+    const thrown = tr.throws.find((h) => t >= h.t0 && t < h.t1);
     let lookDir = 0;
     if (walking) lookDir = place.dir;
     else {
       let targetX: number | null = null;
       if (handoff) targetX = where.get(handoff.toward) ?? null;
+      else if (hug) targetX = where.get(hug.toward) ?? null;
+      else if (thrown) targetX = (thrown.toward ? where.get(thrown.toward) : undefined) ?? here + thrown.dir * 100;
       else if (talk) {
         if (talk.lookAt) targetX = where.get(talk.lookAt) ?? null;
         if (targetX === null) {
@@ -948,22 +1116,27 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
       if (targetX !== null && Math.abs(targetX - here) > 30) lookDir = Math.sign(targetX - here);
       else if (vehicle) lookDir = vehicle.flip ? -1 : 1;
     }
-    const turn = walking ? lookDir : lookDir * (talk ? 0.55 : 0.42);
+    const turn = walking ? lookDir : (lookDir || (act.vomit ? 1 : 0)) * (talk || act.vomit ? 0.55 : 0.42);
     const gaze = gazeAt(tr, t, lookDir, here, where, !!talk);
 
     // Arms: hand-overs, then gestures, then pumping while running.
     const lead = (lookDir || 1) as -1 | 1;
     const charLead = (tr.flip ? -lead : lead) as -1 | 1;
     let arms: ArmsPose | undefined;
-    const gs = gestureAt(tr, t);
     if (handoff) arms = blendIn(g, handOverArms(g, charLead), t, handoff.t0, handoff.t1);
+    else if (hug) arms = blendIn(g, hugArms(g, charLead), t, hug.t0, hug.t1);
+    else if (thrown) arms = throwArms(g, charLead, t - thrown.t0, WIND_UP);
+    else if (act.dance !== undefined) arms = danceArms(g, act.dance);
     else if (gs) arms = blendIn(g, poseArms(g, gs.gesture, charLead, t - gs.t0, level), t, gs.t0, gs.t1);
     else if (walking && place.run) arms = runArms(g, place.moveT);
+    else if (walking && place.sneak) arms = sneakArms(g, charLead, place.moveT);
 
-    const act = actionAt(tr, t);
-    const period = place.run ? RUN_HOP : HOP_PERIOD;
+    const period = place.run ? RUN_HOP : place.sneak ? SNEAK_HOP : HOP_PERIOD;
     const hop = walking ? Math.round((1 - Math.abs(2 * ((place.moveT / period) % 1) - 1)) * 2) / 2 : 0;
     const blink = !talk && mood !== 'love' && tr.blinks.some((b) => t >= b && t < b + 0.13);
+    // Runners lean into it, and so does anyone creeping along, hugging or being sick.
+    const lean = walking ? place.dir * (place.run ? 7 : place.sneak ? 5 : 0) : (hug ? lookDir * 5 : 0) + (act.vomit ? (lookDir || 1) * 10 : 0);
+    const drip = 1 + (Math.floor(t * 6 + 1e-6) % 4);
     out.push({
       castId: tr.castId,
       name: member.name,
@@ -974,13 +1147,16 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
       flip: tr.flip,
       turn: tr.flip ? -turn : turn,
       talk: level,
+      mouth: shape,
       blink,
+      tears: mood === 'cry' ? drip : 0,
+      sweat: mood === 'nervous' ? drip : 0,
+      vomit: act.vomit,
       gazeX: tr.flip ? -gaze.x : gaze.x,
       gazeY: gaze.y,
       arms,
-      lift: hop * (place.run ? 34 : 26) + act.lift + level * 3 + raise,
-      // Runners lean into it.
-      rotate: act.rotate || (walking && place.run ? place.dir * 7 : 0),
+      lift: hop * (place.run ? 34 : place.sneak ? 10 : 26) + act.lift + level * 3 + raise,
+      rotate: sit.lie ? -90 * sit.lie : act.rotate || lean,
       squash: act.squash,
       jitter: act.jitter,
       depth: tr.depth,
@@ -994,9 +1170,9 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
 }
 
 /** `t` is the pose on screen; `frameT` is the frame, which camera moves and fades run on. */
-export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: ClipMap, frameT = t): SceneFrame {
+export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, frameT = t): SceneFrame {
   const vehicles = sampleVehicles(sc, t);
-  const actors = sampleActors(sc, ep, t, clips, vehicles);
+  const actors = sampleActors(sc, ep, t, vehicles);
   let beat: CompiledBeat | null = null;
   for (const b of sc.beats) if (b.start <= t) beat = b;
 
@@ -1008,8 +1184,8 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, c
       // On the pose, so the character holds still in the frame while the set moves behind them. Their hops don't shake it.
       // Once they've left there's nobody to frame, and it cuts back to wide for whoever's still there.
       const p = poseTime(at);
-      framing = sampleActors(sc, ep, p, clips, sampleVehicles(sc, p)).map((a) => ({ ...a, lift: 0 }));
-    } else if (shot.type !== 'wide') framing = t0 === t ? actors : sampleActors(sc, ep, t0 + 1e-3, clips, sampleVehicles(sc, t0 + 1e-3));
+      framing = sampleActors(sc, ep, p, sampleVehicles(sc, p)).map((a) => ({ ...a, lift: 0 }));
+    } else if (shot.type !== 'wide') framing = t0 === t ? actors : sampleActors(sc, ep, t0 + 1e-3, sampleVehicles(sc, t0 + 1e-3));
     let cam = cameraFor(shot, framing, from?.beat.who);
     if (shot.push && from) {
       const k = clamp((at - from.start) / Math.max(0.5, from.end - from.start), 0, 1);
@@ -1039,7 +1215,7 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, c
   let subtitle: SceneFrame['subtitle'] = null;
   if (beat?.beat.text && t < beat.end) subtitle = { who: ep.cast.get(beat.beat.who ?? '')?.name ?? '', text: beat.beat.text };
 
-  return { kind: 'scene', scene: sc, t, camera, actors, vehicles, beat, caption, subtitle, flash, fade: 0, weather: sc.scene.weather };
+  return { kind: 'scene', scene: sc, t, camera, actors, vehicles, props: sampleProps(sc, t, actors), beat, caption, subtitle, flash, fade: 0, weather: sc.scene.weather };
 }
 
 const fadeLength = (sc: CompiledScene) => Math.min(FADE_TIME, sc.duration / 2);
@@ -1051,7 +1227,7 @@ export function transitionTime(sc: CompiledScene): number {
 }
 
 /** Scene changes are overlays: fades and dissolves use the hold and the tail each scene already has, so nothing moves in time. */
-function transition(frame: SceneFrame, ep: CompiledEpisode, local: number, clips: ClipMap): SceneFrame {
+function transition(frame: SceneFrame, ep: CompiledEpisode, local: number): SceneFrame {
   const sc = frame.scene;
   const t = frameTime(local);
   const time = transitionTime(sc);
@@ -1060,13 +1236,13 @@ function transition(frame: SceneFrame, ep: CompiledEpisode, local: number, clips
   frame.fade = clamp(Math.max(up, down), 0, 1);
   const prev = ep.scenes[sc.index - 1];
   if (sc.scene.transition === 'dissolve' && prev && t < time) {
-    frame.under = { frame: sampleScene(prev, ep, prev.duration + poseTime(local), clips, prev.duration + t), opacity: 1 - t / time };
+    frame.under = { frame: sampleScene(prev, ep, prev.duration + poseTime(local), prev.duration + t), opacity: 1 - t / time };
   }
   return frame;
 }
 
 /** The picture at time t, held on the current frame and pose. */
-export function sampleEpisode(ep: CompiledEpisode, t: number, clips: ClipMap): Frame | null {
+export function sampleEpisode(ep: CompiledEpisode, t: number): Frame | null {
   if (t < ep.titleDuration) {
     const fade = ep.scenes[0]?.scene.transition === 'fade' ? clamp(1 - (ep.titleDuration - frameTime(t)) / FADE_TIME, 0, 1) : 0;
     return { kind: 'title', title: ep.episode.title, t: poseTime(t), fade };
@@ -1074,10 +1250,10 @@ export function sampleEpisode(ep: CompiledEpisode, t: number, clips: ClipMap): F
   const sc = ep.scenes.find((s) => t < s.start + s.duration);
   if (sc) {
     const local = Math.max(0, t - sc.start);
-    return transition(sampleScene(sc, ep, poseTime(local), clips, frameTime(local)), ep, local, clips);
+    return transition(sampleScene(sc, ep, poseTime(local), frameTime(local)), ep, local);
   }
   const last = ep.scenes[ep.scenes.length - 1];
-  return last ? transition(sampleScene(last, ep, last.duration, clips), ep, last.duration, clips) : null;
+  return last ? transition(sampleScene(last, ep, last.duration), ep, last.duration) : null;
 }
 
 /** Which scene (index) and beat is playing at episode time t. */
@@ -1109,6 +1285,11 @@ export function audioCues(ep: CompiledEpisode): AudioCue[] {
       if (b.beat.text?.trim()) cues.push({ t: sc.start + b.start, kind: 'line', beatId: b.beat.id });
       if (b.beat.sfx) cues.push({ t: sc.start + b.start, kind: 'sfx', beatId: b.beat.id, sfx: b.beat.sfx });
       if (b.beat.action === 'faint' && !b.beat.sfx) cues.push({ t: sc.start + b.start + 0.28, kind: 'sfx', beatId: b.beat.id, sfx: 'thud' });
+      if (b.beat.action === 'vomit' && !b.beat.sfx) cues.push({ t: sc.start + b.start, kind: 'sfx', beatId: b.beat.id, sfx: 'vomit' });
+    }
+    for (const f of sc.flights) {
+      cues.push({ t: sc.start + f.t0, kind: 'sfx', beatId: f.beatId, sfx: 'whoosh' });
+      if (f.at) cues.push({ t: sc.start + f.t1, kind: 'sfx', beatId: f.beatId, sfx: 'slap' });
     }
   }
   return cues.sort((a, b) => a.t - b.t);

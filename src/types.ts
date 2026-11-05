@@ -86,6 +86,9 @@ export interface BodyGeo {
   isAdult: boolean;
 }
 
+/** A talking mouth: wide open, open and wide, teeth together, round, puckered, teeth on the lip, tongue up. */
+export type MouthShape = 'ah' | 'eh' | 'ee' | 'oh' | 'oo' | 'fv' | 'th';
+
 export interface RenderCtx {
   c: CharacterState;
   g: BodyGeo;

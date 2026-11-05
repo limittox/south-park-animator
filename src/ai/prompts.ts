@@ -117,7 +117,7 @@ export function voiceReference(voices: string[]): string {
 /* ------------------------------------------------------------------ system prompts */
 
 const STYLE = `THE SHOW'S STYLE
-A crude construction-paper cut-out cartoon set in a small snowy mountain town. Kids are short with huge round heads; grown-ups stand about one and a half kids tall. Characters mostly face the camera, slide across the ground with a stop-motion hop when they walk, bob when they talk and snap between expressions. The camera is a static wide shot most of the time, with hard cuts to a two-shot or a close-up for punchlines, reactions and big emotional moments, then back to wide. Comedy lives in the timing: a beat of silence before a deadpan reply, a cut to someone's horrified face, a character fainting flat on the floor.`;
+A crude construction-paper cut-out cartoon set in a small snowy mountain town. Kids are short with huge round heads; grown-ups stand about one and a half kids tall. Characters mostly face the camera, slide across the ground with a stop-motion hop when they walk, bob when they talk and snap between expressions and mouth shapes. The camera is a static wide shot most of the time, with hard cuts to a two-shot or a close-up for punchlines, reactions and big emotional moments, then back to wide. Comedy lives in the timing: a beat of silence before a deadpan reply, a cut to someone's horrified face, a character fainting flat on the floor.`;
 
 export const CAST_SYSTEM = `You are the character designer and voice casting director of a construction-paper cut-out cartoon.
 
@@ -162,7 +162,7 @@ Scene = {
   "title": "short name", "description": "what happens",
   "set": SetSpec,
   "weather": one of ${WEATHER_LIST.map((w) => w.id).join(', ')},
-  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "in": "car", "hold": "phone" } ],  // sit / in / hold only when needed
+  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "lie": "bed", "in": "car", "hold": "phone" } ],  // sit / lie / in / hold only when needed
   "vehicles": [ { "id": "car", "type": "car|police|bus", "x": 800, "color": "#hex", "offstage": true, "lane": "back|front" } ],  // only if a vehicle appears
   "beats": [ Beat ],
   "hold": seconds of establishing wide shot before the first beat (about 1.2; 0.6 for the first scene),
@@ -178,9 +178,11 @@ Beat = {
   "reactions": { "other name": mood },  // faces of listeners, from this beat on
   "gesture": arm pose of "who" during the beat,
   "action": one-shot body action of "who",
-  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|stand|getIn|getOut", "x": 800, "side": "left|right", "run": true, "on": "seat or vehicle" } ],
+  "also": ["names"],  // others doing the same gesture, action and hold at the same moment
+  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|lie|stand|approach|getIn|getOut", "x": 800, "side": "left|right", "run": true, "sneak": true, "on": "seat, vehicle or person" } ],
   "hold": "prop id",  // what "who" holds from this beat on ("none" puts it away)
   "give": "name",  // "who" hands their prop to this person during the beat
+  "hug": "name",  // "who" walks up to this person and they hug
   "lookAt": "name the speaker looks at (default: nearest person); on a silent beat only the eyes move, a side-eye",
   "shot": { "type": "wide|medium|close", "on": ["names"], "push": false, "pan": false, "follow": false },  // camera change at the start of the beat; omit to keep the current shot
   "sfx": sound effect, "effect": screen effect,
@@ -209,8 +211,13 @@ vehicles:
 ${vehicleCatalogForPrompt()}
 
 STAGE BUSINESS
-- Walk and run: a move with "run": true runs (walk, enter, exit). Use it for chases, panics and excited arrivals.
+- Walk and run: a move with "run": true runs (walk, enter, exit, approach). Use it for chases, panics and excited arrivals. "sneak": true creeps along crouched instead; a sneaking "walk" with no x prowls across the stage. "approach" walks up to the person in "on".
+- Together: "also" makes other people do the same gesture, action and hold as "who" at the same moment. Use it whenever a group dances, cheers, raises something or throws. Separate beats would play one after the other.
 - Sitting: a "sit" move walks the character to a seat and sits them down; "on" is a seat id, a seat type ("couch", "bench", "chair", "table", "desk", "log") or "floor". A "stand" move gets them up; walking anywhere also gets them up. Blocking "sit" starts them seated. Seats are the "seat" pieces of a kit set (sitters face the camera; at tables and desks they sit behind it) or the seats listed for a preset. Several people share a couch or table side by side.
+- Lying down: a "lie" move works like "sit", but they stretch out along the seat ("couch", "bed", "bench") or on the "floor", and stay there until a "stand" or a walk. Blocking "lie" starts them lying down. "faint" is falling over; "lie" is lying down on purpose: sleeping, hungover, sunbathing.
+- Tears and sweat: the "cry" and "nervous" moods run them for as long as the mood lasts.
+- Food and drink: the "eat" and "drink" gestures use whatever "who" holds, so set "hold" on the same beat if they aren't holding it yet.
+- Throwing: the "throw" action sends what "who" holds at "lookAt", or out of shot if there's no "lookAt". Set "hold" on the same beat if they aren't holding it yet. The prop leaves their hand.
 - Props: "hold" puts a prop in "who"'s hand (pick something up, pull out a phone); "give" hands it to someone, who should be standing near them. Blocking "hold" sets the prop they start the scene with.
 - Camera moves: a shot normally cuts. "pan": true glides there from the last shot over about a second: from one person to another, in on someone, or back out to wide. "follow": true keeps a medium or close shot on "on" as they walk or run. "push": true creeps in slowly during the beat.
 - Eyes: a silent beat with "lookAt" slides just the eyes to that person, with no head turn. Good for a side-eye before a deadpan line.
@@ -235,7 +242,7 @@ DIRECTING RULES
 7. Camera: wide by default. Cut to a close-up for punchlines, outbursts and reaction shots, a medium shot for intimate two-person moments, then cut back to wide. Don't cut on every line. Pans and follows are rare: save them for a reveal or a chase.
 8. Comic timing: pauseAfter 0.6 to 1.2 before deadpan answers and after shocking lines; a silent reaction beat (duration 1 to 1.5, with reactions) is often funnier than a line.
 9. Outdoor town scenes usually have "weather": "snow" unless the script says otherwise. Scene changes are hard cuts unless the script asks for a fade or a dissolve, or a big jump in time calls for one.
-10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who run run; anything someone picks up, eats, reads or hands over becomes a "hold" or "give"; arrivals and departures by car or bus use a vehicle.`;
+10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who lie down lie down; people who run run; people who sneak sneak; people who dance dance; anything someone picks up, eats, drinks, reads, throws or hands over becomes a "hold", "give" or "throw"; arrivals and departures by car or bus use a vehicle.`;
 }
 
 export function editSystem(): string {
