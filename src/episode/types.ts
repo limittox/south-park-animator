@@ -93,10 +93,10 @@ export interface Shot {
   follow?: boolean;
 }
 
-export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'lie' | 'stand' | 'approach' | 'getIn' | 'getOut';
+export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'lie' | 'stand' | 'approach' | 'getIn' | 'getOut' | 'crash' | 'joinScreen' | 'leaveScreen';
 
 export interface Move {
-  /** Cast id, or a vehicle id: vehicles drive with walk / enter / exit / appear / vanish. */
+  /** Cast id, or a vehicle id: vehicles drive with walk / enter / exit / appear / vanish / crash. */
   who: string;
   kind: MoveKind;
   /** Target x for walk / enter / appear, the spot to sit near for sit; ignored otherwise. */
@@ -107,7 +107,7 @@ export interface Move {
   run?: boolean;
   /** Creep along, crouched, instead of walking. Without an x, a walk heads across the stage. */
   sneak?: boolean;
-  /** sit / lie: a seat id or type ("couch", "bench", "chair-2"), or "floor". getIn: the vehicle id. approach: the cast id to walk up to. */
+  /** sit / lie: a seat id or type ("couch", "bench", "chair-2"), or "floor". getIn: the vehicle id. approach: the cast id to walk up to. crash: "wall" to burst through the back of the set. */
   on?: string;
 }
 
@@ -129,6 +129,11 @@ export type SfxId =
   | 'vomit';
 
 export type ScreenEffect = 'shake' | 'flash';
+
+export type BurstId = 'smoke' | 'fire' | 'explosion' | 'poof' | 'debris';
+
+/** How a crowd of extras takes something. */
+export type CrowdReaction = 'cheer' | 'gasp' | 'boo' | 'panic';
 
 /** How a scene takes over from the one before it. */
 export type Transition = 'cut' | 'fade' | 'dissolve';
@@ -159,6 +164,14 @@ export interface Beat {
   give?: string;
   /** Cast id `who` walks up to and hugs. */
   hug?: string;
+  /** `who` turns into this: another cast id, or a creature (a sidekick id: "bat", "frog", "pig"...). */
+  becomes?: string;
+  /** How the scene's crowd reacts. */
+  crowd?: CrowdReaction;
+  /** Smoke, fire or an explosion: on someone or something (a cast or vehicle id, `who` by default), or at x. `stay` keeps it going until the scene ends. */
+  burst?: { kind: BurstId; at?: string; x?: number; stay?: boolean };
+  /** A prop going by on its own: blown across, rolling along the ground, or falling at x. */
+  drift?: { item: string; style?: 'blow' | 'roll' | 'fall'; from?: 'left' | 'right'; x?: number };
   /** Cast id `who` looks at; defaults to the nearest other character. On a silent beat only their eyes move: a side-eye. */
   lookAt?: string;
   /** Camera cut at the start of the beat. Leave out to keep the previous shot. */
@@ -193,6 +206,8 @@ export interface Blocking {
   in?: string;
   /** Prop in hand when the scene starts, instead of the one in their look. */
   hold?: string;
+  /** On the set's TV or the video call instead of on stage. */
+  screen?: boolean;
 }
 
 export type VehicleType = 'car' | 'police' | 'bus';
@@ -231,6 +246,19 @@ export interface Scene {
   sting: boolean;
   /** How this scene takes over from the last one. Leave out for a hard cut. */
   transition?: Transition;
+  /** Extras behind the cast. */
+  crowd?: Crowd;
+  /** A phone call: the screen splits, with these people in a second set on the right. */
+  split?: { set: SetSpec; who: string[]; weather?: Weather };
+}
+
+export interface Crowd {
+  count: number;
+  /** "group" fills the rows behind the cast; "line" queues across the stage. */
+  layout: 'group' | 'line';
+  /** All kids (a class), rather than a mix. */
+  kids?: boolean;
+  mood?: MoodId;
 }
 
 /* ---------------------------------------------------------------- sets */

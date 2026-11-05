@@ -20,6 +20,8 @@ export interface SceneDef {
   front?: (o: SceneOpts) => ReactNode;
   /** Places to sit, in scene coordinates. */
   seats?: PresetSeat[];
+  /** The picture of a TV in the set, for people who appear on it. */
+  screen?: { x: number; y: number; w: number; h: number };
 }
 
 /** A seat drawn into a preset: sitters' feet go on `y`, their hips `h` above it, sharing width `w`. */
@@ -506,6 +508,7 @@ export const SCENES: SceneDef[] = [
       </g>
     ),
     seats: [{ id: 'couch', x: 800, y: 700, h: 172, w: 520 }],
+    screen: { x: 152, y: 310, w: 236, h: 160 },
   },
   {
     id: 'pond',

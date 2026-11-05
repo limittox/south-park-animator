@@ -281,7 +281,7 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
             />
           )}
           {tab === 'cast' && <CastPanel episode={episode} settings={settings} onEpisode={(ep, merge) => set(ep, { merge })} />}
-          {tab === 'set' && scene && <SetPanel scene={scene} onScene={onScene} />}
+          {tab === 'set' && scene && <SetPanel scene={scene} cast={episode.cast} onScene={onScene} />}
           {tab === 'chat' && <ChatPanel episode={episode} sceneIndex={sceneIndex} settings={settings} onApply={(ep) => set(ep)} onRevert={(ep) => set(ep)} onOpenSettings={onOpenSettings} />}
         </div>
       </aside>

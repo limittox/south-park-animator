@@ -1,4 +1,4 @@
-import type { ActionId, GestureId, MoodId, ScreenEffect, SfxId, ShotType, Transition, Weather } from './types';
+import type { ActionId, BurstId, CrowdReaction, GestureId, MoodId, ScreenEffect, SfxId, ShotType, Transition, Weather } from './types';
 
 /** The animation vocabulary: shown in the editor and handed to the LLM, so every entry says what it looks like. */
 export interface VocabEntry<T extends string> {
@@ -83,6 +83,21 @@ export const EFFECT_LIST: VocabEntry<ScreenEffect>[] = [
   { id: 'flash', label: 'Flash', desc: 'white flash (explosions, revelations)' },
 ];
 
+export const BURST_LIST: VocabEntry<BurstId>[] = [
+  { id: 'smoke', label: 'Smoke', desc: 'grey puffs rising for a few seconds' },
+  { id: 'fire', label: 'Fire', desc: 'flickering paper flames' },
+  { id: 'explosion', label: 'Explosion', desc: 'a fireball, then smoke' },
+  { id: 'poof', label: 'Poof', desc: 'a small white cloud, for things appearing and vanishing' },
+  { id: 'debris', label: 'Debris', desc: 'bits of wreckage flying out and falling' },
+];
+
+export const CROWD_LIST: VocabEntry<CrowdReaction>[] = [
+  { id: 'cheer', label: 'Cheer', desc: 'arms up, overjoyed, bobbing' },
+  { id: 'gasp', label: 'Gasp', desc: 'shocked faces' },
+  { id: 'boo', label: 'Boo', desc: 'angry, shaking their fists' },
+  { id: 'panic', label: 'Panic', desc: 'shocked, flailing and bobbing' },
+];
+
 export const TRANSITION_LIST: VocabEntry<Transition>[] = [
   { id: 'cut', label: 'Hard cut', desc: 'straight to the new scene (the usual)' },
   { id: 'fade', label: 'Fade through black', desc: 'the last scene fades to black, then this one fades up (act breaks, big time jumps)' },
@@ -105,6 +120,8 @@ export const SHOT_IDS = SHOT_LIST.map((m) => m.id);
 export const SFX_IDS = SFX_LIST.map((m) => m.id);
 export const EFFECT_IDS = EFFECT_LIST.map((m) => m.id);
 export const TRANSITION_IDS = TRANSITION_LIST.map((m) => m.id);
+export const BURST_IDS = BURST_LIST.map((m) => m.id);
+export const CROWD_IDS = CROWD_LIST.map((m) => m.id);
 export const WEATHER_IDS = WEATHER_LIST.map((m) => m.id);
 
 /** Feet stay inside this band so nobody is cut in half by the frame. */

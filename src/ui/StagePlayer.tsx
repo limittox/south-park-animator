@@ -153,7 +153,8 @@ export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
     return { x: p.x, y: p.y };
   };
   const startDrag = (kind: 'actor' | 'piece', id: string, ox: number, oy: number) => (e: React.PointerEvent) => {
-    if (playing || !sceneFrame) return;
+    // A split screen is two sets in one frame, so stage positions don't map to the pointer.
+    if (playing || !sceneFrame || sceneFrame.split) return;
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = toScene(e);

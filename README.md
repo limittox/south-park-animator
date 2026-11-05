@@ -29,11 +29,17 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 - Acting: dancing, crying with running tears, sweating, vomiting, eating and chewing, drinking, hugging, and lying down on couches, beds and floors. Several people can do the same thing at once.
 - Running: faster, quicker hops, a forward lean and pumping arms. Sneaking: slow, crouched, hands up. Characters can also walk up to someone instead of to a spot.
 - Sitting on couches, chairs, benches, beds, logs and the floor, or behind tables and desks (which are drawn again over the sitters). Grown-ups sink into the seat with their knees toward the camera; little kids are lifted onto it, legs dangling. Several people share a seat side by side.
-- Props: 35 things to hold (phones, cash, gifts, love letters, sodas, snowballs, pickaxes, beers, swabs, microphones, butterfly nets…), picked up, put away, handed from one character to another mid-line, or thrown, flying in an arc to someone's head or out of shot.
+- Props: 37 things to hold (phones, cash, gifts, love letters, sodas, snowballs, pickaxes, beers, swabs, microphones, butterfly nets…), picked up, put away, handed from one character to another mid-line, or thrown, flying in an arc to someone's head or out of shot. They can also go by on their own, blowing past, rolling along or falling.
 - Vehicles: a car, a police car with flashing lights and the yellow school bus drive in and off, juddering on spinning wheels, with passengers showing through the windows. People get in and out; the bus can pull up in front of everyone.
 - Listeners turn toward whoever is talking. Talkers face the person they address. Pupils move on their own: they point at whoever matters, wander in quiet moments, and a silent look is a side-eye with no head turn.
 - Hard camera cuts between wide, medium and close-up shots framed from where people stand, plus pans between shots, shots that follow someone across the set, slow push-ins, screen shake and flashes.
 - Scene changes are hard cuts, fades through black or dissolves.
+- Crowds of extras behind the cast, in rows or a queue, who cheer, gasp, boo and panic.
+- People on the set's TV or computer, or on a big video-call screen, sharing it in tiles as they join and leave. A close-up can zoom right into it.
+- Split-screen phone calls, with each half in its own set.
+- Cars crashing in with debris, smoke and a screen shake, and tearing a hole through the wall if they go through it.
+- Smoke, fire and explosions, on a spot or following someone around.
+- Transformations: a flicker and a puff of smoke, into another character or a creature.
 - A title card, an original synthesized guitar sting for scene changes, synthesized sound effects (pop, boing, crash, thud, fart…), weather and captions.
 
 **Sets**

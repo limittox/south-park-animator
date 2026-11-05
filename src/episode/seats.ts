@@ -63,6 +63,29 @@ export function findSeat(spots: SeatSpot[], ref: string | undefined, nearX: numb
   return any && Math.abs(any.x - nearX) <= NEAR_ENOUGH ? any : null;
 }
 
+export interface ScreenSpot {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Not part of the set: a big video screen put up for the occasion. */
+  panel?: boolean;
+}
+
+const BIG_SCREEN: ScreenSpot = { x: 500, y: 170, w: 600, h: 340, panel: true };
+
+/** Where people on a TV or a video call show up: the set's first TV or computer, or else a big screen on the back wall. */
+export function screenOf(set: SetSpec): ScreenSpot {
+  if (set.kind === 'preset') return getScene(set.preset).screen ?? BIG_SCREEN;
+  for (const piece of set.pieces) {
+    const s = getPieceDef(piece.type)?.screen;
+    if (!s) continue;
+    const p = resolvePiece(set, piece);
+    return { x: p.x + s.x * p.scale, y: p.y + s.y * p.scale, w: s.w * p.scale, h: s.h * p.scale };
+  }
+  return BIG_SCREEN;
+}
+
 /** Squeezed up, people sit this close. */
 const SQUEEZE_W = 170;
 

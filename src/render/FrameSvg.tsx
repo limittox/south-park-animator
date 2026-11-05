@@ -1,9 +1,10 @@
 import { memo, useId, type ReactNode, type Ref, type SVGProps } from 'react';
 import type { SetSpec, Weather } from '../episode/types';
-import { FRAME_H, FRAME_W, type ActorFrame, type Camera, type Frame, type PropFrame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
+import { FRAME_H, FRAME_W, PANEL_W, type ActorFrame, type Camera, type Frame, type PropFrame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
 import { CharacterGroup } from '../character/Character';
 import { getGeo, handPos } from '../character/geometry';
-import { HELD } from '../character/parts/held';
+import { HELD, SIDEKICKS } from '../character/parts/held';
+import { BurstShape, WallHole } from './Effects';
 import { getScene } from '../scenes/backgrounds';
 import { renderKitSet } from '../sets/kit';
 import { getVehicleDef, wheel } from '../sets/vehicles';
@@ -31,7 +32,23 @@ export function actorTransform(a: ActorFrame): string {
   return `translate(${a.x.toFixed(1)} ${y.toFixed(1)})${a.rotate ? ` rotate(${a.rotate.toFixed(1)})` : ''} scale(${sx.toFixed(4)} ${a.scale.toFixed(4)}) translate(-200 -480)`;
 }
 
+/** Someone turned into a creature, drawn much bigger than the pet it would otherwise be. */
+function Creature({ a }: { a: ActorFrame }) {
+  const prefix = `form${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const def = SIDEKICKS.find((s) => s.id === a.form);
+  const g = getGeo(a.c.body, a.c.headShape);
+  let n = 0;
+  const art = def?.render?.({ c: a.c, g, color: def.defaultColor ?? a.c.heldColor, uid: (name) => `${prefix}-${name}-${n++}`, talk: 0 });
+  const s = a.scale * 1.7;
+  return (
+    <g className="sp-char" transform={`translate(${a.x.toFixed(1)} ${(a.y - a.lift * a.scale).toFixed(1)}) scale(${(a.flip ? -s : s).toFixed(3)} ${s.toFixed(3)}) translate(${-(g.cx - 186)} -480)`}>
+      {art}
+    </g>
+  );
+}
+
 export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
+  if (a.form) return <Creature a={a} />;
   return (
     <g transform={actorTransform(a)}>
       <CharacterGroup c={a.c} talk={a.talk} mouthShape={a.mouth} turn={a.turn} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} tears={a.tears} sweat={a.sweat} vomit={a.vomit} hipY={a.hipY} />
@@ -222,17 +239,49 @@ export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, 
 
 const viewBoxOf = (cam: Camera) => `${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`;
 
-/** Everything that stands in the set, in scene coordinates. */
-function SceneContent({ frame, renderActor, sceneOverlay }: Pick<FrameSvgProps, 'renderActor' | 'sceneOverlay'> & { frame: SceneFrame }) {
-  const set = frame.scene.scene.set;
+const TILE_COLORS = ['#3a5a8c', '#7a4f8a', '#2f7a6b', '#8a5a3a', '#4f6f46', '#8a3f4f'];
+
+/** Everyone on the TV or the video call, each cut off at the edges of their own tile. */
+function ScreenLayer({ frame, draw }: { frame: SceneFrame; draw: (a: ActorFrame) => ReactNode }) {
+  const prefix = `tile${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const live = frame.actors.filter((a) => a.tile);
+  if (!live.length) return null;
+  const s = frame.scene.screen;
+  return (
+    <g>
+      {s.panel && <rect x={s.x - 16} y={s.y - 16} width={s.w + 32} height={s.h + 32} rx={12} fill="#26262c" />}
+      {live.map((a) => {
+        const { x, y, w, h } = a.tile!;
+        const id = `${prefix}-${a.castId}`;
+        return (
+          <g key={a.castId}>
+            <clipPath id={id}>
+              <rect x={x} y={y} width={w} height={h} />
+            </clipPath>
+            <rect x={x} y={y} width={w} height={h} fill={TILE_COLORS[[...a.castId].reduce((n, ch) => n + ch.charCodeAt(0), 0) % TILE_COLORS.length]} stroke="#111" strokeWidth={2} />
+            <g clipPath={`url(#${id})`}>{draw(a)}</g>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** Everything that stands in the set, in scene coordinates. `half` draws one side of a split screen. */
+function SceneContent({ frame, half, renderActor, sceneOverlay }: Pick<FrameSvgProps, 'renderActor' | 'sceneOverlay'> & { frame: SceneFrame; half?: 'left' | 'right' }) {
+  const right = half === 'right';
+  const set = (right && frame.split?.set) || frame.scene.scene.set;
+  const actors = half ? frame.actors.filter((a) => !!a.right === right) : frame.actors;
+  const here = <T,>(list: T[]) => (right ? [] : list);
   const actor = (a: ActorFrame) => {
     const node = <Actor key={a.castId} a={a} />;
     return renderActor ? <g key={a.castId}>{renderActor(a, node)}</g> : node;
   };
   // People and vehicles back to front; passengers are drawn inside their vehicle.
   const items: { y: number; node: ReactNode }[] = [
-    ...frame.actors
-      .filter((a) => !a.riding)
+    ...here(frame.crowd).map((a) => ({ y: a.y, node: <Actor key={a.castId} a={a} /> })),
+    ...actors
+      .filter((a) => !a.riding && !a.tile)
       .map((a) => ({
         y: a.y,
         node: a.cover ? (
@@ -244,24 +293,62 @@ function SceneContent({ frame, renderActor, sceneOverlay }: Pick<FrameSvgProps, 
           actor(a)
         ),
       })),
-    ...frame.vehicles.map((v) => ({ y: v.y, node: <VehicleShape key={`v-${v.id}`} v={v} passengers={frame.actors.filter((a) => a.riding === v.id).map(actor)} /> })),
+    ...here(frame.vehicles).map((v) => ({ y: v.y, node: <VehicleShape key={`v-${v.id}`} v={v} passengers={actors.filter((a) => a.riding === v.id).map(actor)} /> })),
   ];
   items.sort((a, b) => a.y - b.y);
   return (
     <>
       <SetLayer set={set} layer="back" />
+      {here(frame.holes).map((h) => (
+        <WallHole key={h.t} x={h.x} y={h.y} r={h.r} behind={set.kind === 'kit' && set.place === 'exterior' ? '#26262c' : '#bfe3ee'} seed={Math.round(h.t * 100) + 1} />
+      ))}
+      {!right && <ScreenLayer frame={frame} draw={actor} />}
       {items.map((i) => i.node)}
-      {frame.props.map((p) => (
+      {here(frame.props).map((p) => (
         <FlyingProp key={p.key} p={p} />
       ))}
+      {here(frame.bursts).map((b) => (
+        <BurstShape key={b.key} b={b} />
+      ))}
       <SetLayer set={set} layer="front" />
-      <WeatherLayer weather={frame.weather} t={frame.scene.start + frame.t} />
+      <WeatherLayer weather={right ? frame.split!.weather : frame.weather} t={frame.scene.start + frame.t} />
       {sceneOverlay}
     </>
   );
 }
 
+function Overlays({ frame, subtitles, freeCamera }: Pick<FrameSvgProps, 'subtitles' | 'freeCamera'> & { frame: SceneFrame }) {
+  return (
+    <>
+      {frame.caption && <Caption text={frame.caption} />}
+      {subtitles && frame.subtitle && <Subtitle who={frame.subtitle.who} text={frame.subtitle.text} />}
+      {frame.flash > 0 && <rect width={FRAME_W} height={FRAME_H} fill="#fff" opacity={frame.flash} />}
+      {frame.fade > 0 && !freeCamera && <rect width={FRAME_W} height={FRAME_H} fill="#000" opacity={frame.fade} />}
+    </>
+  );
+}
+
+/** A phone call: two sets side by side, in the frame's own coordinates. */
+function SplitSvg({ frame, split, subtitles, renderActor, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame; split: NonNullable<SceneFrame['split']> }) {
+  const panel = (half: 'left' | 'right', x: number, cam: Camera) => (
+    <svg x={x} width={PANEL_W} height={FRAME_H} viewBox={viewBoxOf(cam)} preserveAspectRatio="xMidYMid slice">
+      <SceneContent frame={frame} half={half} renderActor={renderActor} />
+    </svg>
+  );
+  return (
+    <svg ref={svgRef} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} {...rest}>
+      <rect width={FRAME_W} height={FRAME_H} fill="#111" />
+      {panel('left', 0, split.left)}
+      {panel('right', FRAME_W - PANEL_W, split.right)}
+      <g pointerEvents="none">
+        <Overlays frame={frame} subtitles={subtitles} />
+      </g>
+    </svg>
+  );
+}
+
 function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
+  if (frame.split && !freeCamera) return <SplitSvg frame={frame} split={frame.split} subtitles={subtitles} renderActor={renderActor} svgRef={svgRef} {...rest} />;
   const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : frame.camera;
   const k = cam.w / FRAME_W;
   // The set editor shows the whole stage, so it leaves out what's only there for the transition.
@@ -277,10 +364,7 @@ function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svg
             </svg>
           </g>
         )}
-        {frame.caption && <Caption text={frame.caption} />}
-        {subtitles && frame.subtitle && <Subtitle who={frame.subtitle.who} text={frame.subtitle.text} />}
-        {frame.flash > 0 && <rect width={FRAME_W} height={FRAME_H} fill="#fff" opacity={frame.flash} />}
-        {frame.fade > 0 && !freeCamera && <rect width={FRAME_W} height={FRAME_H} fill="#000" opacity={frame.fade} />}
+        <Overlays frame={frame} subtitles={subtitles} freeCamera={freeCamera} />
       </g>
     </svg>
   );

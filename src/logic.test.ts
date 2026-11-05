@@ -6,7 +6,7 @@ import { parseScript, SAMPLE_SCRIPT } from './episode/parseScript';
 import { PROMPT_EXAMPLE, PROMPT_PLACES, scriptWritingPrompt } from './episode/writingPrompt';
 import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
-import { audioCues, cameraFor, compileEpisode, estimateLineSeconds, FPS, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
+import { audioCues, cameraFor, compileEpisode, estimateLineSeconds, FPS, groundYOf, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
 import { repositionActor, setMoodAt } from './episode/edit';
 import { applyCrew, applyEdit } from './ai/director';
 import { extractJson } from './ai/openrouter';
@@ -250,6 +250,40 @@ Gus throws a snowball at Tilly.
 Gus and Tilly dance.`).scenes[0].beats.filter((b) => !b.text);
     expect(beats).toHaveLength(16);
     expect(beats.map((b) => b.action ?? b.gesture ?? b.mood ?? b.moves?.[0].kind ?? (b.hug ? 'hug' : ''))).toEqual(['dance', 'enter', 'walk', 'approach', 'hug', 'cry', 'nervous', 'vomit', 'coverEars', 'cross', 'hipHands', 'shrug', 'lie', 'drink', 'throw', 'dance']);
+  });
+
+  it('promises staging the parser understands', () => {
+    const prompt = scriptWritingPrompt();
+    for (const words of ["Mom's car crashes through the wall.", 'A newspaper blows past.', 'Gus turns into a frog.', 'The crowd cheers.', 'The crowd gasps.', 'The crowd boos.', 'The crowd panics.', 'Tilly appears on the TV.', 'Tilly shows up on the call.', 'Tilly leaves the call.', 'SPLIT SCREEN: Gus and Tilly at the bus stop.']) {
+      expect(prompt).toContain(words);
+    }
+    const ep = parseScript(`EXT. MAIN STREET - DAY
+GUS: Hi.
+TILLY: Hi.
+MOM: Hi.
+A crowd watches.
+Mom's car crashes through the wall.
+A newspaper blows past.
+Gus turns into a frog.
+The crowd cheers.
+The crowd gasps.
+The crowd boos.
+The crowd panics.
+Tilly appears on the TV.
+Tilly leaves the call.
+
+INT. CLASSROOM - DAY
+SPLIT SCREEN: Gus and Tilly at the bus stop.
+GUS: Hello?
+TILLY: Hi.`);
+    const [street, call] = ep.scenes;
+    expect(street.crowd?.count).toBeGreaterThan(0);
+    const beats = street.beats.filter((b) => !b.text);
+    expect(beats.flatMap((b) => b.moves ?? []).map((m) => m.kind)).toEqual(['crash', 'joinScreen', 'leaveScreen']);
+    expect(beats.find((b) => b.drift)?.drift?.item).toBe('newspaper');
+    expect(beats.find((b) => b.becomes)).toMatchObject({ who: 'gus', becomes: 'frog' });
+    expect(beats.flatMap((b) => b.crowd ?? [])).toEqual(['cheer', 'gasp', 'boo', 'panic']);
+    expect(call.split).toMatchObject({ who: ['tilly'], set: { kind: 'preset', preset: 'busstop' } });
   });
 
   it('strips code fences from a pasted script', () => {
@@ -1372,5 +1406,393 @@ describe('Quick build reads acting', () => {
     expect(hug.hug).toBe('b');
     expect(ep.scenes[0].beats).toHaveLength(2);
     expect(ep.scenes[0].blocking.map((b) => b.lie)).toEqual(['bed', 'floor']);
+  });
+});
+
+describe('staging', () => {
+  const two = [{ name: 'Dad', look: { body: 'adult', held: 'none' } }, { name: 'Kid', look: { body: 'kid', held: 'none' } }];
+  const play = (scene: Record<string, unknown>, cast: unknown[] = two) => {
+    const ep = normalizeEpisode({ cast, scenes: [scene] }, '');
+    ep.titleCard = false;
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[0];
+    const frame = (t: number) => sampleEpisode(c, sc.start + t) as SceneFrame;
+    return { c, sc, frame, who: (t: number, id: string) => frame(t).actors.find((a) => a.castId === id)! };
+  };
+  const draw = (frame: SceneFrame) => renderToStaticMarkup(createElement(FrameSvg, { frame, xmlns: 'http://www.w3.org/2000/svg' }));
+
+  describe('smoke and fire', () => {
+    it('burns on the spot until it runs out, or to the end of the scene if it stays', () => {
+      const brief = play({ blocking: [{ who: 'Dad', x: 300 }], beats: [{ who: 'Dad', burst: { kind: 'poof' } }, { who: 'Dad', duration: 3 }] });
+      const start = brief.sc.beats[0].start;
+      expect(brief.frame(start + 0.3).bursts).toHaveLength(1);
+      expect(brief.frame(start + 1).bursts).toEqual([]);
+      const stays = play({ blocking: [{ who: 'Dad', x: 300 }], beats: [{ burst: { kind: 'fire', x: 1200, stay: true } }, { who: 'Dad', duration: 12 }] });
+      const fire = stays.frame(stays.sc.duration - 0.1).bursts[0];
+      expect(fire).toMatchObject({ kind: 'fire', x: 1200 });
+    });
+
+    it('flickers, and goes where the person on fire goes', () => {
+      const { sc, frame } = play({ blocking: [{ who: 'Dad', x: 300 }], beats: [{ who: 'Dad', burst: { kind: 'fire', stay: true }, moves: [{ who: 'Dad', kind: 'walk', x: 1200 }] }] });
+      const { start } = sc.beats[0];
+      const a = frame(start + 0.25);
+      const b = frame(start + 1);
+      expect(b.bursts[0].x).toBeGreaterThan(a.bursts[0].x);
+      expect(b.bursts[0].step).toBeGreaterThan(a.bursts[0].step);
+      expect(b.bursts[0].x).toBe(b.actors[0].x);
+    });
+
+    it('draws each kind, differently from one moment to the next', () => {
+      for (const kind of ['smoke', 'fire', 'explosion', 'poof', 'debris']) {
+        const { sc, frame } = play({ blocking: [{ who: 'Dad', x: 800 }], beats: [{ who: 'Dad', burst: { kind }, duration: 2 }] });
+        const { start } = sc.beats[0];
+        const plain = draw({ ...frame(start + 0.25), bursts: [] });
+        expect(draw(frame(start + 0.25)).length, kind).toBeGreaterThan(plain.length);
+        expect(draw(frame(start + 0.25)), kind).not.toBe(draw(frame(start + 0.5)));
+      }
+    });
+
+    it('reads them from directions', () => {
+      const says = (line: string) => parseScript(`INT. KITCHEN - DAY\nDEX: Hi.\n${line}`).scenes[0].beats[1]?.burst;
+      expect(says('Dex explodes.')).toEqual({ kind: 'explosion', at: 'dex' });
+      expect(says('The stove catches fire.')).toEqual({ kind: 'fire', stay: true });
+      expect(says('Dex is on fire.')).toEqual({ kind: 'fire', stay: true, at: 'dex' });
+      expect(says('Smoke fills the room.')).toEqual({ kind: 'smoke' });
+      expect(says('Dex vanishes in a puff of smoke.')).toEqual({ kind: 'poof', at: 'dex' });
+      expect(says('Dex smokes a pipe.')).toBeUndefined();
+    });
+  });
+
+  describe('crashes', () => {
+    const wreck = (on?: string) =>
+      play({
+        set: { kind: 'preset', preset: 'livingroom' },
+        vehicles: [{ id: 'car', type: 'car', x: 800, offstage: true }],
+        blocking: [{ who: 'Kid', x: 1300 }],
+        beats: [{ moves: [{ who: 'car', kind: 'crash', x: 700, on }] }, { who: 'Kid', text: 'My house!' }],
+      });
+
+    it('slams in much faster than it drives, at full speed right up to the hit', () => {
+      const { c, sc, frame } = wreck('wall');
+      const hit = sc.impacts[0].t;
+      expect(hit - sc.beats[0].start).toBeLessThan(1);
+      expect(frame(hit - 0.1).vehicles[0].x).toBeGreaterThan(400);
+      expect(frame(hit + 0.1).vehicles[0].x).toBe(700);
+      expect(audioCues(c).filter((q) => q.sfx === 'crash').map((q) => q.t)).toEqual([hit]);
+    });
+
+    it('shakes the camera, throws debris and leaves it smoking', () => {
+      const { sc, frame } = wreck('wall');
+      const hit = sc.impacts[0].t;
+      expect(frame(hit + 0.1).camera.x).not.toBe(0);
+      expect(frame(hit + 0.1).bursts.map((b) => b.kind).sort()).toEqual(['debris', 'smoke']);
+      expect(frame(sc.duration - 0.1).bursts.map((b) => b.kind)).toEqual(['smoke']);
+    });
+
+    it('tears a hole in the back of the set only when it goes through the wall', () => {
+      const through = wreck('wall');
+      const hit = through.sc.impacts[0].t;
+      expect(through.frame(hit - 0.1).holes).toEqual([]);
+      expect(through.frame(hit + 0.1).holes).toHaveLength(1);
+      expect(through.frame(through.sc.duration - 0.1).holes).toHaveLength(1);
+      const plain = wreck();
+      expect(plain.frame(plain.sc.duration - 0.1).holes).toEqual([]);
+    });
+
+    it('is only something vehicles do', () => {
+      const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ vehicles: [{ type: 'car' }], beats: [{ who: 'A', moves: [{ who: 'A', kind: 'crash' }, { who: 'car', kind: 'crash', through: true }] }] }] }, '');
+      expect(ep.scenes[0].beats[0].moves).toEqual([{ who: 'car', kind: 'crash', on: 'wall' }]);
+    });
+
+    it('reads a crash, with the car coming from nowhere', () => {
+      const scene = parseScript("INT. LIVING ROOM - DAY\nKENNY: Hi.\nRANDY's car crashes through Kenny's wall.").scenes[0];
+      expect(scene.vehicles).toEqual([{ id: 'car-1', type: 'car', x: 800, offstage: true }]);
+      expect(scene.beats[1].moves).toEqual([{ who: 'car-1', kind: 'crash', x: 800, on: 'wall' }]);
+      expect(scene.beats[1].sfx).toBeUndefined();
+    });
+  });
+
+  describe('props on their own', () => {
+    it('blows across the stage at head height, turning and swaying, without a sound', () => {
+      const { c, sc, frame } = play({ blocking: [{ who: 'Dad', x: 800 }], beats: [{ drift: { item: 'mask' } }] });
+      const { start, end } = sc.beats[0];
+      expect(end - start).toBeCloseTo(3);
+      const seen = [0.5, 1, 1.5, 2].map((t) => frame(start + t).props[0]);
+      expect(seen.every((p) => p.item === 'mask')).toBe(true);
+      expect(seen.map((p) => p.x)).toEqual([...seen.map((p) => p.x)].sort((a, b) => a - b));
+      expect(new Set(seen.map((p) => p.y)).size).toBeGreaterThan(1);
+      expect(seen[1].rotate).not.toBe(seen[0].rotate);
+      expect(audioCues(c).some((q) => q.sfx === 'whoosh')).toBe(false);
+    });
+
+    it('rolls along the ground, and comes from the side it is told', () => {
+      const { sc, frame } = play({ blocking: [{ who: 'Dad', x: 800 }], beats: [{ drift: { item: 'football', style: 'roll', from: 'right' } }] });
+      const { start } = sc.beats[0];
+      expect(frame(start + 1).props[0].x).toBeGreaterThan(frame(start + 2).props[0].x);
+      expect(frame(start + 1).props[0].y).toBeCloseTo(sc.groundY - 20);
+    });
+
+    it('falls from the sky at x', () => {
+      const { sc, frame } = play({ blocking: [{ who: 'Dad', x: 800 }], beats: [{ drift: { item: 'football', style: 'fall', x: 400 } }] });
+      const { start, end } = sc.beats[0];
+      expect(end - start).toBeCloseTo(1.2);
+      const [a, b] = [frame(start + 0.2).props[0], frame(start + 0.9).props[0]];
+      expect(a.x).toBe(400);
+      expect(b.y).toBeGreaterThan(a.y);
+    });
+
+    it('reads a prop going by, and leaves people alone', () => {
+      const says = (line: string) => parseScript(`EXT. MAIN STREET - DAY\nDEX: Hi.\n${line}`).scenes[0].beats[1];
+      expect(says('A used mask blows past a snowy house.')?.drift).toEqual({ item: 'mask', style: 'blow' });
+      expect(says('A football rolls by.')?.drift).toEqual({ item: 'football', style: 'roll' });
+      expect(says('A snowball falls down.')?.drift).toEqual({ item: 'snowball', style: 'fall' });
+      expect(says('Dex rolls across the floor.')?.drift).toBeUndefined();
+    });
+  });
+
+  describe('transformations', () => {
+    it('flickers into a creature in a puff of smoke, and stays one', () => {
+      const { sc, frame, who } = play({ blocking: [{ who: 'Dad', x: 800 }], beats: [{ who: 'Dad', becomes: 'frog' }, { who: 'Dad', text: 'Ribbit.' }] });
+      const { start } = sc.beats[0];
+      const forms = [0, 1, 2, 3].map((i) => who(start + i / POSE_FPS, 'dad').form);
+      expect(forms).toEqual([undefined, 'frog', undefined, 'frog']);
+      expect(frame(start).bursts.map((b) => b.kind)).toEqual(['poof']);
+      expect(who(sc.beats[1].start + 0.1, 'dad').form).toBe('frog');
+      expect(draw(frame(sc.beats[1].start + 0.1))).toContain('#6fae3f');
+    });
+
+    it('sends a bat up off the ground', () => {
+      const { sc, who } = play({ blocking: [{ who: 'Dad', x: 800 }], beats: [{ who: 'Dad', becomes: 'bat' }, { who: 'Dad', duration: 1 }] });
+      expect(who(sc.beats[1].start + 0.1, 'dad').lift).toBeGreaterThan(100);
+    });
+
+    it('swaps in another character on the same spot', () => {
+      const { sc, frame, who } = play({ blocking: [{ who: 'Dad', x: 500 }], beats: [{ who: 'Dad', becomes: 'Kid' }, { who: 'Kid', text: 'Hi.' }] });
+      const { start } = sc.beats[0];
+      expect(frame(start).actors.map((a) => a.castId)).toEqual(['dad']);
+      expect(who(start + 1 / POSE_FPS, 'dad').c.body).toBe('kid');
+      expect(frame(sc.beats[1].start + 0.1).actors.map((a) => a.castId)).toEqual(['kid']);
+      expect(who(sc.beats[1].start + 0.1, 'kid').x).toBe(500);
+    });
+
+    it('reads what they turn into, and ignores what it has no art for', () => {
+      const says = (line: string) => parseScript(`EXT. MAIN STREET - DAY\nDEX: Hi.\nPRIYA: Yo.\n${line}`).scenes[0].beats.filter((b) => !b.text);
+      const [bat] = says('There is a flash and a pop, and Dex vanishes, turning into a cardboard bat.');
+      expect(bat).toMatchObject({ who: 'dex', becomes: 'bat', effect: 'flash' });
+      expect(bat.moves).toBeUndefined();
+      expect(says('Dex turns into Priya.')[0].becomes).toBe('priya');
+      expect(says('Dex transforms into a chicken.')[0].becomes).toBe('hen');
+      expect(says('Dex turns into a lamp.')).toEqual([]);
+    });
+  });
+
+  describe('crowds', () => {
+    const packed = (crowd: Record<string, unknown>, beats: unknown[] = [{ who: 'Dad', text: 'Hello everyone.' }]) => play({ crowd, blocking: [{ who: 'Dad', x: 800 }], beats });
+
+    it('fills the rows behind the cast with people of its own, the same each time', () => {
+      const { c, sc, frame } = packed({ count: 12 });
+      const f = frame(1);
+      expect(f.crowd).toHaveLength(12);
+      expect(new Set(f.crowd.map((a) => a.castId)).size).toBe(12);
+      expect(f.crowd.every((a) => a.y < f.actors[0].y && a.scale < f.actors[0].scale)).toBe(true);
+      expect(f.crowd.map((a) => a.y)).toEqual([...f.crowd.map((a) => a.y)].sort((a, b) => a - b));
+      expect(f.actors).toHaveLength(1);
+      expect(new Set(f.crowd.map((a) => a.c.topColor + a.c.hair)).size).toBeGreaterThan(3);
+      const again = compileEpisode(c.episode, new Map()).scenes[0].extras;
+      expect(again.map((e) => [e.x, e.look])).toEqual(sc.extras.map((e) => [e.x, e.look]));
+    });
+
+    it('queues across the stage in a line, all facing the same way', () => {
+      const f = packed({ count: 8, layout: 'line' }).frame(1);
+      const xs = f.crowd.map((a) => a.x).sort((a, b) => a - b);
+      expect(xs[1] - xs[0]).toBeCloseTo(118);
+      expect(f.crowd.every((a) => a.turn > 0)).toBe(true);
+    });
+
+    it('can be all kids', () => {
+      const f = packed({ count: 10, kids: true }).frame(1);
+      expect(f.crowd.every((a) => ['kid', 'husky', 'skinny'].includes(a.c.body))).toBe(true);
+    });
+
+    it('reacts together but not quite in step, then settles', () => {
+      const { sc, frame } = packed({ count: 12, mood: 'sad' }, [{ crowd: 'cheer' }, { who: 'Dad', duration: 4 }]);
+      const { start } = sc.beats[0];
+      const moods = (t: number) => frame(t).crowd.map((a) => a.c.mouth);
+      expect(new Set(moods(start)).size).toBeGreaterThan(1);
+      const late = frame(start + 0.5);
+      expect(late.crowd.every((a) => a.arms)).toBe(true);
+      expect(new Set(late.crowd.map((a) => a.lift)).size).toBe(2);
+      expect(frame(start + 3).crowd.every((a) => !a.arms)).toBe(true);
+    });
+
+    it('gasps with their faces alone', () => {
+      const { sc, frame } = packed({ count: 6 }, [{ crowd: 'gasp' }]);
+      const f = frame(sc.beats[0].start + 0.5);
+      expect(f.crowd.every((a) => a.c.mouth === 'oshock' && !a.arms)).toBe(true);
+    });
+
+    it('draws them behind the cast', () => {
+      const { frame } = packed({ count: 6 });
+      const f = frame(1);
+      const withCrowd = draw(f);
+      expect(withCrowd.length).toBeGreaterThan(draw({ ...f, crowd: [] }).length);
+    });
+
+    it('reads crowds, lines and classes from directions', () => {
+      const scene = (line: string) => parseScript(`INT. CLASSROOM - DAY\n${line}\nDEX: Hi.`).scenes[0];
+      expect(scene('A long line of worried paper townspeople stretches outside.').crowd).toEqual({ count: 30, layout: 'line', mood: 'nervous' });
+      expect(scene('Paper neighbors gather in the snow.').crowd).toEqual({ count: 18, layout: 'group' });
+      expect(scene('Dex stands in a packed rock concert hall.').crowd).toEqual({ count: 30, layout: 'group' });
+      expect(scene('The Dance Master commands a room of paper students.').crowd).toMatchObject({ kids: true });
+      expect(parseScript('INT. HALL - DAY\nDEX: Hi.\nThe crowd cheers.').scenes[0].beats[1]).toMatchObject({ crowd: 'cheer', sfx: 'cheer' });
+      expect(parseScript('INT. HALL - DAY\nDEX: Hi.\nThe crowd gasps.').scenes[0].beats[1]).toMatchObject({ crowd: 'gasp', sfx: 'gasp' });
+    });
+  });
+
+  describe('screens', () => {
+    const tv = { kind: 'preset', preset: 'livingroom' };
+
+    it('shows someone on the set TV, head and shoulders inside the picture', () => {
+      const { sc, frame, who } = play({ set: tv, blocking: [{ who: 'Dad', screen: true }, { who: 'Kid', x: 1200 }], beats: [{ who: 'Dad', text: 'Good evening.' }] });
+      const dad = who(sc.beats[0].start + 0.2, 'dad');
+      expect(dad.tile).toEqual({ x: 152, y: 310, w: 236, h: 160 });
+      expect(dad.x).toBe(270);
+      expect(dad.scale).toBeLessThan(1);
+      const markup = draw(frame(sc.beats[0].start + 0.2));
+      expect(markup).toContain('clip-path');
+    });
+
+    it('turns everyone on stage to the screen when it talks', () => {
+      const { sc, who } = play({ set: tv, blocking: [{ who: 'Dad', screen: true }, { who: 'Kid', x: 1200 }], beats: [{ who: 'Dad', text: 'Good evening.' }] });
+      const t = sc.beats[0].start + 0.2;
+      expect(who(t, 'kid').turn).toBeLessThan(0);
+      expect(who(t, 'dad').turn).toBe(0);
+    });
+
+    it('shares the screen out, and puts up a big one when the set has none', () => {
+      const four = [{ name: 'A' }, { name: 'B' }, { name: 'C' }, { name: 'D' }];
+      const { frame, sc } = play({ set: { kind: 'preset', preset: 'studio' }, blocking: four.map((c) => ({ who: c.name, screen: true })), beats: [{ who: 'A', text: 'Can you hear me?' }] }, four);
+      expect(sc.screen.panel).toBe(true);
+      const tiles = frame(1).actors.map((a) => a.tile!);
+      expect(new Set(tiles.map((t) => `${t.x},${t.y}`)).size).toBe(4);
+      expect(tiles[0].w).toBe(300);
+      expect(tiles[0].h).toBe(170);
+    });
+
+    it('uses a TV or a computer in a built set, moved and scaled with it', () => {
+      const { sc } = play({ set: { kind: 'kit', place: 'interior', pieces: [{ type: 'tv', x: 400, y: 700, scale: 2 }] }, blocking: [{ who: 'Dad', screen: true }], beats: [{ who: 'Dad', text: 'Hi.' }] });
+      expect(sc.screen).toEqual({ x: 164, y: 80, w: 472, h: 320 });
+    });
+
+    it('lets people join and leave a call while it goes on', () => {
+      const { sc, who, frame } = play({ set: tv, blocking: [{ who: 'Dad', screen: true }, { who: 'Kid', x: 1200, offstage: true }], beats: [{ who: 'Dad', text: 'Anyone there?' }, { who: 'Kid', moves: [{ who: 'Kid', kind: 'join' }] }, { who: 'Kid', text: 'Me!' }, { who: 'Dad', moves: [{ who: 'Dad', kind: 'leaveCall' }] }, { who: 'Kid', text: 'Bye.' }] });
+      const [first, , both, , last] = sc.beats;
+      expect(frame(first.start + 0.1).actors.map((a) => a.castId)).toEqual(['dad']);
+      expect(who(both.start + 0.1, 'dad').tile?.w).toBe(118);
+      expect(who(both.start + 0.1, 'kid').tile?.w).toBe(118);
+      expect(frame(last.start + 0.1).actors.map((a) => a.castId)).toEqual(['kid']);
+      expect(who(last.start + 0.1, 'kid').tile?.w).toBe(236);
+    });
+
+    it('ignores anything else someone on a screen is told to do', () => {
+      const { sc, who } = play({ set: tv, blocking: [{ who: 'Dad', screen: true }], beats: [{ who: 'Dad', moves: [{ who: 'Dad', kind: 'walk', x: 1200 }] }, { who: 'Dad', text: 'Hi.' }] });
+      expect(who(sc.beats[1].start + 0.1, 'dad').tile).toBeTruthy();
+    });
+
+    it('zooms in on the screen for a close-up on someone on it', () => {
+      const { sc, frame } = play({ set: tv, blocking: [{ who: 'Dad', screen: true }], beats: [{ who: 'Dad', text: 'Good evening.', shot: { type: 'close', on: ['Dad'] } }] });
+      const cam = frame(sc.beats[0].start + 0.2).camera;
+      expect(cam.w).toBeLessThan(600);
+      expect(cam.x).toBeLessThan(270);
+      expect(cam.x + cam.w).toBeGreaterThan(270);
+    });
+
+    it('reads people on screens, without confusing anyone who only turns one on', () => {
+      const scene = parseScript(`INT. LIVING ROOM - DAY
+STAN and KYLE appear on a large video-call screen, standing side by side.
+ANCHOR, a serious reporter in a dark suit, on the TV.
+RANDY turns on the TV.
+STAN: Hi.
+KYLE: Hi.
+ANCHOR (O.S.): News.
+RANDY: Ugh.
+KENNY shows up on the call.
+KENNY: Mmph.
+KENNY leaves the call.`).scenes[0];
+      const on = scene.blocking.filter((b) => b.screen).map((b) => b.who);
+      expect(on).toEqual(['stan', 'kyle', 'anchor']);
+      expect(scene.blocking.find((b) => b.who === 'anchor')?.offstage).toBeUndefined();
+      expect(scene.blocking.find((b) => b.who === 'randy')?.screen).toBeUndefined();
+      expect(scene.blocking.find((b) => b.who === 'kenny')).toMatchObject({ offstage: true });
+      expect(scene.beats.flatMap((b) => b.moves ?? []).map((m) => m.kind)).toEqual(['joinScreen', 'leaveScreen']);
+    });
+  });
+
+  describe('split screens', () => {
+    const call = { set: { kind: 'preset', preset: 'livingroom' }, split: { set: { kind: 'preset', preset: 'busstop' }, who: ['Kid'] }, blocking: [{ who: 'Dad', x: 560 }, { who: 'Kid', x: 1040 }], beats: [{ who: 'Dad', text: 'Hello?' }, { who: 'Kid', text: 'Hi.' }] };
+
+    it('puts the people named in the second set, and faces them both inward', () => {
+      const { sc, who } = play(call);
+      const t = sc.beats[0].start + 0.1;
+      expect(who(t, 'kid').right).toBe(true);
+      expect(who(t, 'dad').right).toBeUndefined();
+      expect(who(t, 'kid').turn).toBeLessThan(0);
+      expect(who(sc.beats[1].start + 0.1, 'dad').turn).toBeGreaterThan(0);
+    });
+
+    it('stands them on the floor of their own set', () => {
+      const { sc, who } = play(call);
+      const t = sc.beats[0].start + 0.1;
+      expect(who(t, 'dad').y).toBe(groundYOf({ kind: 'preset', preset: 'livingroom' }));
+      expect(who(t, 'kid').y).toBe(groundYOf({ kind: 'preset', preset: 'busstop' }));
+      expect(who(t, 'kid').y).not.toBe(who(t, 'dad').y);
+    });
+
+    it('frames each half around whoever is in it', () => {
+      const { sc, frame } = play(call);
+      const { left, right } = frame(sc.beats[0].start + 0.1).split!;
+      expect(left.x + left.w / 2).toBeCloseTo(560);
+      expect(right.x + right.w / 2).toBeCloseTo(1040);
+      expect(left.w / left.h).toBeCloseTo(796 / 900);
+    });
+
+    it('draws both sets side by side, each with its own people', () => {
+      const { sc, frame } = play(call);
+      const f = frame(sc.beats[0].start + 0.1);
+      const markup = draw(f);
+      expect(markup.match(/<svg/g)).toHaveLength(3);
+      expect(markup).toContain('viewBox="0 0 1600 900"');
+      expect(markup.match(/sp-char/g)).toHaveLength(2);
+    });
+
+    it('reads a split screen and gives everyone a phone', () => {
+      const scene = parseScript('INT. BEDROOM - NIGHT\nSPLIT SCREEN: Dex and Priya at the bus stop.\nDEX: Hello?\nPRIYA: Hi.').scenes[0];
+      expect(scene.split).toEqual({ set: { kind: 'preset', preset: 'busstop' }, who: ['priya'] });
+      expect(scene.blocking.map((b) => b.hold)).toEqual(['phone', 'phone']);
+      const ep = parseScript('INT. BEDROOM - NIGHT\nINTERCUT\nDEX: Hi.');
+      expect(ep.cast.map((c) => c.name)).toEqual(['Dex']);
+    });
+
+    it('drops a split with nobody in it', () => {
+      const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ split: { set: { kind: 'preset', preset: 'studio' }, who: ['Nobody'] }, crowd: 0, beats: [] }] }, '');
+      expect(ep.scenes[0].split).toBeUndefined();
+      expect(ep.scenes[0].crowd).toBeUndefined();
+    });
+  });
+
+  it('keeps staging from the director and drops what it cannot do', () => {
+    const ep = normalizeEpisode(
+      {
+        cast: [{ name: 'A' }, { name: 'B' }],
+        scenes: [{ crowd: { count: 999, layout: 'blob', mood: 'nope' }, blocking: [{ who: 'A', screen: true }], vehicles: [{ type: 'car' }], beats: [{ who: 'A', becomes: 'bat', crowd: 'cheer', burst: { kind: 'fire', at: 'the car', stay: true }, drift: { item: 'mask', style: 'roll', from: 'right' } }, { who: 'A', becomes: 'lamp', crowd: 'yawn', burst: { kind: 'lasers' }, drift: { item: 'rock' } }, { who: 'A', burst: 'smoke', drift: 'football' }] }],
+      },
+      '',
+    );
+    const [scene] = ep.scenes;
+    expect(scene.crowd).toEqual({ count: 40, layout: 'group' });
+    expect(scene.blocking[0].screen).toBe(true);
+    expect(scene.beats[0]).toMatchObject({ becomes: 'bat', crowd: 'cheer', burst: { kind: 'fire', at: 'car', stay: true }, drift: { item: 'mask', style: 'roll', from: 'right' } });
+    expect(scene.beats).toHaveLength(2);
+    expect(scene.beats[1]).toMatchObject({ burst: { kind: 'smoke' }, drift: { item: 'football' } });
   });
 });

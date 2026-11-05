@@ -1,6 +1,6 @@
 import type { CharacterState } from '../types';
-import type { Beat, Blocking, CastMember, Episode, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, VoiceSpec } from './types';
-import { ACTION_IDS, EFFECT_IDS, GESTURE_IDS, MOOD_IDS, SFX_IDS, SHOT_IDS, TRANSITION_IDS, WEATHER_IDS } from './catalog';
+import type { Beat, Blocking, CastMember, Crowd, Episode, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, VoiceSpec } from './types';
+import { ACTION_IDS, BURST_IDS, CROWD_IDS, EFFECT_IDS, GESTURE_IDS, MOOD_IDS, SFX_IDS, SHOT_IDS, TRANSITION_IDS, WEATHER_IDS } from './catalog';
 import { CATEGORIES } from '../data/catalog';
 import { DEFAULT_CHARACTER, normalizeCharacter } from '../data/defaults';
 import { applyItem } from '../lib/apply';
@@ -269,6 +269,15 @@ const MOVE_ALIASES: Record<string, { kind: Move['kind']; run?: boolean; sneak?: 
   liedown: { kind: 'lie' },
   lay: { kind: 'lie' },
   laydown: { kind: 'lie' },
+  crash: { kind: 'crash' },
+  crashinto: { kind: 'crash' },
+  crashthrough: { kind: 'crash' },
+  smash: { kind: 'crash' },
+  joinscreen: { kind: 'joinScreen' },
+  join: { kind: 'joinScreen' },
+  joincall: { kind: 'joinScreen' },
+  leavescreen: { kind: 'leaveScreen' },
+  leavecall: { kind: 'leaveScreen' },
   enter: { kind: 'enter' },
   arrive: { kind: 'enter' },
   drivein: { kind: 'enter' },
@@ -327,6 +336,9 @@ function resolveVehicle(vehicles: Vehicle[], ref: unknown): string | undefined {
 }
 
 const PROP_ALIASES: Record<string, string> = {
+  facemask: 'mask',
+  surgicalmask: 'mask',
+  paper: 'newspaper',
   nothing: 'none',
   empty: 'none',
   money: 'cash',
@@ -383,6 +395,16 @@ export function propId(v: unknown): string | undefined {
   return hit?.id ?? items.find((i) => i.id === s.replace(/s$/, '') || i.id === s.replace(/es$/, ''))?.id;
 }
 
+const FORM_ALIASES: Record<string, string> = { chicken: 'hen', bird: 'hen', rooster: 'hen', toad: 'frog', mouse: 'hamster', rat: 'hamster', puppy: 'dog', kitten: 'cat' };
+
+/** A creature someone can turn into: a sidekick id, name or everyday word for it. */
+export function formId(v: unknown): string | undefined {
+  if (typeof v !== 'string' || !v.trim()) return undefined;
+  const s = squash(v);
+  const items = CATEGORIES.sidekick.items.filter((i) => i.id !== 'none');
+  return (items.find((i) => i.id === s || squash(i.name) === s) ?? items.find((i) => i.id === FORM_ALIASES[s]))?.id;
+}
+
 function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], fallbackWho?: string): Move | null {
   if (!isObj(input)) return null;
   // Vehicles first: loose name matching would turn "the bus" into "Bus Driver".
@@ -391,7 +413,7 @@ function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], 
   const alias = typeof input.kind === 'string' ? MOVE_ALIASES[squash(input.kind)] : undefined;
   if (!who || !alias) return null;
   // Vehicles only drive.
-  if (vehicle && !['walk', 'enter', 'exit', 'appear', 'vanish'].includes(alias.kind)) return null;
+  if (vehicle ? !['walk', 'enter', 'exit', 'appear', 'vanish', 'crash'].includes(alias.kind) : alias.kind === 'crash') return null;
   const x = num(input.x);
   // Walking to a person, not a spot, is walking up to them.
   const target = !vehicle && (alias.kind === 'walk' || alias.kind === 'approach') ? resolveCast(cast, input.on ?? input.to) : undefined;
@@ -408,6 +430,8 @@ function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], 
     move.on = v;
   } else if (kind === 'approach') {
     move.on = target;
+  } else if (kind === 'crash') {
+    if (input.on === 'wall' || input.through === true) move.on = 'wall';
   } else if (kind === 'sit' || kind === 'lie') {
     const on = str(input.on ?? input.seat, 40);
     if (on) move.on = on;
@@ -471,6 +495,25 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   if (give && who && give !== who) beat.give = give;
   const hug = resolveCast(cast, input.hug);
   if (hug && who && hug !== who) beat.hug = hug;
+  const becomes = resolveCast(cast, input.becomes) ?? formId(input.becomes);
+  if (becomes && who && becomes !== who) beat.becomes = becomes;
+  const reaction = oneOf(input.crowd, CROWD_IDS);
+  if (reaction) beat.crowd = reaction;
+  const b = typeof input.burst === 'string' ? { kind: input.burst } : input.burst;
+  const burst = isObj(b) ? oneOf(b.kind, BURST_IDS) : undefined;
+  if (isObj(b) && burst) {
+    const at = resolveCast(cast, b.at) ?? resolveVehicle(vehicles, typeof b.at === 'string' ? b.at : '__nothing__');
+    const x = num(b.x);
+    beat.burst = { kind: burst, ...(at ? { at } : {}), ...(x !== undefined ? { x: clamp(x, 0, 1600) } : {}), ...(b.stay === true ? { stay: true } : {}) };
+  }
+  const d = typeof input.drift === 'string' ? { item: input.drift } : input.drift;
+  const item = isObj(d) ? propId(d.item) : undefined;
+  if (isObj(d) && item && item !== 'none') {
+    const style = oneOf(d.style, ['blow', 'roll', 'fall'] as const);
+    const from = oneOf(d.from, ['left', 'right'] as const);
+    const x = num(d.x);
+    beat.drift = { item, ...(style ? { style } : {}), ...(from ? { from } : {}), ...(x !== undefined ? { x: clamp(x, 0, 1600) } : {}) };
+  }
   const lookAt = resolveCast(cast, input.lookAt);
   if (lookAt && lookAt !== who) beat.lookAt = lookAt;
   const shot = normalizeShot(input.shot, cast);
@@ -488,7 +531,7 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   // A line needs a speaker; a beat needs to do *something*.
   if (beat.text && !beat.who) return null;
   const doesSomething =
-    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt;
+    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt || beat.becomes || beat.crowd || beat.burst || beat.drift;
   return doesSomething ? beat : null;
 }
 
@@ -509,7 +552,25 @@ function normalizeBlocking(input: unknown, cast: CastMember[], vehicles: Vehicle
     ...(input.flip === true ? { flip: true } : {}),
     ...(ride ? { in: ride } : sit ? { sit } : lie ? { lie } : {}),
     ...(hold ? { hold } : {}),
+    ...(input.screen === true ? { screen: true } : {}),
   };
+}
+
+function normalizeCrowd(input: unknown): Crowd | undefined {
+  const c = typeof input === 'number' ? { count: input } : input;
+  if (!isObj(c)) return undefined;
+  const count = Math.round(clamp(num(c.count) ?? 18, 0, 40));
+  if (!count) return undefined;
+  const mood = oneOf(c.mood, MOOD_IDS);
+  return { count, layout: oneOf(c.layout, ['group', 'line'] as const) ?? 'group', ...(c.kids === true ? { kids: true } : {}), ...(mood ? { mood } : {}) };
+}
+
+function normalizeSplit(input: unknown, cast: CastMember[]): Scene['split'] {
+  if (!isObj(input) || !Array.isArray(input.who)) return undefined;
+  const who = [...new Set(input.who.map((x) => resolveCast(cast, x)))].filter((x): x is string => !!x);
+  if (!who.length) return undefined;
+  const weather = oneOf(input.weather, WEATHER_IDS);
+  return { set: normalizeSet(input.set), who, ...(weather ? { weather } : {}) };
 }
 
 export function normalizeScene(input: unknown, cast: CastMember[], index: number): Scene | null {
@@ -525,6 +586,8 @@ export function normalizeScene(input: unknown, cast: CastMember[], index: number
   const blocking = Array.isArray(input.blocking) ? input.blocking.map((b) => normalizeBlocking(b, cast, vehicles)).filter((b): b is Blocking => !!b) : [];
   const dedup = blocking.filter((b, i) => blocking.findIndex((x) => x.who === b.who) === i);
   const transition = oneOf(input.transition, TRANSITION_IDS);
+  const crowd = normalizeCrowd(input.crowd);
+  const split = normalizeSplit(input.split, cast);
   return {
     id: str(input.id, 40) ?? newId('s'),
     title: str(input.title, 80) ?? `Scene ${index + 1}`,
@@ -537,6 +600,8 @@ export function normalizeScene(input: unknown, cast: CastMember[], index: number
     hold: clamp(num(input.hold) ?? (index === 0 ? 0.6 : 1.2), 0, 8),
     sting: typeof input.sting === 'boolean' ? input.sting : index > 0,
     ...(transition && transition !== 'cut' ? { transition } : {}),
+    ...(crowd ? { crowd } : {}),
+    ...(split ? { split } : {}),
   };
 }
 

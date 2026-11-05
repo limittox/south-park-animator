@@ -55,6 +55,8 @@ export interface KitPieceDef {
    * `cover` pieces (tables, desks) are drawn again over whoever sits at them.
    */
   seat?: { h: number; w: number; cover?: boolean };
+  /** Its picture, for people who appear on it (piece units, from the base). */
+  screen?: { x: number; y: number; w: number; h: number };
   render(p: ResolvedPiece, ctx: KitCtx): ReactNode;
   /** Drawn after the night tint: lit windows, lamps, flames, the moon. */
   lights?(p: ResolvedPiece, ctx: KitCtx): ReactNode;
@@ -973,6 +975,7 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor2: '#2ec4c4',
     text: true,
     colors: 'color = TV body, color2 = screen',
+    screen: { x: -118, y: -310, w: 236, h: 160 },
     render: (p) => (
       <g>
         <rect x={-150} y={-110} width={300} height={110} {...f('#6b4226')} />
@@ -1360,6 +1363,7 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#3d3d44',
     defaultColor2: '#5aaeea',
     colors: 'color = case, color2 = screen',
+    screen: { x: -68, y: -148, w: 136, h: 88 },
     render: (p) => (
       <g>
         <rect x={-14} y={-50} width={28} height={40} {...f(p.color)} />

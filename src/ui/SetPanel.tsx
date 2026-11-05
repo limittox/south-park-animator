@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import type { KitPiece, KitSet, Scene, Transition, Vehicle, VehicleType, Weather } from '../episode/types';
+import type { CastMember, Crowd, KitPiece, KitSet, Scene, Transition, Vehicle, VehicleType, Weather } from '../episode/types';
 import { getVehicleDef, VEHICLES } from '../sets/vehicles';
 import { TRANSITION_LIST, WEATHER_LIST } from '../episode/catalog';
 import { SCENES } from '../scenes/backgrounds';
@@ -10,6 +10,74 @@ import { SetLayer } from '../render/FrameSvg';
 interface Props {
   scene: Scene;
   onScene: (scene: Scene, merge?: string) => void;
+}
+
+/** Who appears on the TV, who's on the other end of a split screen, and how big the crowd is. */
+function Staging({ scene, cast, onScene }: Props & { cast: CastMember[] }) {
+  const crowd: Crowd = scene.crowd ?? { count: 0, layout: 'group' };
+  const setCrowd = (patch: Partial<Crowd>, merge?: string) => {
+    const next = { ...crowd, ...patch };
+    onScene({ ...scene, crowd: next.count ? next : undefined }, merge);
+  };
+  const here = cast.filter((c) => scene.blocking.some((b) => b.who === c.id) || scene.beats.some((b) => b.who === c.id));
+  const toggleScreen = (id: string) => {
+    const has = scene.blocking.some((b) => b.who === id);
+    const blocking = has ? scene.blocking.map((b) => (b.who === id ? { ...b, screen: b.screen ? undefined : true } : b)) : [...scene.blocking, { who: id, x: 800, depth: 0, mood: 'happy' as const, screen: true }];
+    onScene({ ...scene, blocking });
+  };
+  const split = scene.split;
+  const toggleSplit = (id: string) => {
+    const who = split?.who.includes(id) ? split.who.filter((x) => x !== id) : [...(split?.who ?? []), id];
+    onScene({ ...scene, split: who.length ? { set: split?.set ?? { kind: 'preset', preset: 'studio' }, who, ...(split?.weather ? { weather: split.weather } : {}) } : undefined });
+  };
+  return (
+    <div className="field-grid">
+      <label>
+        Crowd size
+        <input type="number" min={0} max={40} step={1} value={crowd.count} onChange={(e) => setCrowd({ count: Math.max(0, Math.min(40, Number(e.target.value))) }, `crowd-${scene.id}`)} />
+      </label>
+      <label>
+        Crowd stands in
+        <select value={crowd.layout} onChange={(e) => setCrowd({ layout: e.target.value as Crowd['layout'] })} disabled={!crowd.count}>
+          <option value="group">Rows</option>
+          <option value="line">A line</option>
+        </select>
+      </label>
+      <div className="span2">
+        <span className="lbl">On the TV or video call</span>
+        <div className="chips">
+          {here.map((c) => (
+            <button key={c.id} className="chip-btn" aria-pressed={!!scene.blocking.find((b) => b.who === c.id)?.screen} onClick={() => toggleScreen(c.id)}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="span2">
+        <span className="lbl">Other end of a split screen</span>
+        <div className="chips">
+          {here.map((c) => (
+            <button key={c.id} className="chip-btn" aria-pressed={!!split?.who.includes(c.id)} onClick={() => toggleSplit(c.id)}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      {split && (
+        <label className="span2">
+          Their set
+          <select value={split.set.kind === 'preset' ? split.set.preset : ''} onChange={(e) => onScene({ ...scene, split: { ...split, set: { kind: 'preset', preset: e.target.value } } })}>
+            {split.set.kind === 'kit' && <option value="">Built from the paper kit</option>}
+            {SCENES.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
 }
 
 const PresetThumb = memo(function PresetThumb({ id }: { id: string }) {
@@ -67,7 +135,7 @@ function PieceRow({ p, set, onChange, onRemove }: { p: KitPiece; set: KitSet; on
   );
 }
 
-export function SetPanel({ scene, onScene }: Props) {
+export function SetPanel({ scene, cast, onScene }: Props & { cast: CastMember[] }) {
   const set = scene.set;
   const [adding, setAdding] = useState('');
   const setKit = (patch: Partial<KitSet>, merge?: string) => set.kind === 'kit' && onScene({ ...scene, set: { ...set, ...patch } }, merge);
@@ -109,6 +177,8 @@ export function SetPanel({ scene, onScene }: Props) {
           <input type="checkbox" checked={scene.sting} onChange={(e) => onScene({ ...scene, sting: e.target.checked })} /> Guitar sting at the start of the scene
         </label>
       </div>
+
+      <Staging scene={scene} cast={cast} onScene={onScene} />
 
       <div className="seg-toggle" role="tablist">
         <button role="tab" aria-selected={set.kind === 'preset'} onClick={() => set.kind !== 'preset' && onScene({ ...scene, set: { kind: 'preset', preset: 'busstop' } })}>

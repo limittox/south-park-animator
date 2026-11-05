@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import type { Beat, CastMember, Episode, Move, Scene, Shot } from '../episode/types';
-import { ACTION_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST } from '../episode/catalog';
+import { ACTION_LIST, BURST_LIST, CROWD_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST } from '../episode/catalog';
 import { insertBeat, moveBeat, removeBeat, updateBeat } from '../episode/edit';
 import { seatsOf } from '../episode/seats';
 import { getVehicleDef } from '../sets/vehicles';
-import { HELD } from '../character/parts/held';
+import { HELD, SIDEKICKS } from '../character/parts/held';
 import type { VoiceStatus } from '../audio/useVoiceBank';
 
 interface Props {
@@ -80,7 +80,7 @@ function ShotEditor({ shot, cast, onChange }: { shot?: Shot; cast: CastMember[];
   );
 }
 
-const DRIVES: Move['kind'][] = ['walk', 'enter', 'exit', 'appear', 'vanish'];
+const DRIVES: Move['kind'][] = ['walk', 'enter', 'exit', 'appear', 'vanish', 'crash'];
 
 function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: CastMember[]; scene: Scene; onChange: (m: Move[]) => void }) {
   const vehicles = scene.vehicles ?? [];
@@ -136,17 +136,25 @@ function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: Ca
               <option value="exit">{vehicle ? 'drives off' : 'exits'}</option>
               <option value="appear">appears at</option>
               <option value="vanish">vanishes</option>
+              {vehicle && <option value="crash">crashes in at</option>}
               {!vehicle && <option value="approach">walks up to</option>}
               {!vehicle && <option value="sit">sits on</option>}
               {!vehicle && <option value="lie">lies on</option>}
               {!vehicle && <option value="stand">stands up</option>}
+              {!vehicle && <option value="joinScreen">goes on the screen</option>}
+              {!vehicle && <option value="leaveScreen">leaves the screen</option>}
               {!vehicle && vehicles.length > 0 && <option value="getIn">gets in</option>}
               {!vehicle && vehicles.length > 0 && <option value="getOut">gets out</option>}
             </select>
-            {(m.kind === 'walk' || m.kind === 'enter' || m.kind === 'appear') && (
+            {(m.kind === 'walk' || m.kind === 'enter' || m.kind === 'appear' || m.kind === 'crash') && (
               <input type="number" min={vehicle ? 0 : 140} max={vehicle ? 1600 : 1460} step={20} value={m.x ?? 800} onChange={(e) => set(i, { x: Number(e.target.value) })} aria-label="Target x" />
             )}
-            {(m.kind === 'enter' || m.kind === 'exit') && (
+            {m.kind === 'crash' && (
+              <label className="check" title="Tear a hole in the back of the set">
+                <input type="checkbox" checked={m.on === 'wall'} onChange={(e) => set(i, { on: e.target.checked ? 'wall' : undefined })} /> through the wall
+              </label>
+            )}
+            {(m.kind === 'enter' || m.kind === 'exit' || m.kind === 'crash') && (
               <select value={m.side ?? ''} onChange={(e) => set(i, { side: (e.target.value || undefined) as Move['side'] })} aria-label="Side">
                 <option value="">{vehicle ? 'the way it faces' : 'nearest side'}</option>
                 <option value="left">from/to left</option>
@@ -289,6 +297,10 @@ function BeatCard(props: {
             beat.hold ? `holds ${HELD.find((h) => h.id === beat.hold)?.name.toLowerCase() ?? beat.hold}` : '',
             beat.give ? `hands to ${ep.cast.find((c) => c.id === beat.give)?.name ?? beat.give}` : '',
             beat.hug ? `hugs ${ep.cast.find((c) => c.id === beat.hug)?.name ?? beat.hug}` : '',
+            beat.becomes ? `becomes ${ep.cast.find((c) => c.id === beat.becomes)?.name ?? beat.becomes}` : '',
+            beat.crowd ? `crowd: ${beat.crowd}` : '',
+            beat.burst?.kind,
+            beat.drift ? `${beat.drift.item} goes by` : '',
             beat.also?.length ? `+${beat.also.length} together` : '',
             beat.pauseAfter ? `${beat.pauseAfter}s pause` : '',
           ]
@@ -360,6 +372,59 @@ function BeatCard(props: {
           <label>
             Hugs
             <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.hug} onChange={(v) => set({ hug: v })} allowNone />
+          </label>
+          <label>
+            Turns into
+            <select value={beat.becomes ?? ''} onChange={(e) => set({ becomes: e.target.value || undefined })}>
+              <option value="">—</option>
+              {ep.cast
+                .filter((c) => c.id !== beat.who)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              <optgroup label="Creatures">
+                {SIDEKICKS.filter((s) => s.id !== 'none').map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </label>
+          <label>
+            Crowd
+            <select value={beat.crowd ?? ''} onChange={(e) => set({ crowd: (e.target.value || undefined) as Beat['crowd'] })} disabled={!scene.crowd}>
+              <option value="">—</option>
+              {CROWD_LIST.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Smoke and fire
+            <select value={beat.burst?.kind ?? ''} onChange={(e) => set({ burst: e.target.value ? { ...beat.burst, kind: e.target.value as NonNullable<Beat['burst']>['kind'] } : undefined })}>
+              <option value="">—</option>
+              {BURST_LIST.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Goes by on its own
+            <select value={beat.drift?.item ?? ''} onChange={(e) => set({ drift: e.target.value ? { ...beat.drift, item: e.target.value } : undefined })}>
+              <option value="">—</option>
+              {HELD.filter((h) => h.id !== 'none').map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="span2">
             <span className="lbl">Does it together with</span>

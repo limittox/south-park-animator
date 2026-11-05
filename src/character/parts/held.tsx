@@ -693,6 +693,40 @@ export const HELD: HeldDef[] = [
       );
     },
   },
+  // Things that are rarely anybody's: they blow past, roll by or fall.
+  {
+    id: 'mask',
+    name: 'Face Mask',
+    quip: 'Worn under the nose. Has never stopped anything.',
+    defaultColor: '#bfe0ee',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <path d={`M ${x - 34} ${y - 30} q -18 10 0 22 M ${x + 34} ${y - 30} q 18 10 0 22`} fill="none" stroke="#f4f4f4" strokeWidth={3} />
+          <rect x={x - 34} y={y - 38} width={68} height={38} rx={8} {...f(c.color)} />
+          <path d={`M ${x - 28} ${y - 26} L ${x + 28} ${y - 26} M ${x - 28} ${y - 18} L ${x + 28} ${y - 18} M ${x - 28} ${y - 10} L ${x + 28} ${y - 10}`} stroke={shade(c.color, -0.18)} strokeWidth={2.5} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'newspaper',
+    name: 'Newspaper',
+    quip: 'Yesterday\'s news. Today\'s puppy pad.',
+    defaultColor: '#efe9dc',
+    render: (c) => {
+      const [x, y] = hand(c);
+      return (
+        <g>
+          <rect x={x - 44} y={y - 68} width={88} height={68} {...f(c.color)} />
+          <rect x={x - 36} y={y - 60} width={72} height={12} fill={O} />
+          <path d={`M ${x - 36} ${y - 40} L ${x - 4} ${y - 40} M ${x - 36} ${y - 30} L ${x - 4} ${y - 30} M ${x - 36} ${y - 20} L ${x - 4} ${y - 20} M ${x - 36} ${y - 10} L ${x - 4} ${y - 10}`} stroke={shade(c.color, -0.4)} strokeWidth={3} />
+          <rect x={x + 6} y={y - 42} width={30} height={32} fill={shade(c.color, -0.25)} />
+        </g>
+      );
+    },
+  },
 ];
 
 /* --------------------------------------------------------------- sidekicks */
@@ -907,6 +941,53 @@ export const SIDEKICKS: SidekickDef[] = [
           <circle cx={x - 14} cy={y - 34} r={3} fill={O} />
           <circle cx={x - 18} cy={y - 44} r={6} {...f(shade(c.color, 0.25))} strokeWidth={1.5} />
           <path d={`M ${x - 26} ${y - 70} Q ${x - 10} ${y - 84} ${x + 10} ${y - 80}`} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.8} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'bat',
+    name: 'Cave Bat',
+    quip: 'Sleeps upside down. Has opinions about the local fruit.',
+    defaultColor: '#3d3a46',
+    render: (c) => {
+      const { x, y } = spot(c);
+      const by = y - 64;
+      const wing = (s: number) => `M ${x + s * 12} ${by - 14} Q ${x + s * 54} ${by - 62} ${x + s * 118} ${by - 40} Q ${x + s * 100} ${by - 18} ${x + s * 104} ${by + 8} Q ${x + s * 82} ${by - 10} ${x + s * 68} ${by + 16} Q ${x + s * 50} ${by} ${x + s * 12} ${by + 22} Z`;
+      return (
+        <g>
+          <path d={wing(-1)} {...f(c.color)} />
+          <path d={wing(1)} {...f(c.color)} />
+          <path d={`M ${x - 22} ${by - 22} L ${x - 26} ${by - 60} L ${x - 4} ${by - 34} Z M ${x + 22} ${by - 22} L ${x + 26} ${by - 60} L ${x + 4} ${by - 34} Z`} {...f(c.color)} />
+          <ellipse cx={x} cy={by} rx={26} ry={36} {...f(c.color)} />
+          <circle cx={x - 10} cy={by - 12} r={7} fill="#fff" />
+          <circle cx={x + 10} cy={by - 12} r={7} fill="#fff" />
+          <circle cx={x - 9} cy={by - 11} r={2.6} fill={O} />
+          <circle cx={x + 11} cy={by - 11} r={2.6} fill={O} />
+          <path d={`M ${x - 9} ${by + 6} l 4 9 l 4 -8 l 2 0 l 4 8 l 4 -9`} fill="#fff" stroke={O} strokeWidth={1.5} />
+        </g>
+      );
+    },
+  },
+  {
+    id: 'frog',
+    name: 'Pond Frog',
+    quip: 'Used to be somebody. Will not say who.',
+    defaultColor: '#6fae3f',
+    render: (c) => {
+      const { x, y } = spot(c);
+      return (
+        <g>
+          <ellipse cx={x - 40} cy={y - 8} rx={30} ry={10} {...f(shade(c.color, -0.15))} />
+          <ellipse cx={x + 40} cy={y - 8} rx={30} ry={10} {...f(shade(c.color, -0.15))} />
+          <ellipse cx={x} cy={y - 40} rx={52} ry={36} {...f(c.color)} />
+          <circle cx={x - 26} cy={y - 76} r={16} {...f(c.color)} />
+          <circle cx={x + 26} cy={y - 76} r={16} {...f(c.color)} />
+          <circle cx={x - 26} cy={y - 78} r={9} fill="#fff" />
+          <circle cx={x + 26} cy={y - 78} r={9} fill="#fff" />
+          <circle cx={x - 26} cy={y - 76} r={4} fill={O} />
+          <circle cx={x + 26} cy={y - 76} r={4} fill={O} />
+          <path d={`M ${x - 34} ${y - 36} Q ${x} ${y - 16} ${x + 34} ${y - 36}`} fill="none" stroke={O} strokeWidth={3.5} />
         </g>
       );
     },

@@ -3,8 +3,8 @@ import { CLOTH_COLORS, HAIR_COLORS, SKIN_TONES } from '../data/palette';
 import { SCENES } from '../scenes/backgrounds';
 import { kitCatalogForPrompt } from '../sets/kit';
 import { vehicleCatalogForPrompt } from '../sets/vehicles';
-import { HELD } from '../character/parts/held';
-import { ACTION_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST, TRANSITION_LIST, WEATHER_LIST, type VocabEntry } from '../episode/catalog';
+import { HELD, SIDEKICKS } from '../character/parts/held';
+import { ACTION_LIST, BURST_LIST, CROWD_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST, TRANSITION_LIST, WEATHER_LIST, type VocabEntry } from '../episode/catalog';
 import type { CategoryId } from '../types';
 
 /* ------------------------------------------------------------------ reference blocks */
@@ -162,12 +162,14 @@ Scene = {
   "title": "short name", "description": "what happens",
   "set": SetSpec,
   "weather": one of ${WEATHER_LIST.map((w) => w.id).join(', ')},
-  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "lie": "bed", "in": "car", "hold": "phone" } ],  // sit / lie / in / hold only when needed
+  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "lie": "bed", "in": "car", "hold": "phone", "screen": true } ],  // sit / lie / in / hold / screen only when needed
   "vehicles": [ { "id": "car", "type": "car|police|bus", "x": 800, "color": "#hex", "offstage": true, "lane": "back|front" } ],  // only if a vehicle appears
   "beats": [ Beat ],
   "hold": seconds of establishing wide shot before the first beat (about 1.2; 0.6 for the first scene),
   "sting": true to play the short guitar sting over the hold (scene changes),
-  "transition": how this scene takes over from the last one; leave out for a hard cut
+  "transition": how this scene takes over from the last one; leave out for a hard cut,
+  "crowd": { "count": 18, "layout": "group|line", "kids": false, "mood": "happy" },  // extras behind the cast, only if the scene has a crowd
+  "split": { "set": SetSpec, "who": ["names"], "weather": "none" }  // a phone call: these people are in a second set on the right half of the screen
 }
 
 Beat = {
@@ -179,10 +181,14 @@ Beat = {
   "gesture": arm pose of "who" during the beat,
   "action": one-shot body action of "who",
   "also": ["names"],  // others doing the same gesture, action and hold at the same moment
-  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|lie|stand|approach|getIn|getOut", "x": 800, "side": "left|right", "run": true, "sneak": true, "on": "seat, vehicle or person" } ],
+  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|lie|stand|approach|getIn|getOut|crash|joinScreen|leaveScreen", "x": 800, "side": "left|right", "run": true, "sneak": true, "on": "seat, vehicle or person" } ],
   "hold": "prop id",  // what "who" holds from this beat on ("none" puts it away)
   "give": "name",  // "who" hands their prop to this person during the beat
   "hug": "name",  // "who" walks up to this person and they hug
+  "becomes": "name or creature",  // "who" turns into this person or creature
+  "crowd": how the scene's crowd reacts,
+  "burst": { "kind": "smoke", "at": "name or vehicle id", "x": 800, "stay": false },  // smoke and fire; "stay" keeps it going until the scene ends
+  "drift": { "item": "prop id", "style": "blow|roll|fall", "from": "left|right", "x": 800 },  // a prop going by on its own
   "lookAt": "name the speaker looks at (default: nearest person); on a silent beat only the eyes move, a side-eye",
   "shot": { "type": "wide|medium|close", "on": ["names"], "push": false, "pan": false, "follow": false },  // camera change at the start of the beat; omit to keep the current shot
   "sfx": sound effect, "effect": screen effect,
@@ -206,6 +212,11 @@ effects:
 ${list(EFFECT_LIST)}
 scene transitions:
 ${list(TRANSITION_LIST)}
+bursts:
+${list(BURST_LIST)}
+crowd reactions:
+${list(CROWD_LIST)}
+creatures (for "becomes"): ${SIDEKICKS.filter((s) => s.id !== 'none').map((s) => s.id).join(', ')}
 props (for "hold", "give" and blocking "hold"): ${propReference()}
 vehicles:
 ${vehicleCatalogForPrompt()}
@@ -221,6 +232,13 @@ STAGE BUSINESS
 - Props: "hold" puts a prop in "who"'s hand (pick something up, pull out a phone); "give" hands it to someone, who should be standing near them. Blocking "hold" sets the prop they start the scene with.
 - Camera moves: a shot normally cuts. "pan": true glides there from the last shot over about a second: from one person to another, in on someone, or back out to wide. "follow": true keeps a medium or close shot on "on" as they walk or run. "push": true creeps in slowly during the beat.
 - Eyes: a silent beat with "lookAt" slides just the eyes to that person, with no head turn. Good for a side-eye before a deadpan line.
+- Crowds: "crowd" fills the rows behind the cast with extras ("line" queues them across the stage instead). Beat "crowd" makes them react. Use it for audiences, classes, mobs and queues. The cast stay separate from the extras.
+- Screens: blocking "screen": true puts someone on the set's TV or computer, or on a big video screen on the back wall if it has none; several people share it as a video call. "joinScreen" and "leaveScreen" moves put people on and take them off during the scene. They can talk as normal, and everyone on stage looks at the screen when they do. Use it for news anchors, people "on the TV" and video calls.
+- Phone calls: "split" divides the picture down the middle: "who" are in the second set on the right, everyone else in the scene's own set on the left. Give the two speakers phones.
+- Crashes: a "crash" move slams a vehicle in to x with a crash, a shake, flying debris and smoke. "on": "wall" also tears a hole in the back of the set.
+- Smoke and fire: "burst" puts smoke, fire or an explosion on someone or something, or at x. Pair an explosion with "sfx": "explosion" and "effect": "flash".
+- Things on their own: "drift" sends a prop across the stage with nobody holding it, like litter on the wind.
+- Transformations: "becomes" flickers "who" into another character or a creature in a puff of smoke. A creature stays one for the rest of the scene.
 - Vehicles: list them in the scene's "vehicles". They drive with the same moves, using the vehicle id as "who": "enter" drives in and parks at x (vehicles face right and come from the left; give the vehicle "flip": true, or the move a "side", to come from the right), "walk" drives to x, "exit" drives off with everyone inside. Blocking "in" starts someone inside (the first one in is the driver); "getIn" walks someone to the door and in ("on": vehicle id), "getOut" lets them out next to it. A vehicle in "lane": "front" passes in front of everyone, like the school bus pulling up at the bus stop and hiding the kids; "back" (default) parks behind the front row. A car is about 780 wide, the bus 1320.
 
 SETS
@@ -242,7 +260,7 @@ DIRECTING RULES
 7. Camera: wide by default. Cut to a close-up for punchlines, outbursts and reaction shots, a medium shot for intimate two-person moments, then cut back to wide. Don't cut on every line. Pans and follows are rare: save them for a reveal or a chase.
 8. Comic timing: pauseAfter 0.6 to 1.2 before deadpan answers and after shocking lines; a silent reaction beat (duration 1 to 1.5, with reactions) is often funnier than a line.
 9. Outdoor town scenes usually have "weather": "snow" unless the script says otherwise. Scene changes are hard cuts unless the script asks for a fade or a dissolve, or a big jump in time calls for one.
-10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who lie down lie down; people who run run; people who sneak sneak; people who dance dance; anything someone picks up, eats, drinks, reads, throws or hands over becomes a "hold", "give" or "throw"; arrivals and departures by car or bus use a vehicle.`;
+10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who lie down lie down; people who run run; people who sneak sneak; people who dance dance; anything someone picks up, eats, drinks, reads, throws or hands over becomes a "hold", "give" or "throw"; arrivals and departures by car or bus use a vehicle; anyone "on the TV" or "on the call" is on the screen; crowds, crashes, fires and transformations are shown, not skipped.`;
 }
 
 export function editSystem(): string {
