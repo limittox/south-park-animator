@@ -815,18 +815,13 @@ describe("the show's timing", () => {
     return compileEpisode(ep, new Map());
   };
 
-  it('moves characters every second frame at 24 frames a second', () => {
-    expect(FPS).toBe(24);
-    expect(POSE_FPS).toBe(12);
+  it('moves characters smoothly at 30 frames a second, and faster if the screen can', () => {
+    expect(FPS).toBe(30);
     const c = walker();
     const x = (frame: number) => (sampleEpisode(c, frame / FPS) as SceneFrame).actors[0].x;
     const first = Math.round(c.scenes[0].beats[0].start * FPS) + 4;
-    for (let f = first; f < first + 12; f += 2) {
-      expect(x(f + 1)).toBe(x(f));
-      expect(x(f + 2)).toBeGreaterThan(x(f + 1));
-    }
-    // The picture only changes on the grid, however often it's asked for.
-    expect(x(first + 0.5)).toBe(x(first));
+    for (let f = first; f < first + 12; f++) expect(x(f + 1)).toBeGreaterThan(x(f));
+    expect(x(first + 0.5)).toBeGreaterThan(x(first));
   });
 
   it('starts every beat and scene on a pose, whatever the audio lengths are', () => {
@@ -897,11 +892,8 @@ describe('camera moves', () => {
     expect(from).toBeLessThan(mid);
     expect(mid).toBeLessThan(to);
     expect(frame(1.5).camera.x).toBe(to);
-    // The camera runs on every frame while the characters hold their pose.
-    const a = frame(0.5);
-    const b = frame(0.5 + 1 / FPS);
-    expect(b.camera.x).toBeGreaterThan(a.camera.x);
-    expect(b.t).toBe(a.t);
+    // The camera moves on every frame.
+    expect(frame(0.5 + 1 / FPS).camera.x).toBeGreaterThan(frame(0.5).camera.x);
   });
 
   it('gives a silent pan time to finish', () => {
@@ -981,7 +973,7 @@ describe('scene transitions', () => {
     expect(start.scene.index).toBe(1);
     expect(start.under?.frame.scene.index).toBe(0);
     expect(start.under?.opacity).toBe(1);
-    const mid = at(join + 10 / FPS);
+    const mid = at(join + transitionTime(c.scenes[1]) / 2);
     expect(mid.under?.opacity).toBeCloseTo(0.5);
     expect(mid.fade).toBe(0);
     expect(at(join + 0.9).under).toBeUndefined();

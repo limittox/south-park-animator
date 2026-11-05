@@ -23,7 +23,7 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 
 **Animation**
 - One pure timeline (`src/episode/timeline.ts`) turns the episode into frames. The player and the exporter both sample it, so what you see is what you export.
-- 24 frames a second with characters and props posed every second frame, the way the show is animated. Beats start on a pose, so lines, cuts and actions land the moment the picture changes; camera moves and fades run on every frame.
+- Smooth motion: everything moves on every frame, at 30 frames a second in exported videos and as fast as your screen draws in the player. Hops, mouth shapes and trembling still pop 12 times a second, like paper cut-outs.
 - Stop-motion hop walks, entrances and exits, blinks, a talking bob, 14 moods, 16 arm gestures (wave, point, facepalm, flail, cover ears…), jumps, spins, trembles and faints.
 - Lip sync with seven mouth shapes plus closed lips. The words say which shape comes next and the audio says when, so pauses in the speech keep them lined up.
 - Acting: dancing, crying with running tears, sweating, vomiting, eating and chewing, drinking, hugging, and lying down on couches, beds and floors. Several people can do the same thing at once.

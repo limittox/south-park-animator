@@ -21,9 +21,10 @@ import { DEFAULT_CHARACTER } from '../data/defaults';
 
 /** Lip-sync envelopes are sampled this many times a second. */
 export const ENV_FPS = 60;
-/** The show runs at 24 frames a second and moves its characters and props every second frame. */
-export const FPS = 24;
-export const POSE_FPS = FPS / 2;
+/** Videos export at this rate. Everything moves on every frame; the player draws as fast as the screen does. */
+export const FPS = 30;
+/** Things that pop rather than glide (hops, mouth shapes, trembling, a turn going round) change this many times a second. */
+export const POSE_FPS = 12;
 export const FRAME_W = 1600;
 export const FRAME_H = 900;
 const TITLE_SECONDS = 3.25;
@@ -74,18 +75,12 @@ const LANE_FRONT = 70;
 export const PASSENGER_SCALE = 0.62;
 /** A pan from one shot to the next. */
 const PAN_TIME = 1;
-const FADE_TIME = 12 / FPS;
-const DISSOLVE_TIME = 20 / FPS;
+const FADE_TIME = 15 / FPS;
+const DISSOLVE_TIME = 25 / FPS;
 /** How far the pupils slide toward someone the head is already turned to. */
 const GAZE_LOOK = 0.6;
 
-/** A hair of slack keeps float error from losing a tick. */
-const stepDown = (t: number, fps: number) => Math.floor(t * fps + 1e-6) / fps;
-/** The frame showing at time t. */
-export const frameTime = (t: number) => stepDown(t, FPS);
-/** The pose showing at time t. */
-export const poseTime = (t: number) => stepDown(t, POSE_FPS);
-/** The first pose at or after t. Beats start on one, so lines, cuts and actions land the moment the picture changes. */
+/** The first pose at or after t. Beats start on one, so lines, cuts and actions keep in step with the hops and mouths. */
 const nextPose = (t: number) => Math.ceil(t * POSE_FPS - 1e-6) / POSE_FPS;
 
 /** Audio for one line: how long it runs and how loud it is over time (for the mouth). */
@@ -1568,8 +1563,7 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
   return out.sort((a, b) => a.y - b.y || a.talk - b.talk);
 }
 
-/** `t` is the pose on screen; `frameT` is the frame, which camera moves and fades run on. */
-export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, frameT = t): SceneFrame {
+export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number): SceneFrame {
   const vehicles = sampleVehicles(sc, t);
   const actors = sampleActors(sc, ep, t, vehicles);
   let beat: CompiledBeat | null = null;
@@ -1580,10 +1574,9 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, f
     const { t: t0, shot, beat: from } = sc.shots[i];
     let framing: ActorFrame[] = [];
     if (shot.follow) {
-      // On the pose, so the character holds still in the frame while the set moves behind them. Their hops don't shake it.
+      // The character holds still in the frame while the set moves behind them. Their hops don't shake it.
       // Once they've left there's nobody to frame, and it cuts back to wide for whoever's still there.
-      const p = poseTime(at);
-      framing = sampleActors(sc, ep, p, sampleVehicles(sc, p)).map((a) => ({ ...a, lift: 0 }));
+      framing = sampleActors(sc, ep, at, sampleVehicles(sc, at)).map((a) => ({ ...a, lift: 0 }));
     } else if (shot.type !== 'wide') framing = t0 === t ? actors : sampleActors(sc, ep, t0 + 1e-3, sampleVehicles(sc, t0 + 1e-3));
     let cam = cameraFor(shot, framing, from?.beat.who);
     if (shot.push && from) {
@@ -1593,7 +1586,7 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, f
     const k = (at - t0) / PAN_TIME;
     return shot.pan && i > 0 && k < 1 ? mixCamera(shotCamera(i - 1, t0), cam, ease(Math.max(0, k))) : cam;
   };
-  let camera = shotCamera(sc.shots.indexOf(lastAt(sc.shots, t) ?? sc.shots[0]), frameT);
+  let camera = shotCamera(sc.shots.indexOf(lastAt(sc.shots, t) ?? sc.shots[0]), t);
 
   // Screen effects.
   let flash = 0;
@@ -1607,7 +1600,7 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, f
     const dt = t - b.start;
     if (dt < 0) break;
     if (b.beat.effect === 'shake') shake(dt);
-    if (b.beat.effect === 'flash' && frameT - b.start < 0.45) flash = Math.max(flash, 1 - (frameT - b.start) / 0.45);
+    if (b.beat.effect === 'flash' && dt < 0.45) flash = Math.max(flash, 1 - dt / 0.45);
   }
   for (const i of sc.impacts) shake(t - i.t);
 
@@ -1648,30 +1641,29 @@ export function transitionTime(sc: CompiledScene): number {
 }
 
 /** Scene changes are overlays: fades and dissolves use the hold and the tail each scene already has, so nothing moves in time. */
-function transition(frame: SceneFrame, ep: CompiledEpisode, local: number): SceneFrame {
+function transition(frame: SceneFrame, ep: CompiledEpisode, t: number): SceneFrame {
   const sc = frame.scene;
-  const t = frameTime(local);
   const time = transitionTime(sc);
   const up = sc.scene.transition === 'fade' ? 1 - t / time : 0;
   const down = ep.scenes[sc.index + 1]?.scene.transition === 'fade' ? 1 - (sc.duration - t) / fadeLength(sc) : 0;
   frame.fade = clamp(Math.max(up, down), 0, 1);
   const prev = ep.scenes[sc.index - 1];
   if (sc.scene.transition === 'dissolve' && prev && t < time) {
-    frame.under = { frame: sampleScene(prev, ep, prev.duration + poseTime(local), prev.duration + t), opacity: 1 - t / time };
+    frame.under = { frame: sampleScene(prev, ep, prev.duration + t), opacity: 1 - t / time };
   }
   return frame;
 }
 
-/** The picture at time t, held on the current frame and pose. */
+/** The picture at time t. */
 export function sampleEpisode(ep: CompiledEpisode, t: number): Frame | null {
   if (t < ep.titleDuration) {
-    const fade = ep.scenes[0]?.scene.transition === 'fade' ? clamp(1 - (ep.titleDuration - frameTime(t)) / FADE_TIME, 0, 1) : 0;
-    return { kind: 'title', title: ep.episode.title, t: poseTime(t), fade };
+    const fade = ep.scenes[0]?.scene.transition === 'fade' ? clamp(1 - (ep.titleDuration - t) / FADE_TIME, 0, 1) : 0;
+    return { kind: 'title', title: ep.episode.title, t, fade };
   }
   const sc = ep.scenes.find((s) => t < s.start + s.duration);
   if (sc) {
     const local = Math.max(0, t - sc.start);
-    return transition(sampleScene(sc, ep, poseTime(local), frameTime(local)), ep, local);
+    return transition(sampleScene(sc, ep, local), ep, local);
   }
   const last = ep.scenes[ep.scenes.length - 1];
   return last ? transition(sampleScene(last, ep, last.duration), ep, last.duration) : null;
