@@ -1,10 +1,12 @@
 import type { ItemBase, Render, RenderCtx } from '../../types';
 import { accent, inkOn, shade } from '../../lib/color';
 import { handPos } from '../geometry';
-import { ink, O, scallop, starPath } from './common';
+import { ink, O, pale, scallop, starPath } from './common';
 
 export interface HeldDef extends ItemBase {
   render?: Render;
+  /** Degrees a kid tilts it away from their big head, so the head doesn't hide it. */
+  lean?: number;
 }
 
 const f = (color: string) => ({ fill: color, ...ink });
@@ -32,12 +34,13 @@ export const HELD: HeldDef[] = [
   {
     id: 'sign',
     name: 'Protest Sign',
+    lean: 8,
     quip: 'Fighting the power. The power is bedtime. Edit the slogan below!',
     defaultColor: '#ffffff',
     render: (c) => {
       const [x, y] = hand(c);
       const lines = wrapSign(c.c.signText || 'WE WANT RECESS');
-      const bx = x + 46;
+      const bx = x + 72;
       const by = y - 210;
       return (
         <g>
@@ -66,6 +69,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'sword',
     name: 'Wooden Sword',
+    lean: 8,
     quip: 'Knight of the playground. Has slain three dragons (shrubs).',
     defaultColor: '#c9a07a',
     render: (c) => {
@@ -120,6 +124,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'snack',
     name: 'Snack Bag',
+    lean: 6,
     quip: 'Breakfast of champions. Lunch of champions. Dinner of champions.',
     defaultColor: '#f0742a',
     render: (c) => {
@@ -155,6 +160,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'phone',
     name: 'Smartphone',
+    lean: 6,
     quip: 'Doomscrolling since age six. Has 4,000 unread notifications.',
     defaultColor: '#1f1f22',
     render: (c) => {
@@ -210,14 +216,15 @@ export const HELD: HeldDef[] = [
   {
     id: 'coffee',
     name: 'Coffee',
+    lean: 12,
     quip: 'Kids should not drink coffee. This one does. Now vibrates at a frequency only dogs can hear.',
     defaultColor: '#2e8b47',
     render: (c) => {
       const [x, y] = hand(c);
       return (
         <g>
-          <path d={`M ${x - 18} ${y - 66} L ${x + 22} ${y - 66} L ${x + 16} ${y + 6} L ${x - 12} ${y + 6} Z`} {...f('#fff')} />
-          <rect x={x - 22} y={y - 74} width={48} height={10} rx={4} {...f('#fff')} />
+          <path d={`M ${x - 18} ${y - 66} L ${x + 22} ${y - 66} L ${x + 16} ${y + 6} L ${x - 12} ${y + 6} Z`} {...pale('#fff')} />
+          <rect x={x - 22} y={y - 74} width={48} height={10} rx={4} {...pale('#fff')} />
           <path d={`M ${x - 16} ${y - 44} L ${x + 20} ${y - 44} L ${x + 18} ${y - 18} L ${x - 14} ${y - 18} Z`} {...f(c.color)} strokeWidth={2} />
           <path d={`M ${x - 4} ${y - 80} q 6 -10 0 -20 M ${x + 8} ${y - 80} q 6 -10 0 -20`} fill="none" stroke="#bbb" strokeWidth={3} strokeLinecap="round" />
         </g>
@@ -233,8 +240,9 @@ export const HELD: HeldDef[] = [
       const [x, y] = hand(c);
       return (
         <g>
-          <path d={scallop(x + 14, y - 26, 24, 24, 9, 0.05)} {...f('#fdfdff')} />
-          <path d={`M ${x + 2} ${y - 36} q 8 -8 18 -4`} fill="none" stroke="#bcd4f0" strokeWidth={3} strokeLinecap="round" />
+          <path d={scallop(x + 14, y - 26, 27, 27, 9, 0.05)} {...pale('#f2f7ff')} stroke="#9fbcd8" />
+          <path d={`M ${x + 28} ${y - 42} q 16 14 4 32 q -14 12 -32 4 q 22 -2 28 -36 Z`} fill="#cfe0f2" />
+          <path d={`M ${x} ${y - 38} q 8 -9 18 -5`} fill="none" stroke="#fff" strokeWidth={4} strokeLinecap="round" />
         </g>
       );
     },
@@ -242,6 +250,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'icecream',
     name: 'Ice Cream',
+    lean: 24,
     quip: 'Three scoops. In a blizzard. Commitment.',
     defaultColor: '#f27bb4',
     render: (c) => {
@@ -261,6 +270,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'trophy',
     name: 'Trophy',
+    lean: 14,
     quip: 'Participation trophy. Very shiny. Says "You Tried!" on the bottom.',
     defaultColor: '#f2c230',
     render: (c) => {
@@ -280,6 +290,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'flower',
     name: 'Flower',
+    lean: 22,
     quip: 'For you. Or for the teacher. Fine, it is for the teacher.',
     defaultColor: '#f2c230',
     render: (c) => {
@@ -288,7 +299,7 @@ export const HELD: HeldDef[] = [
         <g>
           <path d={`M ${x + 4} ${y + 6} Q ${x + 16} ${y - 60} ${x + 10} ${y - 110}`} fill="none" stroke="#2e8b47" strokeWidth={5} />
           <path d={`M ${x + 12} ${y - 50} q 18 -10 26 4 q -14 8 -26 -4 Z`} fill="#7fbf3f" {...ink} strokeWidth={1.5} />
-          <path d={scallop(x + 10, y - 122, 22, 22, 8, 0.25)} {...f('#fff')} />
+          <path d={scallop(x + 10, y - 122, 24, 24, 8, 0.25)} {...pale('#fff')} />
           <circle cx={x + 10} cy={y - 122} r={10} {...f(c.color)} strokeWidth={2} />
         </g>
       );
@@ -314,6 +325,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'pizza',
     name: 'Pizza Slice',
+    lean: 16,
     quip: 'Cold pizza for breakfast. A balanced diet, technically.',
     colorable: false,
     render: (c) => {
@@ -333,15 +345,19 @@ export const HELD: HeldDef[] = [
   {
     id: 'megaphone',
     name: 'Megaphone',
+    lean: 6,
     quip: 'Indoor voice? Never heard of her.',
     defaultColor: '#f2c230',
     render: (c) => {
       const [x, y] = hand(c);
       return (
-        <g transform={`rotate(-30 ${x} ${y})`}>
-          <path d={`M ${x - 6} ${y - 20} L ${x + 50} ${y - 50} L ${x + 50} ${y + 20} L ${x - 6} ${y - 6} Z`} {...f(c.color)} />
-          <ellipse cx={x + 50} cy={y - 15} rx={9} ry={35} {...f(shade(c.color, -0.2))} />
-          <rect x={x - 16} y={y - 22} width={14} height={18} rx={3} {...f('#55555a')} />
+        <g transform={`rotate(-14 ${x} ${y})`}>
+          <rect x={x - 3} y={y - 16} width={14} height={30} rx={4} {...f('#55555a')} />
+          <path d={`M ${x - 18} ${y - 34} L ${x + 66} ${y - 66} L ${x + 66} ${y + 14} L ${x - 18} ${y - 18} Z`} {...f(c.color)} />
+          <path d={`M ${x + 18} ${y - 48} L ${x + 34} ${y - 54} L ${x + 34} ${y - 1} L ${x + 18} ${y - 5} Z`} fill="#fff" />
+          <rect x={x - 32} y={y - 36} width={16} height={20} rx={4} {...f('#55555a')} />
+          <ellipse cx={x + 66} cy={y - 26} rx={15} ry={41} {...f(shade(c.color, -0.2))} />
+          <ellipse cx={x + 68} cy={y - 26} rx={9} ry={30} fill={shade(c.color, -0.55)} />
         </g>
       );
     },
@@ -349,6 +365,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'book',
     name: 'Book',
+    lean: 12,
     quip: '"How to Be Cool, Vol. 1". Has read it 14 times. Still not cool.',
     defaultColor: '#3b6fd8',
     render: (c) => {
@@ -385,6 +402,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'chicken',
     name: 'Rubber Chicken',
+    lean: 16,
     quip: 'Comedy gold. Squeaks when squeezed. Squeezed 400 times a day.',
     colorable: false,
     render: (c) => {
@@ -422,6 +440,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'plunger',
     name: 'Plunger',
+    lean: 16,
     quip: "Don't ask. Seriously. Just don't.",
     defaultColor: '#d33b2c',
     render: (c) => {
@@ -430,7 +449,8 @@ export const HELD: HeldDef[] = [
         <g>
           <path d={`M ${x + 6} ${y + 10} L ${x + 14} ${y - 120}`} stroke={O} strokeWidth={12} strokeLinecap="round" />
           <path d={`M ${x + 6} ${y + 10} L ${x + 14} ${y - 120}`} stroke="#c9a07a" strokeWidth={8} strokeLinecap="round" />
-          <path d={`M ${x - 18} ${y - 116} Q ${x + 14} ${y - 172} ${x + 46} ${y - 116} Z`} {...f(c.color)} />
+          <path d={`M ${x + 4} ${y - 112} Q ${x - 30} ${y - 128} ${x - 34} ${y - 168} L ${x + 62} ${y - 168} Q ${x + 58} ${y - 128} ${x + 24} ${y - 112} Z`} {...f(c.color)} />
+          <ellipse cx={x + 14} cy={y - 168} rx={48} ry={11} {...f(shade(c.color, -0.5))} />
         </g>
       );
     },
@@ -444,9 +464,10 @@ export const HELD: HeldDef[] = [
       const [x, y] = hand(c);
       return (
         <g>
-          <path d={`M ${x + 30} ${y - 10} Q ${x + 70} ${y + 30} ${x + 50} ${y + 80} Q ${x + 40} ${y + 110} ${x + 70} ${y + 120}`} fill="none" stroke="#fdfdfd" strokeWidth={14} />
+          <path d={`M ${x + 30} ${y - 10} Q ${x + 70} ${y + 30} ${x + 50} ${y + 80} Q ${x + 40} ${y + 110} ${x + 70} ${y + 120}`} fill="none" stroke="#c4d0dc" strokeWidth={16} />
+          <path d={`M ${x + 30} ${y - 10} Q ${x + 70} ${y + 30} ${x + 50} ${y + 80} Q ${x + 40} ${y + 110} ${x + 70} ${y + 120}`} fill="none" stroke="#fdfdfd" strokeWidth={12} />
           <path d={`M ${x + 30} ${y - 10} Q ${x + 70} ${y + 30} ${x + 50} ${y + 80} Q ${x + 40} ${y + 110} ${x + 70} ${y + 120}`} fill="none" stroke={O} strokeWidth={1.5} strokeDasharray="1 7" />
-          <ellipse cx={x + 16} cy={y - 22} rx={22} ry={26} {...f('#fdfdfd')} />
+          <ellipse cx={x + 16} cy={y - 22} rx={22} ry={26} {...pale('#fdfdfd')} />
           <ellipse cx={x + 16} cy={y - 22} rx={7} ry={9} fill="#c9a07a" stroke={O} strokeWidth={1.5} />
         </g>
       );
@@ -455,6 +476,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'pennant',
     name: 'Team Pennant',
+    lean: 12,
     quip: 'Go team! Which team? Does it matter? GO TEAM!',
     defaultColor: '#8a1f2b',
     render: (c) => {
@@ -518,7 +540,7 @@ export const HELD: HeldDef[] = [
       const [x, y] = hand(c);
       return (
         <g transform={`rotate(-12 ${x} ${y})`}>
-          <rect x={x - 14} y={y - 52} width={76} height={50} rx={3} {...f(c.color)} />
+          <rect x={x - 14} y={y - 52} width={76} height={50} rx={3} {...pale(c.color)} />
           <path d={`M ${x - 14} ${y - 52} L ${x + 24} ${y - 22} L ${x + 62} ${y - 52}`} fill="none" stroke={O} strokeWidth={2} />
           <path d={`M ${x + 24} ${y - 18} C ${x + 10} ${y - 28} ${x + 16} ${y - 40} ${x + 24} ${y - 32} C ${x + 32} ${y - 40} ${x + 38} ${y - 28} ${x + 24} ${y - 18} Z`} fill="#e5322d" stroke={O} strokeWidth={1.5} />
         </g>
@@ -546,6 +568,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'soda',
     name: 'Giant Soda',
+    lean: 14,
     quip: 'The 64-ounce Thirst Destroyer. Nobody has ever finished one. Nobody.',
     defaultColor: '#d33b2c',
     render: (c) => {
@@ -564,6 +587,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'bag',
     name: 'Grocery Bag',
+    lean: 12,
     quip: 'Milk, eggs and nineteen bags of chips. Mom said "groceries". These are groceries.',
     defaultColor: '#c9a07a',
     render: (c) => {
@@ -581,12 +605,13 @@ export const HELD: HeldDef[] = [
   {
     id: 'beer',
     name: 'Beer Bottle',
+    lean: 10,
     quip: 'Grown-ups only. Smells like a garage on a Sunday.',
     defaultColor: '#7a4a1e',
     render: (c) => {
       const [x, y] = hand(c);
       return (
-        <g transform={`rotate(-8 ${x} ${y})`}>
+        <g transform={`rotate(-8 ${x} ${y}) translate(${x} ${y}) scale(1.25) translate(${-x} ${-y})`}>
           <path d={`M ${x - 10} ${y + 8} L ${x - 10} ${y - 50} Q ${x - 10} ${y - 62} ${x - 2} ${y - 70} L ${x - 2} ${y - 94} L ${x + 12} ${y - 94} L ${x + 12} ${y - 70} Q ${x + 20} ${y - 62} ${x + 20} ${y - 50} L ${x + 20} ${y + 8} Z`} {...f(c.color)} />
           <rect x={x - 10} y={y - 42} width={30} height={26} fill="#f2e2b8" stroke={O} strokeWidth={1.5} />
           <rect x={x - 4} y={y - 100} width={22} height={8} rx={2} fill="#c9c9c9" stroke={O} strokeWidth={1.5} />
@@ -614,15 +639,16 @@ export const HELD: HeldDef[] = [
   {
     id: 'swab',
     name: 'Cotton Swab',
+    lean: 8,
     quip: 'A very long cotton swab. Goes all the way up. Do not ask how far.',
     defaultColor: '#ffffff',
     render: (c) => {
       const [x, y] = hand(c);
       return (
         <g>
-          <path d={`M ${x + 2} ${y + 4} L ${x + 34} ${y - 104}`} stroke={O} strokeWidth={8} strokeLinecap="round" />
-          <path d={`M ${x + 2} ${y + 4} L ${x + 34} ${y - 104}`} stroke={c.color} strokeWidth={4} strokeLinecap="round" />
-          <ellipse cx={x + 37} cy={y - 116} rx={10} ry={16} transform={`rotate(17 ${x + 37} ${y - 116})`} fill="#fdfdfd" {...ink} strokeWidth={2} />
+          <path d={`M ${x + 2} ${y + 4} L ${x + 34} ${y - 104}`} stroke="#9fb0c0" strokeWidth={8} strokeLinecap="round" />
+          <path d={`M ${x + 2} ${y + 4} L ${x + 34} ${y - 104}`} stroke={c.color} strokeWidth={5} strokeLinecap="round" />
+          <ellipse cx={x + 38} cy={y - 118} rx={14} ry={21} transform={`rotate(17 ${x + 38} ${y - 118})`} {...pale('#fdfdfd')} />
         </g>
       );
     },
@@ -630,19 +656,20 @@ export const HELD: HeldDef[] = [
   {
     id: 'microphone',
     name: 'News Microphone',
+    lean: 16,
     quip: 'Live at five. Asks the hard questions. Mostly "how do you feel?"',
     defaultColor: '#3b6fd8',
     render: (c) => {
       const [x, y] = hand(c);
       return (
         <g transform={`rotate(-12 ${x} ${y})`}>
-          <rect x={x - 4} y={y - 60} width={16} height={70} rx={6} {...f('#3d3d44')} />
-          <rect x={x - 12} y={y - 74} width={32} height={22} rx={3} {...f(c.color)} strokeWidth={2} />
-          <text x={x + 4} y={y - 58} textAnchor="middle" fontFamily="'Luckiest Guy', 'Arial Black', sans-serif" fontSize={12} fill="#fff">
+          <rect x={x - 4} y={y - 66} width={16} height={78} rx={6} {...f('#3d3d44')} />
+          <circle cx={x + 4} cy={y - 106} r={23} {...f('#9aa3ad')} />
+          <path d={`M ${x - 14} ${y - 118} L ${x + 22} ${y - 94} M ${x - 14} ${y - 96} L ${x + 22} ${y - 118} M ${x - 19} ${y - 106} L ${x + 27} ${y - 106}`} stroke="#6b7078" strokeWidth={2} />
+          <rect x={x - 20} y={y - 88} width={48} height={32} rx={4} {...f(c.color)} strokeWidth={2} />
+          <text x={x + 4} y={y - 65} textAnchor="middle" fontFamily="'Luckiest Guy', 'Arial Black', sans-serif" fontSize={19} fill="#fff">
             TV
           </text>
-          <circle cx={x + 4} cy={y - 90} r={18} {...f('#9aa3ad')} />
-          <path d={`M ${x - 8} ${y - 98} L ${x + 16} ${y - 82} M ${x - 8} ${y - 84} L ${x + 16} ${y - 98}`} stroke="#6b7078" strokeWidth={2} />
         </g>
       );
     },
@@ -650,6 +677,7 @@ export const HELD: HeldDef[] = [
   {
     id: 'net',
     name: 'Butterfly Net',
+    lean: 18,
     quip: 'Has caught zero butterflies. One sandwich. Two regrets.',
     defaultColor: '#a5713d',
     render: (c) => {
@@ -658,8 +686,9 @@ export const HELD: HeldDef[] = [
         <g>
           <path d={`M ${x + 2} ${y + 14} L ${x + 34} ${y - 150}`} stroke={O} strokeWidth={11} strokeLinecap="round" />
           <path d={`M ${x + 2} ${y + 14} L ${x + 34} ${y - 150}`} stroke={c.color} strokeWidth={6} strokeLinecap="round" />
-          <path d={`M ${x + 6} ${y - 196} Q ${x + 30} ${y - 120} ${x + 74} ${y - 150} Q ${x + 92} ${y - 196} ${x + 60} ${y - 214} Z`} fill="#ffffff" opacity={0.75} stroke={O} strokeWidth={2} strokeDasharray="5 4" />
-          <ellipse cx={x + 50} cy={y - 186} rx={44} ry={26} transform={`rotate(-30 ${x + 50} ${y - 186})`} fill="none" stroke={O} strokeWidth={5} />
+          <path d={`M ${x + 14} ${y - 168} C ${x + 26} ${y - 110} ${x + 66} ${y - 84} ${x + 92} ${y - 92} C ${x + 104} ${y - 124} ${x + 104} ${y - 170} ${x + 92} ${y - 206} Z`} fill="#fff" fillOpacity={0.6} stroke="#8fa1b3" strokeWidth={2.5} />
+          <path d={`M ${x + 36} ${y - 168} Q ${x + 58} ${y - 120} ${x + 90} ${y - 104} M ${x + 58} ${y - 182} Q ${x + 76} ${y - 136} ${x + 94} ${y - 118} M ${x + 76} ${y - 196} Q ${x + 92} ${y - 160} ${x + 98} ${y - 138} M ${x + 22} ${y - 140} Q ${x + 62} ${y - 146} ${x + 100} ${y - 170} M ${x + 38} ${y - 116} Q ${x + 72} ${y - 118} ${x + 100} ${y - 134}`} fill="none" stroke="#8fa1b3" strokeWidth={2} />
+          <ellipse cx={x + 52} cy={y - 186} rx={46} ry={26} transform={`rotate(-22 ${x + 52} ${y - 186})`} fill="none" stroke="#55555a" strokeWidth={6} />
         </g>
       );
     },
@@ -798,8 +827,8 @@ export const SIDEKICKS: SidekickDef[] = [
       return (
         <g>
           <path d={`M ${x - 6} ${y} L ${x - 6} ${y - 14} M ${x + 8} ${y} L ${x + 8} ${y - 14}`} stroke="#f0742a" strokeWidth={4} />
-          <path d={`M ${x - 30} ${y - 40} Q ${x - 30} ${y - 14} ${x} ${y - 14} Q ${x + 36} ${y - 14} ${x + 40} ${y - 50} Q ${x + 20} ${y - 40} ${x + 10} ${y - 44} Z`} {...f(c.color)} />
-          <circle cx={x - 24} cy={y - 56} r={16} {...f(c.color)} />
+          <path d={`M ${x - 30} ${y - 40} Q ${x - 30} ${y - 14} ${x} ${y - 14} Q ${x + 36} ${y - 14} ${x + 40} ${y - 50} Q ${x + 20} ${y - 40} ${x + 10} ${y - 44} Z`} {...pale(c.color)} />
+          <circle cx={x - 24} cy={y - 56} r={16} {...pale(c.color)} />
           <path d={`M ${x - 32} ${y - 70} q 4 -10 8 -2 q 4 -10 8 -2 q 4 -8 6 2`} fill="#e5322d" {...ink} strokeWidth={1.5} />
           <path d={`M ${x - 40} ${y - 58} L ${x - 50} ${y - 54} L ${x - 40} ${y - 50} Z`} fill="#f2c230" {...ink} strokeWidth={1.5} />
           <circle cx={x - 28} cy={y - 60} r={2.5} fill={O} />
@@ -816,7 +845,7 @@ export const SIDEKICKS: SidekickDef[] = [
       const { x, y } = spot(c);
       return (
         <g opacity={0.75}>
-          <path d={`M ${x - 30} ${y - 10} L ${x - 30} ${y - 70} Q ${x} ${y - 120} ${x + 30} ${y - 70} L ${x + 30} ${y - 10} l -10 -10 l -10 10 l -10 -10 l -10 10 l -10 -10 l -10 10 Z`} fill="#fff" stroke={O} strokeWidth={2.5} strokeDasharray="6 4" />
+          <path d={`M ${x - 30} ${y - 10} L ${x - 30} ${y - 70} Q ${x} ${y - 120} ${x + 30} ${y - 70} L ${x + 30} ${y - 10} l -10 -10 l -10 10 l -10 -10 l -10 10 l -10 -10 l -10 10 Z`} fill="#fff" stroke="#a9b8c6" strokeWidth={3} strokeDasharray="6 4" />
           <ellipse cx={x - 10} cy={y - 70} rx={5} ry={7} fill={O} />
           <ellipse cx={x + 10} cy={y - 70} rx={5} ry={7} fill={O} />
           <ellipse cx={x} cy={y - 50} rx={6} ry={8} fill={O} />
@@ -873,7 +902,7 @@ export const SIDEKICKS: SidekickDef[] = [
       const { x, y } = spot(c);
       return (
         <g>
-          <circle cx={x} cy={y - 44} r={44} fill="#bfe6ff" opacity={0.35} stroke={O} strokeWidth={3} />
+          <circle cx={x} cy={y - 44} r={44} fill="#bfe6ff" fillOpacity={0.45} stroke="#6fa8d0" strokeWidth={4} />
           <ellipse cx={x} cy={y - 26} rx={22} ry={16} {...f(c.color)} />
           <circle cx={x - 14} cy={y - 34} r={3} fill={O} />
           <circle cx={x - 18} cy={y - 44} r={6} {...f(shade(c.color, 0.25))} strokeWidth={1.5} />

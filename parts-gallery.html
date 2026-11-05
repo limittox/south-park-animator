@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Character Parts Gallery (dev)</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; background: #eef1f4; color: #1d1d1d; }
+      nav { padding: 6px 10px; font-size: 12px; line-height: 1.8; }
+      nav a { margin-right: 8px; color: #2e4fa8; }
+      .grid { display: grid; gap: 4px; padding: 4px; }
+      .cell { background: #cfe3f2; border: 1px solid #1d1d1d; border-radius: 6px; overflow: hidden; }
+      .cell .pair { display: flex; }
+      .cell svg { flex: 1 1 0; min-width: 0; display: block; }
+      .cell .nm { font-size: 11px; font-weight: 700; text-align: center; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/character/gallery-main.tsx"></script>
+  </body>
+</html>

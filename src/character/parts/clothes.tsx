@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { BodyGeo, ItemBase, Render, RenderCtx } from '../../types';
 import { accent, inkOn, shade } from '../../lib/color';
 import { torsoHalfWidthAt, torsoPath } from '../geometry';
-import { edge, heartPath, ink, O, scallop, scallopEdge, starPath } from './common';
+import { edge, heartPath, ink, O, pale, scallop, scallopEdge, starPath } from './common';
 
 export const chinY = (g: BodyGeo) => g.headCy + g.headRy * 0.97;
 
@@ -428,7 +428,7 @@ export const TOPS: TopDef[] = [
       const ch = chinY(g);
       return (
         <g>
-          {base(c, '#f7f7f7')}
+          <path d={torsoPath(g)} {...pale('#f7f7f7')} />
           <path d={`M ${g.cx - 26} ${ch - 14} L ${g.cx - 10} ${g.torsoBottom + 4} L ${g.cx + 10} ${g.torsoBottom + 4} L ${g.cx + 26} ${ch - 14} Z`} {...f(c.color)} strokeWidth={2.2} />
           <path d={`M ${g.cx - 28} ${ch - 14} L ${g.cx - 12} ${ch + 50} L ${g.cx - 46} ${ch + 18} Z M ${g.cx + 28} ${ch - 14} L ${g.cx + 12} ${ch + 50} L ${g.cx + 46} ${ch + 18} Z`} {...f('#ececec')} strokeWidth={2.2} />
           <rect x={g.cx + 30} y={ch + 40} width={28} height={30} fill="#ececec" {...ink} strokeWidth={2} />
@@ -443,8 +443,8 @@ export const TOPS: TopDef[] = [
       const w = torsoHalfWidthAt(g, g.torsoBottom - 14);
       return (
         <g>
-          <path d={`M ${g.cx - w} ${y0} L ${g.cx - w - 10} ${y1} L ${g.cx - 8} ${y1} L ${g.cx - 4} ${y0} Z`} {...f('#f7f7f7')} />
-          <path d={`M ${g.cx + w} ${y0} L ${g.cx + w + 10} ${y1} L ${g.cx + 8} ${y1} L ${g.cx + 4} ${y0} Z`} {...f('#f7f7f7')} />
+          <path d={`M ${g.cx - w} ${y0} L ${g.cx - w - 10} ${y1} L ${g.cx - 8} ${y1} L ${g.cx - 4} ${y0} Z`} {...pale('#f7f7f7')} />
+          <path d={`M ${g.cx + w} ${y0} L ${g.cx + w + 10} ${y1} L ${g.cx + 8} ${y1} L ${g.cx + 4} ${y0} Z`} {...pale('#f7f7f7')} />
         </g>
       );
     },
@@ -1105,15 +1105,16 @@ export const BOTTOMS: BottomDef[] = [
     render: (c) => {
       const { g } = c;
       const y = g.legTop + 4;
-      const w = g.hip + 34;
-      let d = `M ${g.cx - w} ${y}`;
-      for (let x = g.cx - w; x < g.cx + w; x += 14) d += ` L ${x + 7} ${y + 22} L ${x + 14} ${y}`;
-      d += ` L ${g.cx + g.hip - 6} ${y - 18} L ${g.cx - g.hip + 6} ${y - 18} Z`;
+      // Two puffy layers of net with scalloped hems.
+      const layer = (w: number, drop: number) => {
+        const hem = y + drop;
+        return `M ${g.cx - g.hip + 6} ${y - 18} L ${g.cx + g.hip - 6} ${y - 18} Q ${g.cx + w + 8} ${y - 8} ${g.cx + w} ${hem} ${scallopEdge(g.cx + w, hem, g.cx - w, hem, Math.round(w / 14), 9)} Q ${g.cx - w - 8} ${y - 8} ${g.cx - g.hip + 6} ${y - 18} Z`;
+      };
       return (
         <g>
           <path d={legsPath(g)} {...f(shade(c.color, 0.55))} />
-          <path d={d} {...f(c.color)} />
-          <path d={d} fill="none" stroke="#fff" strokeWidth={1.5} opacity={0.6} transform="translate(0 -6)" />
+          <path d={layer(g.hip + 44, 16)} {...f(shade(c.color, -0.14))} />
+          <path d={layer(g.hip + 30, 6)} {...f(c.color)} />
         </g>
       );
     },
@@ -1136,7 +1137,7 @@ export const BOTTOMS: BottomDef[] = [
       return (
         <g>
           {skinLegs(c)}
-          <path d={`M ${g.cx - g.hip + 4} ${g.legTop - 10} L ${g.cx + g.hip - 4} ${g.legTop - 10} Q ${g.cx + g.hip} ${y1} ${g.cx + g.legSep} ${y1} Q ${g.cx} ${y1 - 10} ${g.cx - g.legSep} ${y1} Q ${g.cx - g.hip} ${y1} ${g.cx - g.hip + 4} ${g.legTop - 10} Z`} {...f('#fdfdfd')} />
+          <path d={`M ${g.cx - g.hip + 4} ${g.legTop - 10} L ${g.cx + g.hip - 4} ${g.legTop - 10} Q ${g.cx + g.hip} ${y1} ${g.cx + g.legSep} ${y1} Q ${g.cx} ${y1 - 10} ${g.cx - g.legSep} ${y1} Q ${g.cx - g.hip} ${y1} ${g.cx - g.hip + 4} ${g.legTop - 10} Z`} {...pale('#fdfdfd')} />
           <rect x={g.cx - g.hip + 6} y={g.legTop - 6} width={16} height={10} rx={2} fill="#7fd4ff" stroke={O} strokeWidth={1.5} />
           <rect x={g.cx + g.hip - 22} y={g.legTop - 6} width={16} height={10} rx={2} fill="#7fd4ff" stroke={O} strokeWidth={1.5} />
         </g>
@@ -1257,8 +1258,8 @@ export const SHOES: ShoeDef[] = [
     render: (c) =>
       feet(c, (x, y, rx, ry) => (
         <g>
-          <path d={`M ${x - 10} ${y - ry} Q ${x - 18} ${y - ry * 3.2} ${x - 4} ${y - ry * 1.2} M ${x + 10} ${y - ry} Q ${x + 18} ${y - ry * 3.2} ${x + 4} ${y - ry * 1.2}`} {...f(c.color)} strokeWidth={2.4} />
-          <path d={footDome(x, y, rx + 3, ry * 1.1)} {...f(c.color)} />
+          <path d={`M ${x - 10} ${y - ry} Q ${x - 18} ${y - ry * 3.2} ${x - 4} ${y - ry * 1.2} M ${x + 10} ${y - ry} Q ${x + 18} ${y - ry * 3.2} ${x + 4} ${y - ry * 1.2}`} {...pale(c.color)} />
+          <path d={footDome(x, y, rx + 3, ry * 1.1)} {...pale(c.color)} />
           <circle cx={x - 6} cy={y - ry * 0.8} r={2.4} fill={O} />
           <circle cx={x + 6} cy={y - ry * 0.8} r={2.4} fill={O} />
           <circle cx={x} cy={y - ry * 0.4} r={2.6} fill="#f27bb4" />
@@ -1304,9 +1305,13 @@ export const SHOES: ShoeDef[] = [
         <g>
           <path d={bootShaft(c, x, 26)} {...f(c.color)} />
           <path d={footDome(x, y - 6, rx + 1, ry)} {...f(c.color)} />
-          <rect x={x - rx} y={y - 4} width={rx * 2} height={6} fill="#ddd" stroke={O} strokeWidth={1.5} />
-          <circle cx={x - rx + 9} cy={y + 6} r={7} fill="#f2c230" stroke={O} strokeWidth={2} />
-          <circle cx={x + rx - 9} cy={y + 6} r={7} fill="#f2c230" stroke={O} strokeWidth={2} />
+          {[x - rx + 10, x + rx - 10].map((wx) => (
+            <g key={wx}>
+              <circle cx={wx} cy={y + 7} r={9} fill="#f2c230" />
+              <circle cx={wx} cy={y + 7} r={3} fill="#8a6a10" />
+            </g>
+          ))}
+          <rect x={x - rx} y={y - 5} width={rx * 2} height={8} rx={3} fill="#6b7078" />
         </g>
       )),
   },
@@ -1333,8 +1338,8 @@ export const SHOES: ShoeDef[] = [
     render: (c) =>
       feet(c, (x, y, rx, ry) => (
         <g>
-          <path d={bootShaft(c, x, 24)} {...f(c.color)} />
-          <path d={footDome(x, y, rx, ry)} {...f(c.color)} />
+          <path d={bootShaft(c, x, 24)} {...pale(c.color)} />
+          <path d={footDome(x, y, rx, ry)} {...pale(c.color)} />
           <path d={`M ${x - c.g.legW / 2 - 3} ${y - 20} L ${x + c.g.legW / 2 + 3} ${y - 20} M ${x - c.g.legW / 2 - 3} ${y - 14} L ${x + c.g.legW / 2 + 3} ${y - 14}`} stroke={accent(c.color)} strokeWidth={3} />
         </g>
       )),
