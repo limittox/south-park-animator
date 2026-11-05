@@ -102,7 +102,7 @@ export const HAIR: HairDef[] = [
     quip: 'Volume level: maximum. Has lost three pencils and a hamster in there.',
     back: (c) => <path d={scallop(0, -60, 168, 138, 22, 0.05)} {...fill(c.color)} />,
     front: (c) => (
-      <path d={`M -130 -20 C -132 -60 -110 -100 -60 -108 L 60 -108 C 110 -100 132 -60 130 -20 Q 120 -44 100 -52 ${scallopEdge(100, -52, -100, -52, 8, 18)} Q -120 -44 -130 -20 Z`} {...fill(c.color)} />
+      <path d={`M -130 -20 C -132 -60 -110 -100 -60 -108 C -30 -122 30 -122 60 -108 C 110 -100 132 -60 130 -20 Q 120 -44 100 -52 ${scallopEdge(100, -52, -100, -52, 8, 18)} Q -120 -44 -130 -20 Z`} {...fill(c.color)} />
     ),
   },
   {
@@ -194,8 +194,9 @@ export const HAIR: HairDef[] = [
     quip: 'Punk rock forever. Bedtime is 8:30 though.',
     front: (c) => (
       <g>
-        <path d={`${dome(124, -40, -114)} C 80 -70 -80 -70 -124 -40 Z`} fill={c.color} opacity={0.35} />
-        <path d="M -22 -104 L -30 -150 L -12 -140 L -8 -184 L 6 -146 L 18 -178 L 22 -140 L 36 -152 L 24 -104 Z" {...fill(c.color)} />
+        <path d={`${dome(124, -40, -114)} C 80 -70 -80 -70 -124 -40 Z`} fill={c.color} opacity={0.3} />
+        {/* A proper fin: spikes standing up off a strip that runs down to the forehead. */}
+        <path d="M -30 -66 L -36 -102 L -54 -166 L -24 -142 L -18 -204 L 2 -152 L 22 -208 L 28 -144 L 56 -168 L 36 -102 L 30 -66 Q 0 -78 -30 -66 Z" {...fill(c.color)} />
       </g>
     ),
   },
@@ -231,7 +232,8 @@ export const HAIR: HairDef[] = [
         <Mirror>
           <path d="M -130 -50 C -136 -10 -132 20 -122 30 L -110 0 C -112 -20 -114 -40 -118 -56 Z" {...fill(c.color)} strokeWidth={2.2} />
         </Mirror>
-        <path d="M -116 -60 C -80 -120 60 -124 110 -70 M -110 -70 C -60 -116 50 -116 100 -80 M -100 -54 C -50 -100 50 -104 90 -64" fill="none" stroke={c.color} strokeWidth={5} strokeLinecap="round" />
+        {/* A few long strands fanned out from one low parting, scalp showing between them. */}
+        <path d="M -124 -34 C -96 -108 0 -124 90 -98 M -124 -34 C -90 -96 20 -116 112 -74 M -124 -34 C -84 -84 30 -100 120 -56 M -124 -34 C -78 -70 36 -84 124 -40" fill="none" stroke={c.color} strokeWidth={7} strokeLinecap="round" />
       </g>
     ),
   },

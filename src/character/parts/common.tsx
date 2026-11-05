@@ -1,3 +1,5 @@
+import { shade } from '../../lib/color';
+
 /** Outline ink + stroke width shared by every construction-paper shape. */
 export const O = '#1d1d1d';
 export const SW = 3;
@@ -6,6 +8,12 @@ export const ink = { stroke: O, strokeWidth: SW, strokeLinejoin: 'round' as cons
 
 /** Ink for an outline-only re-stroke; the flat show style hides it. */
 export const edge = { ...ink, fill: 'none', className: 'ol' };
+
+/**
+ * For white and pale things. The flat style strips ink, which is fine until a white shape stands
+ * in front of snow; a soft edge in a darker shade of its own colour keeps it readable.
+ */
+export const pale = (color: string) => ({ fill: color, stroke: shade(color, -0.2), strokeWidth: 2.5, strokeLinejoin: 'round' as const });
 
 /** Bumpy cloud/afro/beard outline around an ellipse. */
 export function scallop(cx: number, cy: number, rx: number, ry: number, bumps: number, depth = 0.12, rot = 0): string {

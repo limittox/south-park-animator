@@ -122,8 +122,10 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
   // Flat cut-out arms: one colour, no outline, and a single crease where the arm meets the body.
   const armStrip = (a: ArmState) => (
     <g key={a.side}>
-      <path d={armPath(a)} fill="none" stroke={armBase} strokeWidth={g.armW} strokeLinecap="round" />
+      {/* Bare arms start under the short sleeve, or their round end pokes out above the shoulder. */}
+      <path d={top.sleeves === 'short' ? armPath(a, 0.4) : armPath(a)} fill="none" stroke={armBase} strokeWidth={g.armW} strokeLinecap="round" />
       {top.sleeves === 'short' && <path d={armPath(a, 0, 0.5)} fill="none" stroke={sleeveColor} strokeWidth={g.armW + 1} strokeLinecap="butt" />}
+      {top.sleeves === 'short' && <circle cx={a.start[0]} cy={a.start[1]} r={(g.armW + 1) / 2} fill={sleeveColor} />}
       {isRest(g, a) && (
         <path d={armPath(a, 0.6, 0.92)} transform={`translate(${-a.side * g.armW * 0.42} 0)`} fill="none" stroke={O} strokeWidth={2.4} strokeLinecap="round" />
       )}
@@ -161,7 +163,10 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
   const restHand = handPos(g, 1);
   const heldDx = arms[1].hand[0] - restHand[0];
   const heldDy = arms[1].hand[1] - restHand[1];
-  const heldT = Math.abs(heldDx) + Math.abs(heldDy) > 0.5 ? `translate(${heldDx.toFixed(1)} ${heldDy.toFixed(1)})` : undefined;
+  const heldMove = Math.abs(heldDx) + Math.abs(heldDy) > 0.5 ? `translate(${heldDx.toFixed(1)} ${heldDy.toFixed(1)})` : '';
+  // Kids' heads are huge next to their hands: tall props lean out so the head doesn't hide them.
+  const heldLean = held.lean && !g.isAdult ? `rotate(${held.lean} ${restHand[0]} ${restHand[1]})` : '';
+  const heldT = `${heldMove} ${heldLean}`.trim() || undefined;
 
   /* ---- head contents (head coordinates) ---- */
   const fit = (t: string, children: ReactNode) => <g transform={t}>{children}</g>;

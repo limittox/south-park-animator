@@ -251,7 +251,8 @@ export const HEAD_SHAPES: Record<string, HeadShape> = {
   square: {
     sx: 1.02,
     sy: 0.98,
-    path: 'M -128 -40 C -128 -96 -96 -110 -40 -110 L 40 -110 C 96 -110 128 -96 128 -40 L 128 50 C 128 98 96 110 40 110 L -40 110 C -96 110 -128 98 -128 50 Z',
+    // Round on top, so hair and hats fit it like any other head; the block is all in the jaw.
+    path: 'M -128 0 C -128 -64 -70 -110 0 -110 C 70 -110 128 -64 128 0 L 128 50 C 128 98 96 110 40 110 L -40 110 C -96 110 -128 98 -128 50 Z',
   },
   canadian: {
     sx: 1.04,

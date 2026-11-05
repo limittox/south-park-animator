@@ -1,6 +1,6 @@
 import type { ItemBase, Render } from '../../types';
 import { accent, shade } from '../../lib/color';
-import { edge, ink, Mirror, O, scallop, scallopEdge, starPath } from './common';
+import { edge, ink, Mirror, O, pale, scallop, scallopEdge, starPath } from './common';
 
 export interface HatDef extends ItemBase {
   back?: Render;
@@ -235,8 +235,8 @@ export const HATS: HatDef[] = [
     clipHairAbove: -40,
     front: (c) => (
       <g>
-        <path d={scallop(0, -160, 108, 66, 9, 0.1)} {...f(c.color)} />
-        <path d="M -104 -96 L -104 -40 Q 0 -54 104 -40 L 104 -96 Q 0 -110 -104 -96 Z" {...f(c.color)} />
+        <path d={scallop(0, -160, 108, 66, 9, 0.1)} {...pale(c.color)} />
+        <path d="M -104 -96 L -104 -40 Q 0 -54 104 -40 L 104 -96 Q 0 -110 -104 -96 Z" {...pale(c.color)} />
         <path d="M -50 -100 L -50 -46 M 0 -104 L 0 -48 M 50 -100 L 50 -46" stroke={shade(c.color, -0.2)} strokeWidth={2} />
       </g>
     ),
@@ -346,8 +346,12 @@ export const HATS: HatDef[] = [
     defaultColor: '#cfd6dd',
     front: (c) => (
       <g>
-        <path d="M -80 -100 L -70 -130 L -46 -112 L -24 -146 L 0 -116 L 24 -146 L 46 -112 L 70 -130 L 80 -100 Q 0 -114 -80 -100 Z" {...f(c.color)} />
-        <circle cx={0} cy={-124} r={8} {...f('#e86fb0')} strokeWidth={2} />
+        <path d="M -96 -88 L -90 -132 L -56 -108 L -30 -156 L 0 -114 L 30 -156 L 56 -108 L 90 -132 L 96 -88 Q 0 -112 -96 -88 Z" {...f(c.color)} />
+        <path d="M -96 -88 Q 0 -112 96 -88 L 95 -98 Q 0 -122 -95 -98 Z" fill={shade(c.color, -0.25)} />
+        {[-90, -30, 30, 90].map((x) => (
+          <circle key={x} cx={x} cy={x * x > 2000 ? -136 : -160} r={6} {...f('#fff')} strokeWidth={2} />
+        ))}
+        <path d="M 0 -146 L 13 -124 L 0 -106 L -13 -124 Z" {...f('#e86fb0')} strokeWidth={2} />
       </g>
     ),
   },
@@ -381,7 +385,7 @@ export const HATS: HatDef[] = [
     defaultColor: '#ffffff',
     front: (c) => (
       <Mirror>
-        <path d="M -58 -98 C -98 -200 -66 -258 -40 -248 C -18 -210 -22 -140 -24 -102 Z" {...f(c.color)} />
+        <path d="M -58 -98 C -98 -200 -66 -258 -40 -248 C -18 -210 -22 -140 -24 -102 Z" {...pale(c.color)} />
         <path d="M -48 -110 C -74 -190 -60 -232 -44 -228 C -32 -200 -34 -150 -34 -112 Z" fill="#f6a5b4" />
       </Mirror>
     ),
@@ -407,7 +411,7 @@ export const HATS: HatDef[] = [
     id: 'hood',
     name: 'Cinched Parka Hood',
     quip: 'Mmmph mmph mmmmph! (Translation: "I can\'t hear anything in here.")',
-    defaultColor: '#f0742a',
+    defaultColor: '#3f7d6b',
     hidesHair: true,
     muffles: true,
     eyesOver: true,
@@ -496,8 +500,8 @@ export const HATS: HatDef[] = [
     front: (c) => (
       <g>
         <path d="M -134 -48 C -130 -132 -40 -172 40 -152 Q 120 -140 176 -62 L 156 -52 Q 116 -108 66 -110 Q 124 -66 134 -48 Z" {...f(c.color)} />
-        <path d={`M -142 -66 ${scallopEdge(-142, -66, 142, -66, 10, -10)} L 142 -34 ${scallopEdge(142, -34, -142, -34, 10, -10)} Z`} {...f('#ffffff')} />
-        <path d={scallop(168, -58, 20, 20, 8, 0.12)} {...f('#ffffff')} />
+        <path d={`M -142 -66 ${scallopEdge(-142, -66, 142, -66, 10, -10)} L 142 -34 ${scallopEdge(142, -34, -142, -34, 10, -10)} Z`} {...pale('#ffffff')} />
+        <path d={scallop(168, -58, 20, 20, 8, 0.12)} {...pale('#ffffff')} />
       </g>
     ),
   },

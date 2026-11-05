@@ -1336,8 +1336,15 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#7a9091',
     render: (p) => (
       <g className={nat}>
+        {Array.from({ length: 13 }, (_, i) => (i - 6) * 5).map((d) => {
+          // A little fringe around each end.
+          const a = (d * Math.PI) / 180;
+          return <path key={d} d={`M ${Math.cos(a) * 276} ${-50 + Math.sin(a) * 280 * 0.17} l 16 ${d * 0.1} M ${-Math.cos(a) * 276} ${-50 + Math.sin(a) * 280 * 0.17} l -16 ${d * 0.1}`} stroke={shade(p.color, 0.3)} strokeWidth={3} strokeLinecap="round" />;
+        })}
         <ellipse cx={0} cy={-50} rx={280} ry={50} fill={p.color} />
-        <ellipse cx={0} cy={-50} rx={240} ry={36} fill="none" stroke={shade(p.color, 0.25)} strokeWidth={8} />
+        <ellipse cx={0} cy={-50} rx={244} ry={38} fill="none" stroke={shade(p.color, 0.3)} strokeWidth={8} />
+        <ellipse cx={0} cy={-50} rx={196} ry={26} fill={shade(p.color, -0.14)} />
+        <ellipse cx={0} cy={-50} rx={120} ry={13} fill="none" stroke={shade(p.color, 0.3)} strokeWidth={5} />
       </g>
     ),
   },
@@ -1984,9 +1991,10 @@ export const KIT_PIECES: KitPieceDef[] = [
       <g>
         <path d="M -40 -190 L -110 -230 M -104 -226 l -10 -18 M 40 -190 L 110 -236 M 104 -232 l 14 -14" stroke="#6b4226" strokeWidth={6} strokeLinecap="round" />
         <g className={nat}>
-          <circle cx={0} cy={-70} r={72} fill={SNOW} stroke={O} strokeWidth={3} />
-          <circle cx={0} cy={-184} r={54} fill={SNOW} stroke={O} strokeWidth={3} />
-          <circle cx={0} cy={-268} r={40} fill={SNOW} stroke={O} strokeWidth={3} />
+          {/* A pale blue edge, or he disappears against the snow he's standing on. */}
+          <circle cx={0} cy={-70} r={72} fill={SNOW} stroke="#b4c6d8" strokeWidth={3} />
+          <circle cx={0} cy={-184} r={54} fill={SNOW} stroke="#b4c6d8" strokeWidth={3} />
+          <circle cx={0} cy={-268} r={40} fill={SNOW} stroke="#b4c6d8" strokeWidth={3} />
         </g>
         <path d="M -42 -236 Q 0 -224 42 -236 L 40 -222 Q 0 -210 -40 -222 Z M 18 -228 l 10 46 l 18 -4 l -12 -44 Z" {...f(p.color2)} />
         <circle cx={-14} cy={-276} r={5} fill={O} />
@@ -2078,8 +2086,15 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#d33b2c',
     render: (p) => (
       <g>
+        <path d="M 0 -220 L -176 6 M 0 -220 L 176 6" stroke="#8a7a5a" strokeWidth={3} />
+        <path d="M -176 6 l -7 -12 M 176 6 l 7 -12" stroke="#5a3a22" strokeWidth={6} strokeLinecap="round" />
         <path d="M -140 0 L 0 -220 L 140 0 Z" {...f(p.color)} />
-        <path d="M 0 -220 L -26 0 L 26 0 Z" fill={shade(p.color, -0.4)} stroke={O} strokeWidth={2} />
+        {/* The door: a dark gap with its flaps tied back. */}
+        <path d="M 0 -176 L -52 0 L 52 0 Z" fill={shade(p.color, -0.6)} />
+        <path d="M 0 -176 L -52 0 L -74 0 Q -46 -96 0 -176 Z M 0 -176 L 52 0 L 74 0 Q 46 -96 0 -176 Z" {...f(shade(p.color, 0.14))} strokeWidth={2} />
+        <path d="M -38 -46 l -24 6 M 38 -46 l 24 6" stroke="#f2e2b8" strokeWidth={4} strokeLinecap="round" />
+        <path d="M 0 -220 L 0 -244" stroke="#8a7a5a" strokeWidth={4} />
+        <path d="M 0 -244 L 30 -234 L 0 -224 Z" fill="#f2c230" />
       </g>
     ),
   },

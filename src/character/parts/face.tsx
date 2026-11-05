@@ -711,7 +711,8 @@ export const FACIAL_HAIR: FacialHairDef[] = [
       return (
         <g>
           <clipPath id={id}>
-            <path d={(HEAD_SHAPES[c.c.headShape] ?? HEAD_SHAPES.round).path} transform="translate(0 -6)" />
+            {/* Undoes the jaw fit, which moves grown-ups' faces the other way from kids'. */}
+            <path d={(HEAD_SHAPES[c.c.headShape] ?? HEAD_SHAPES.round).path} transform={`translate(0 ${c.g.isAdult ? 6 : -6})`} />
           </clipPath>
           <path d={BEARD_FULL} fill={c.color} opacity={0.3} clipPath={`url(#${id})`} />
         </g>

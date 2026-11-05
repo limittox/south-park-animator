@@ -293,6 +293,20 @@ function SampleSet({ name, set, cast }: { name: string; set: KitSet; cast?: bool
 }
 
 function Gallery() {
+  // ?page=0&per=24&time=night shows one page of pieces at a size that's easy to check.
+  const q = new URLSearchParams(location.search);
+  const page = q.get('page');
+  if (page !== null) {
+    const per = Number(q.get('per') ?? 24);
+    const time = (q.get('time') ?? 'day') as TimeOfDay;
+    return (
+      <div className="grid">
+        {KIT_PIECES.slice(Number(page) * per, (Number(page) + 1) * per).map((d) => (
+          <PieceCell key={d.id} def={d} time={time} />
+        ))}
+      </div>
+    );
+  }
   return (
     <>
       <h1>Paper set kit — {KIT_PIECES.length} pieces</h1>
