@@ -2187,11 +2187,11 @@ describe('pupils stay in view', () => {
   it('stops a pupil at the join when it looks across the face, and the other carries on', () => {
     // The pupils of wide eyes sit 8 from the middle.
     const [[left], [right]] = moved(draw({ eyes: 'wide' }, 1));
-    expect(-8 + left).toBeCloseTo(-3);
+    expect(-8 + left).toBeCloseTo(-6);
     expect(right).toBe(15);
     const [[l2], [r2]] = moved(draw({ eyes: 'wide' }, -1));
     expect(l2).toBe(-15);
-    expect(8 + r2).toBeCloseTo(3);
+    expect(8 + r2).toBeCloseTo(6);
   });
 
   it("doesn't let a pupil slide out of the side of the eye", () => {
@@ -2212,6 +2212,17 @@ describe('pupils stay in view', () => {
     expect(moved(draw({ eyes: 'classic', hair: 'emo' }, -1)).every(([x]) => x === 0)).toBe(true);
     expect(moved(draw({ eyes: 'classic', hair: 'emo' }, 1)).some(([x]) => x > 0)).toBe(true);
     expect(moved(draw({ eyes: 'classic', hair: 'messy' }, -1)).every(([x]) => x < 0)).toBe(true);
+  });
+
+  it('centres the pupils in what a hat leaves of the eye', () => {
+    const drop = (more: object) => moved(draw({ eyes: 'wide', ...more }, 0))[0][1];
+    expect(drop({})).toBe(0);
+    const kid = drop({ hat: 'trapper' });
+    const adult = drop({ hat: 'trapper', body: 'adult' });
+    expect(kid).toBeGreaterThan(1);
+    // Grown-ups' eyes sit higher, so the hat hides more of them.
+    expect(adult).toBeGreaterThan(kid);
+    expect(moved(draw({ eyes: 'sleepy', hat: 'trapper' }, 0))[0][1]).toBe(0);
   });
 
   it('leaves cross-eyed eyes crossed', () => {

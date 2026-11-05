@@ -191,6 +191,7 @@ export const BODY_GEOS: Record<string, BodyGeo> = {
  */
 export const FACE_FIT = {
   eyes: 'translate(0 6) scale(1.3 1)',
+  eyesY: 6,
   mouth: 'translate(0 18)',
   jaw: 'translate(0 6)',
   nose: 'translate(0 14)',
@@ -201,6 +202,7 @@ export const FACE_FIT = {
 /** Grown-ups have more chin: eyes sit at the middle of the head and the mouth about halfway down to the chin. */
 export const ADULT_FACE_FIT: typeof FACE_FIT = {
   eyes: 'translate(0 0) scale(1.3 1)',
+  eyesY: 0,
   mouth: 'translate(0 -7)',
   jaw: 'translate(0 -6)',
   nose: 'translate(0 2)',
@@ -213,9 +215,13 @@ export const ADULT_FACE_FIT: typeof FACE_FIT = {
  * the extra vertical scale undoes the head's stretch relative to the round kid head.
  */
 export function eyeFit(fit: typeof FACE_FIT, g: BodyGeo): string {
-  const stretch = g.headRy / HEAD_RY / (g.headRx / HEAD_RX);
-  return `${fit.eyes} scale(1 ${(1.2 / stretch).toFixed(3)})`;
+  return `${fit.eyes} scale(1 ${eyeStretch(g).toFixed(3)})`;
 }
+
+const eyeStretch = (g: BodyGeo) => 1.2 / (g.headRy / HEAD_RY / (g.headRx / HEAD_RX));
+
+/** A height on the head, as the eyes measure it. */
+export const eyeSpaceY = (fit: typeof FACE_FIT, g: BodyGeo, y: number) => (y - fit.eyesY) / eyeStretch(g);
 
 /** Box that frames a whole character standing on the ground, with room for tall hats and a sidekick. */
 export function charFrame(g: BodyGeo): { x: number; y: number; w: number; h: number } {

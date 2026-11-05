@@ -1,6 +1,6 @@
 import { memo, useId, type ReactNode } from 'react';
 import type { BodyGeo, CategoryId, CharacterState, MouthShape, RenderCtx, View } from '../types';
-import { ADULT_FACE_FIT, armGeo, armPath, CANADIAN_SPLIT_Y, eyeFit, FACE_FIT, frameViewBox, getGeo, HEAD_RX, HEAD_RY, HEAD_SHAPES, handPos, seatedGeo, sideBody, sideGeo } from './geometry';
+import { ADULT_FACE_FIT, armGeo, armPath, CANADIAN_SPLIT_Y, eyeFit, eyeSpaceY, FACE_FIT, frameViewBox, getGeo, HEAD_RX, HEAD_RY, HEAD_SHAPES, handPos, seatedGeo, sideBody, sideGeo } from './geometry';
 import { isRest, restArms, type ArmsPose, type ArmState } from './pose';
 import { edge, ink, O } from './parts/common';
 import { BROWS, EYES, FACE_DETAILS, FACIAL_HAIR, MOUTHS, NOSES, talkingMouth } from './parts/face';
@@ -74,7 +74,11 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
   const hat = byId(HATS, c.hat);
   const hair = byId(HAIR, c.hair);
   const lookX = hair.overEye && !hat.hidesHair && view === 'front' ? Math.max(0, gazeX) : gazeX;
-  const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk, gaze: [lookX, gazeY] });
+  const FIT = g.isAdult ? ADULT_FACE_FIT : FACE_FIT;
+  // In the show hats are pulled right down to the eyes, so crown-covering hats sit a little lower.
+  const hatDrop = hat.clipHairAbove !== undefined && !hat.hidesHair && !hat.hidesFace ? Math.min(16, Math.max(0, -30 - hat.clipHairAbove)) : 0;
+  const brimY = hat.clipHairAbove !== undefined && !hat.eyesOver ? eyeSpaceY(FIT, g, hat.clipHairAbove + hatDrop) : undefined;
+  const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk, gaze: [lookX, gazeY], brimY });
 
   const top = byId(TOPS, c.top);
   const bottom = byId(BOTTOMS, c.bottom);
@@ -112,8 +116,6 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
   const sy = g.headRy / HEAD_RY;
   const headT = `translate(${g.headCx} ${g.headCy}) scale(${sx} ${sy})`;
 
-  // In the show hats are pulled right down to the eyes, so crown-covering hats sit a little lower.
-  const hatDrop = hat.clipHairAbove !== undefined && !hat.hidesHair && !hat.hidesFace ? Math.min(16, Math.max(0, -30 - hat.clipHairAbove)) : 0;
   const hatT = hatDrop ? `translate(0 ${hatDrop})` : undefined;
 
   // Hair hidden under hats. Hair behind the head is cut a little lower so it can't peek out past the brim.
@@ -208,7 +210,6 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
 
   /* ---- head contents (head coordinates) ---- */
   const fit = (t: string, children: ReactNode) => <g transform={t}>{children}</g>;
-  const FIT = g.isAdult ? ADULT_FACE_FIT : FACE_FIT;
   const EYES_FIT = eyeFit(FIT, g);
 
   // A blink is a pair of skin-coloured lids with a curved closed-eye line, the same shape as the eye pair.

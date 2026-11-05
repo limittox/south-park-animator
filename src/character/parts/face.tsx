@@ -29,7 +29,7 @@ interface EyeOpts {
 const GAZE_X = 15;
 const GAZE_Y = 12;
 /** The eyes meet in the middle: a pupil looking across the face stops this far short of the join. */
-const SEAM_GAP = 3;
+const SEAM_GAP = 6;
 /** Looking outward, a pupil stops this far short of the edge of the eye. */
 const RIM_GAP = 8;
 
@@ -53,11 +53,13 @@ function eyePair(ctx: RenderCtx, o: EyeOpts = {}): ReactNode {
   const [gx, gy] = o.still ? [0, 0] : ctx.gaze ?? [0, 0];
   const at = o.at ?? ((side: -1 | 1) => side * 16.5);
   const rim = 55 * s - RIM_GAP;
+  // A hat hides the top of the eye, so the pupil sits in the middle of what's left of it. A lid has already placed it.
+  const settle = lid === 'none' && ctx.brimY !== undefined ? Math.max(0, (Math.max(-36 * s, ctx.brimY) + 36 * s) / 2) : 0;
   const look = (side: -1 | 1, x: number) => {
     // A pupil stays in view: it stops at the join between the eyes and short of the far edge, and doesn't go up under a lid.
     const [lo, hi] = side < 0 ? [-rim, -SEAM_GAP] : [SEAM_GAP, rim];
     const dx = Math.min(Math.max(x + gx * GAZE_X, Math.min(lo, x)), Math.max(hi, x)) - x;
-    const dy = (lid === 'none' ? gy : Math.max(0, gy)) * GAZE_Y;
+    const dy = settle + (lid === 'none' ? gy : Math.max(0, gy)) * GAZE_Y;
     return dx || dy ? `translate(${dx.toFixed(1)} ${dy.toFixed(1)})` : undefined;
   };
   return (

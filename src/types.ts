@@ -107,6 +107,8 @@ export interface RenderCtx {
   talk: number;
   /** Where the pupils point, -1..1 across and down. */
   gaze?: [number, number];
+  /** Where the edge of a hat crosses the eyes, in the eyes' own coordinates. */
+  brimY?: number;
 }
 
 export type Render = (ctx: RenderCtx) => ReactNode;
