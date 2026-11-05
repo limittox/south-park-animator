@@ -69,7 +69,7 @@ npm run build      # static site in dist/
 
 Open Settings (⚙) and paste an [OpenRouter key](https://openrouter.ai/keys). The director model and the voice model can be any OpenRouter model; the lists load live with prices.
 
-`kit-gallery.html` (served by `npm run dev`) shows every set piece by day and night, plus sample sets, and `parts-gallery.html` shows every character part on a kid and a grown-up, one category at a time (`?cat=hat`, `&body=kid,lanky`, `&bg=fff` to check pale parts against snow). They're handy when drawing new art.
+`kit-gallery.html` (served by `npm run dev`) shows every set piece by day and night, plus sample sets, and `parts-gallery.html` shows every character part on a kid and a grown-up, one category at a time (`?cat=hat`, `&body=kid,lanky`, `&bg=fff` to check pale parts against snow, `&vb=-60,340,160,150` to zoom in). They're handy when drawing new art.
 
 If this site and the Character Creator are served from the same origin (as on `limittox.github.io`), *Use my creator crew* reads the creator's saved crew directly.
 

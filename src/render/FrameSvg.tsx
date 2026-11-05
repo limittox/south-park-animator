@@ -9,7 +9,7 @@ import { getScene } from '../scenes/backgrounds';
 import { renderKitSet } from '../sets/kit';
 import { getVehicleDef, wheel } from '../sets/vehicles';
 import { renderSeatCover } from '../episode/seats';
-import { seeded } from '../character/parts/common';
+import { MirroredPart, seeded } from '../character/parts/common';
 
 export const DISPLAY = "'Luckiest Guy', 'Arial Black', Impact, sans-serif";
 const STUDIO_COLOR = '#5aaeea';
@@ -42,7 +42,7 @@ function Creature({ a }: { a: ActorFrame }) {
   const s = a.scale * 1.7;
   return (
     <g className="sp-char" transform={`translate(${a.x.toFixed(1)} ${(a.y - a.lift * a.scale).toFixed(1)}) scale(${(a.flip ? -s : s).toFixed(3)} ${s.toFixed(3)}) translate(${-(g.cx - 186)} -480)`}>
-      {art}
+      <MirroredPart.Provider value={a.flip}>{art}</MirroredPart.Provider>
     </g>
   );
 }
@@ -51,7 +51,9 @@ export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
   if (a.form) return <Creature a={a} />;
   return (
     <g transform={actorTransform(a)}>
-      <CharacterGroup c={a.c} talk={a.talk} mouthShape={a.mouth} turn={a.turn} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} tears={a.tears} sweat={a.sweat} vomit={a.vomit} hipY={a.hipY} />
+      <MirroredPart.Provider value={a.flip}>
+        <CharacterGroup c={a.c} talk={a.talk} mouthShape={a.mouth} turn={a.turn} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} tears={a.tears} sweat={a.sweat} vomit={a.vomit} hipY={a.hipY} />
+      </MirroredPart.Provider>
     </g>
   );
 });

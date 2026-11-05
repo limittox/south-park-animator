@@ -594,6 +594,26 @@ describe('stage business: running, sitting, props and vehicles', () => {
     expect(markup()).toBe(markup());
   });
 
+  it('keeps the words on a prop readable when the character faces the other way', () => {
+    const { sc, frame } = stage(
+      {
+        blocking: [{ who: 'Dad', x: 300 }, { who: 'Kid', x: 1200 }],
+        beats: [{ who: 'Dad', text: 'Over here!' }],
+      },
+      [{ name: 'Dad', look: { body: 'adult' } }, { name: 'Kid', look: { body: 'kid', held: 'sign', signText: 'HELLO' } }],
+    );
+    const at = sc.beats[0].start + 0.2;
+    const lettering = (flip: boolean) => {
+      const f = frame(at);
+      const actors = f.actors.map((a) => (a.castId === 'kid' ? { ...a, flip } : a));
+      const svg = new DOMParser().parseFromString(renderToStaticMarkup(createElement(FrameSvg, { frame: { ...f, actors } })), 'image/svg+xml');
+      return [...svg.querySelectorAll('text')].find((t) => t.textContent === 'HELLO')!;
+    };
+    expect(lettering(false).getAttribute('transform')).toBeNull();
+    const x = Number(lettering(true).getAttribute('x'));
+    expect(lettering(true).getAttribute('transform')).toBe(`translate(${2 * x} 0) scale(-1 1)`);
+  });
+
   it('sitting shortens the legs and keeps the feet on the floor', () => {
     const g = getGeo('adult', 'round');
     const s = seatedGeo(g, g.legTop + 80);

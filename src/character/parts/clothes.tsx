@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { BodyGeo, ItemBase, Render, RenderCtx } from '../../types';
 import { accent, inkOn, shade } from '../../lib/color';
 import { torsoHalfWidthAt, torsoPath } from '../geometry';
-import { edge, heartPath, ink, O, pale, scallop, scallopEdge, starPath } from './common';
+import { edge, heartPath, ink, O, pale, PartText, scallop, scallopEdge, starPath } from './common';
 
 export const chinY = (g: BodyGeo) => g.headCy + g.headRy * 0.97;
 
@@ -310,7 +310,7 @@ export const TOPS: TopDef[] = [
               <path d={`M ${g.cx - 200} ${g.torsoBottom - 10} L ${g.cx + 200} ${g.torsoBottom - 10}`} stroke="#f4f1e6" strokeWidth={3} />
             </g>,
           )}
-          <text
+          <PartText
             x={g.cx - g.shoulder * 0.45}
             y={ch + 46}
             textAnchor="middle"
@@ -321,7 +321,7 @@ export const TOPS: TopDef[] = [
             strokeWidth={1.5}
           >
             {letter}
-          </text>
+          </PartText>
           {outline(c)}
         </g>
       );
@@ -546,7 +546,7 @@ export const TOPS: TopDef[] = [
         <g>
           {base(c)}
           <path d={`M ${g.cx - 34} ${ch - 12} L ${g.cx} ${ch + 22} L ${g.cx + 34} ${ch - 12}`} fill="none" stroke="#fff" strokeWidth={7} />
-          <text
+          <PartText
             x={g.cx}
             y={ch + (g.torsoBottom - ch) * 0.78}
             textAnchor="middle"
@@ -557,7 +557,7 @@ export const TOPS: TopDef[] = [
             strokeWidth={2}
           >
             {num}
-          </text>
+          </PartText>
         </g>
       );
     },
@@ -1464,9 +1464,9 @@ export const NECKWEAR: NeckDef[] = [
           <path d={`M ${g.cx - 44} ${ch - 14} Q ${g.cx} ${ch + 56} ${g.cx + 44} ${ch - 14}`} fill="none" stroke={O} strokeWidth={8} />
           <path d={`M ${g.cx - 44} ${ch - 14} Q ${g.cx} ${ch + 56} ${g.cx + 44} ${ch - 14}`} fill="none" stroke={c.color} strokeWidth={5} strokeDasharray="6 2" />
           <circle cx={g.cx} cy={ch + 32} r={14} fill={c.color} {...ink} />
-          <text x={g.cx} y={ch + 39} textAnchor="middle" fontFamily="'Luckiest Guy', 'Arial Black', sans-serif" fontSize={20} fill={shade(c.color, -0.5)}>
+          <PartText x={g.cx} y={ch + 39} textAnchor="middle" fontFamily="'Luckiest Guy', 'Arial Black', sans-serif" fontSize={20} fill={shade(c.color, -0.5)}>
             $
-          </text>
+          </PartText>
         </g>
       );
     },
@@ -1646,12 +1646,12 @@ export const NECKWEAR: NeckDef[] = [
         <g transform={`rotate(-6 ${x} ${y})`}>
           <rect x={x - 38} y={y - 18} width={76} height={44} rx={5} fill="#fff" {...ink} strokeWidth={2} />
           <rect x={x - 38} y={y - 18} width={76} height={15} rx={5} fill={c.color} />
-          <text x={x} y={y - 6.5} textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight={700} fontSize={9} fill={inkOn(c.color)}>
+          <PartText x={x} y={y - 6.5} textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight={700} fontSize={9} fill={inkOn(c.color)}>
             HELLO my name is
-          </text>
-          <text x={x} y={y + 18} textAnchor="middle" fontFamily="'Comic Sans MS', 'Chalkboard SE', cursive" fontWeight={700} fontSize={name.length > 7 ? 11 : 15} fill={O}>
+          </PartText>
+          <PartText x={x} y={y + 18} textAnchor="middle" fontFamily="'Comic Sans MS', 'Chalkboard SE', cursive" fontWeight={700} fontSize={name.length > 7 ? 11 : 15} fill={O}>
             {name}
-          </text>
+          </PartText>
         </g>
       );
     },

@@ -7,6 +7,7 @@
  *   cols  columns
  *   page, per  paging for long categories
  *   bg    background colour without the #, e.g. fff to check pale parts against snow
+ *   vb    a viewBox to zoom into, e.g. -60,340,150,150 for a sidekick up close
  */
 import { createRoot } from 'react-dom/client';
 import '@fontsource/luckiest-guy/400.css';
@@ -56,7 +57,7 @@ function Cell({ id, name, make }: { id: string; name: string; make: (c: Characte
         {bodies.map((b) => {
           const c = make(base(b));
           const g = getGeo(c.body, c.headShape);
-          const viewBox = view === 'full' ? frameViewBox(g) : thumbViewBox(view as never, g);
+          const viewBox = q.get('vb')?.replaceAll(',', ' ') ?? (view === 'full' ? frameViewBox(g) : thumbViewBox(view as never, g));
           const arms = cat === 'pose' ? poseArms(g, id as GestureId, 1, 0.2) : undefined;
           return <CharacterSvg key={b} c={c} viewBox={viewBox} arms={arms} />;
         })}

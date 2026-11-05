@@ -1,3 +1,4 @@
+import { createContext, useContext, type SVGProps } from 'react';
 import { shade } from '../../lib/color';
 
 /** Outline ink + stroke width shared by every construction-paper shape. */
@@ -101,4 +102,16 @@ export function Mirror({ children }: { children: React.ReactNode }) {
       <g transform="scale(-1 1)">{children}</g>
     </>
   );
+}
+
+/** A scatter of round dots in one path: stroke it with round caps. */
+export const dots = (points: [number, number][]) => points.map(([x, y]) => `M ${x} ${y} h 0.01`).join(' ');
+
+/** True while drawing a character who faces the other way, which mirrors everything on them. */
+export const MirroredPart = createContext(false);
+
+/** Centred lettering on a part: it turns itself back round on a mirrored character, so it never reads backwards. */
+export function PartText({ x, ...rest }: Omit<SVGProps<SVGTextElement>, 'x' | 'textAnchor'> & { x: number; textAnchor?: 'middle' }) {
+  const mirrored = useContext(MirroredPart);
+  return <text x={x} textAnchor="middle" transform={mirrored ? `translate(${2 * x} 0) scale(-1 1)` : undefined} {...rest} />;
 }
