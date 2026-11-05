@@ -8,7 +8,7 @@ import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
 import { cameraFor, compileEpisode, estimateLineSeconds, locate, sampleEpisode, syntheticEnvelope, WIDE, type SceneFrame } from './episode/timeline';
 import { repositionActor, setMoodAt } from './episode/edit';
-import { applyEdit } from './ai/director';
+import { applyCrew, applyEdit } from './ai/director';
 import { extractJson } from './ai/openrouter';
 import { envelope, processVoice, resample, timeStretch, trimSilence } from './audio/dsp';
 import { directionMode, speechFormat, speechRequest } from './audio/voices';
@@ -234,6 +234,41 @@ describe('normalize', () => {
     expect(resolveCast(ep.cast, 'mr. hargrove')).toBe('mr-hargrove');
     expect(resolveCast(ep.cast, 'dex')).toBe('dex');
     expect(resolveCast(ep.cast, 'Nobody')).toBeUndefined();
+  });
+
+  it('tells people with similar names apart', () => {
+    const { cast } = normalizeEpisode({ cast: ['Butters', 'Mr. Garrison', 'Mrs. Tucker', 'Cop 1', 'The Cashier', 'Uncle Jimbo'].map((name) => ({ name })) }, 'x');
+    for (const someoneElse of ['BUTTERS DAD', 'Butters Mom', "Butters' Lawyer", 'MR. KIM', 'Mr. Tucker', 'Cop 2', 'the bus']) {
+      expect(resolveCast(cast, someoneElse), someoneElse).toBeUndefined();
+    }
+    // Shorter and longer spellings of the same person still work.
+    expect(resolveCast(cast, 'Garrison')).toBe('mr-garrison');
+    expect(resolveCast(cast, 'Butters Stotch')).toBe('butters');
+    expect(resolveCast(cast, 'Tucker')).toBe('mrs-tucker');
+    expect(resolveCast(cast, 'Jimbo')).toBe('uncle-jimbo');
+    expect(resolveCast(cast, 'Cashier')).toBe('the-cashier');
+  });
+
+  it('casts a forgotten speaker instead of giving their lines to someone with a similar name', () => {
+    const ep = normalizeEpisode(
+      { cast: [{ name: 'Butters' }, { name: 'Mr. Garrison' }], scenes: [{ beats: [{ who: 'BUTTERS DAD', text: 'Grounded.' }, { who: 'MR. KIM', text: 'Hello.' }] }] },
+      'x',
+    );
+    expect(ep.scenes[0].beats.map((b) => b.who)).toEqual(['butters-dad', 'mr-kim']);
+  });
+
+  it('gives a crew look only to the character it names', () => {
+    const ep = parseScript('BUTTERS: Hi.\nBUTTERS DAD: Son.\nMR. KIM: Hello.\nMR. GARRISON: Class.\n');
+    const look = (hairColor: string) => ({ ...DEFAULT_CHARACTER, hairColor });
+    const { cast } = applyCrew(ep, [
+      { name: 'Butters', look: look('#010203') },
+      { name: 'Mr. Garrison', look: look('#040506') },
+    ]);
+    const hair = Object.fromEntries(cast.map((c) => [c.name, c.look.hairColor]));
+    expect(hair.Butters).toBe('#010203');
+    expect(hair['Mr. Garrison']).toBe('#040506');
+    expect(hair['Butters Dad']).not.toBe('#010203');
+    expect(hair['Mr. Kim']).not.toBe('#040506');
   });
 
   it('gives the same stock look to the same name', () => {

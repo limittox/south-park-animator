@@ -180,6 +180,33 @@ export function normalizeCastMember(input: unknown, taken: Set<string>): CastMem
   };
 }
 
+const HONORIFIC = /^(mr|mister|mrs|ms|miss|dr)$/;
+/** A family word closing a name means someone else: "Butters Dad" isn't Butters, though "Uncle Jimbo" is Jimbo. So does a possessive: "Stan's Lawyer". */
+const RELATIVE = /^(mom|mum|mommy|mama|mother|dad|daddy|papa|father|parents|brother|sister|son|daughter|wife|husband|uncle|aunt|auntie|grandma|granny|grandmother|grandpa|grandfather|cousin|nephew|niece|girlfriend|boyfriend)$/;
+const POSSESSIVE = /['’]s?\s/;
+
+const honorificOf = (name: string) => name.toLowerCase().split(/[^a-z0-9]+/).find((w) => HONORIFIC.test(w));
+/** The words that say who someone is. Stray letters go (the "s" of "Stan's"); numbers stay ("Cop 2"). */
+const nameWords = (name: string) =>
+  name
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => (w.length > 1 || /\d/.test(w)) && w !== 'the' && !HONORIFIC.test(w));
+
+/**
+ * Could two spellings be one person? One has to be the other with words left out: "Garrison" and
+ * "Mr. Garrison", "Stan" and "Stan Marsh", but not "Mr. Kim" and "Mr. Garrison", or "Mr. Tucker" and "Mrs. Tucker".
+ */
+function sameName(a: string, b: string): boolean {
+  const [ha, hb] = [honorificOf(a), honorificOf(b)];
+  if (ha && hb && ha !== hb) return false;
+  const [wa, wb] = [nameWords(a), nameWords(b)];
+  const [short, long, longName] = wa.length < wb.length ? [wa, wb, b] : [wb, wa, a];
+  if (!short.length || !short.every((w) => long.includes(w))) return false;
+  const last = long[long.length - 1];
+  return short.includes(last) || !(RELATIVE.test(last) || POSSESSIVE.test(longName));
+}
+
 /** Find a cast member by id, name or alias, forgivingly ("STAN", "Stan Marsh", "stan-marsh"). */
 export function resolveCast(cast: CastMember[], ref: unknown): string | undefined {
   if (typeof ref !== 'string' || !ref.trim()) return undefined;
@@ -187,11 +214,7 @@ export function resolveCast(cast: CastMember[], ref: unknown): string | undefine
   const slug = slugify(ref);
   const exact = cast.find((c) => c.id === r || c.id === slug || c.name.toLowerCase() === r || c.aliases.some((a) => a.toLowerCase() === r));
   if (exact) return exact.id;
-  // First-name match: "Garrison" for "Mr. Garrison", "Stan" for "Stan Marsh".
-  const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1);
-  const refWords = words(ref);
-  const loose = cast.find((c) => [c.name, ...c.aliases].some((n) => words(n).some((w) => refWords.includes(w))));
-  return loose?.id;
+  return cast.find((c) => [c.name, ...c.aliases].some((n) => sameName(n, ref)))?.id;
 }
 
 /* ---------------------------------------------------------------- scenes */
@@ -342,7 +365,7 @@ export function propId(v: unknown): string | undefined {
 
 function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], fallbackWho?: string): Move | null {
   if (!isObj(input)) return null;
-  // Vehicles first: loose name matching would turn "the bus" into "The Cashier".
+  // Vehicles first: loose name matching would turn "the bus" into "Bus Driver".
   const vehicle = typeof input.who === 'string' && input.who.trim() ? resolveVehicle(vehicles, input.who) : undefined;
   const who = vehicle ?? resolveCast(cast, input.who) ?? fallbackWho;
   const alias = typeof input.kind === 'string' ? MOVE_ALIASES[squash(input.kind)] : undefined;
