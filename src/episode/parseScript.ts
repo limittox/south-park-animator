@@ -687,31 +687,71 @@ export const SAMPLE_SCRIPT = `TITLE: The Snow Day Scheme
 EXT. BUS STOP - MORNING
 Dex, Benny and Priya wait at the bus stop.
 
-BENNY: Dude, I read on the internet that if you flush ice cubes down the toilet, it snows so much they have to cancel school.
+BENNY: Dude, the internet says flushing ice cubes makes it snow so much they cancel school.
 DEX: (deadpan) That's the dumbest thing I've ever heard.
 PRIYA: (excited) It's science, Dex! Everything on the internet is science!
-DEX: (sarcastic) Oh sure. And I'm the Queen of England.
-BENNY: Then explain why my cousin in Denver got a snow day. Huh? Explain THAT.
-DEX: ...Okay, I'm in.
+BENNY: My cousin in Denver got a snow day. Explain THAT.
+Dex eats a hotdog and looks at Benny.
+BENNY: (smug) Chicken?
+Dex turns into a chicken.
+DEX: (deadpan) ...Okay, I'm in.
+The school bus pulls up.
+The kids get on the bus.
+The bus drives off.
 
 INT. CLASSROOM - DAY
 Mr. Hargrove stands at the chalkboard. The kids sit at their desks.
 
-MR. HARGROVE: Alright, children. Today we're learning about the water cycle.
-BENNY: (whispering) Psst. How many ice cubes did you flush?
+MR. HARGROVE: Today, children, the water cycle.
+Mr. Hargrove faces the chalkboard as the camera pans to Priya.
+BENNY: (whispering) Psst. How many did you flush?
 PRIYA: (proud) Four hundred. My mom thinks the freezer is haunted.
-MR. HARGROVE: (angry) Benny! Is there something you'd like to share with the class?
+DEX (O.S.): (whispering) Flush harder.
+Mr. Hargrove turns around.
+MR. HARGROVE: (yelling) Benny! Care to share with the class?
 BENNY: (nervous) Uhh... the water cycle is when you flush ice and the sky gets jealous?
 MR. HARGROVE: That is the stupidest... actually, that's not totally wrong.
 Mr. Hargrove faints.
+FADE OUT.
 
-INT. GROCERY STORE - NIGHT
-Dex walks in with an empty cart. The cashier stares at him.
+INT. BATHROOM - DAY
+SPLIT SCREEN: Priya and Dex on main street.
+Priya sits on the toilet.
+
+PRIYA: (nervous) The toilet's humming.
+DEX: (deadpan) Keep flushing.
+The toilet explodes and Priya covers her ears.
+A plunger falls through the ceiling.
+PRIYA: (crying) Now my mom thinks the toilet's haunted too!
+DISSOLVE TO:
+
+INT. LIVING ROOM - DAY
+Benny lies on the couch. The Anchor appears on the TV.
+
+ANCHOR: This town is out of ice. Experts are baffled.
+Benny drinks a soda.
+BENNY: (sick) It's warm.
+Benny vomits.
+
+INT. GROCERY STORE - DAY
+A line of angry townspeople waits for ice.
 
 CASHIER: Sir, that's your ninth cart of ice this week.
 DEX: (deadpan) It's for science.
+The camera follows Dex as he sneaks up to the Cashier.
+Dex hands the money to the Cashier as the crowd boos and we pull back.
+Officer Plunkett drives through the wall in his police car.
+The crowd panics.
+OFFICER PLUNKETT: (nervous) Sorry. Icy roads.
 CASHIER: (shocked) Oh my God. Is it... snowing?
+
+EXT. MAIN STREET - DAY
+It starts snowing. A crowd of townspeople fills the street.
+Dex and Benny run in holding signs.
 DEX: (triumphant) We did it! No school tomorrow!
+Dex and Benny dance as the crowd cheers while a caption reads "Science works."
 PRIYA (O.S.): Dex! Tomorrow's Saturday!
+The crowd gasps as we zoom in on Dex.
 DEX: (sad) ...Aw, crap.
+Benny throws a snowball at Dex.
 `;

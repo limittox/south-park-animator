@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FrameSvg } from './render/FrameSvg';
-import { parseScript, SAMPLE_SCRIPT } from './episode/parseScript';
+import { parseScript } from './episode/parseScript';
+import { FIXTURE_SCRIPT } from './fixtureScript';
 import { PROMPT_EXAMPLE, PROMPT_PLACES, scriptWritingPrompt } from './episode/writingPrompt';
 import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
@@ -23,7 +24,7 @@ import { mouthTrack, sounds } from './episode/lipSync';
 import { DEFAULT_CHARACTER } from './data/defaults';
 import type { Episode } from './episode/types';
 
-const sample = () => parseScript(SAMPLE_SCRIPT);
+const sample = () => parseScript(FIXTURE_SCRIPT);
 
 describe('parseScript', () => {
   it('reads the sample: title, three scenes, the cast and every line', () => {
@@ -149,7 +150,7 @@ STAN: Dad?`);
   });
 
   it('seats the sample classroom kids at their desks', () => {
-    const classroom = parseScript(SAMPLE_SCRIPT).scenes[1];
+    const classroom = sample().scenes[1];
     const seated = classroom.blocking.filter((b) => b.sit);
     expect(seated.map((b) => b.who).sort()).toEqual(['benny', 'priya']);
     expect(seated.every((b) => b.sit === 'desk')).toBe(true);
