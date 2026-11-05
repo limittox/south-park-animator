@@ -6,7 +6,7 @@ import { getScene } from '../scenes/backgrounds';
 import { renderKitSet } from '../sets/kit';
 import { getVehicleDef, wheel } from '../sets/vehicles';
 import { renderSeatCover } from '../episode/seats';
-import { seeded } from '../character/parts/common';
+import { MirroredPart, seeded } from '../character/parts/common';
 
 export const DISPLAY = "'Luckiest Guy', 'Arial Black', Impact, sans-serif";
 const STUDIO_COLOR = '#5aaeea';
@@ -32,7 +32,9 @@ export function actorTransform(a: ActorFrame): string {
 export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
   return (
     <g transform={actorTransform(a)}>
-      <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} hipY={a.hipY} />
+      <MirroredPart.Provider value={a.flip}>
+        <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} hipY={a.hipY} />
+      </MirroredPart.Provider>
     </g>
   );
 });

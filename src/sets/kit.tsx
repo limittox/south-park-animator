@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { KitPiece, KitSet, TimeOfDay } from '../episode/types';
-import { ink, O, scallop, seeded, starPath } from '../character/parts/common';
+import { dots, ink, O, scallop, seeded, starPath } from '../character/parts/common';
 import { shade } from '../lib/color';
 import { bareTree, cloud, DAY_SKY, DISPLAY, mountains, PAINT, PINE, pine, ROAD, SCENE_H, SCENE_W, SNOW } from '../scenes/backgrounds';
 
@@ -30,6 +30,8 @@ export interface ResolvedPiece extends KitPiece {
 export interface KitCtx {
   time: TimeOfDay;
   set: KitSet;
+  /** Being drawn again over whoever sits at it, so leave out anything that belongs behind them. */
+  cover?: boolean;
 }
 
 export interface KitPieceDef {
@@ -67,6 +69,9 @@ const nat = 'nat';
 const CHALK = "'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', cursive";
 const LIT = '#ffe58a';
 const GLOW = '#fff6a8';
+const LAMP_SHADE = 'M -60 -330 L 60 -330 L 34 -440 L -34 -440 Z';
+/** The bands round the top and bottom of the lamp shade. */
+const LAMP_TRIM = 'M -60 -330 L 60 -330 L 57 -344 L -57 -344 Z M -36 -430 L 36 -430 L 34 -440 L -34 -440 Z';
 const PRODUCT_COLORS = ['#d33b2c', '#f2c230', '#3b6fd8', '#7fbf3f', '#e86fb0', '#f0742a', '#2ec4c4', '#ffffff', '#8a5530', '#9b6bc0'];
 
 function hash(s: string): number {
@@ -767,15 +772,24 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#8a5a32',
     defaultColor2: '#d9d4d3',
     colors: 'color = body, color2 = top',
-    render: (p) => (
-      <g>
-        <rect x={-250} y={-190} width={500} height={190} {...f(p.color)} />
-        {[-125, 0, 125].map((x) => (
-          <path key={x} d={`M ${x} -170 L ${x} -12`} stroke={shade(p.color, -0.2)} strokeWidth={4} />
-        ))}
-        <rect x={-266} y={-210} width={532} height={26} {...f(p.color2)} />
-      </g>
-    ),
+    render: (p) => {
+      const seam = shade(p.color, -0.24);
+      return (
+        <g>
+          <rect x={-250} y={-190} width={500} height={190} {...f(p.color)} />
+          {[-236, -111, 14, 139].map((x) => (
+            <g key={x}>
+              <rect x={x} y={-166} width={97} height={136} rx={3} fill={shade(p.color, -0.1)} stroke={seam} strokeWidth={3} />
+              <path d={`M ${x + 16} -150 v 104 M ${x + 50} -152 v 50 M ${x + 74} -112 v 64`} stroke={seam} strokeWidth={2} strokeLinecap="round" opacity={0.6} />
+            </g>
+          ))}
+          <rect x={-250} y={-16} width={500} height={16} fill={shade(p.color, -0.34)} />
+          <rect x={-266} y={-210} width={532} height={26} {...f(p.color2)} />
+          <rect x={-266} y={-192} width={532} height={8} fill={shade(p.color2, -0.16)} />
+          <path d="M -250 -203 h 130 M -90 -203 h 60" stroke="#fff" strokeWidth={3} strokeLinecap="round" opacity={0.6} />
+        </g>
+      );
+    },
   },
   {
     id: 'checkout',
@@ -791,15 +805,33 @@ export const KIT_PIECES: KitPieceDef[] = [
     colors: 'color = counter, color2 = top',
     render: (p) => (
       <g>
+        <rect x={-236} y={-300} width={8} height={112} fill="#8e9aa6" />
+        <circle cx={-232} cy={-308} r={16} {...f('#7fbf3f')} />
         <rect x={-240} y={-170} width={480} height={170} {...f(p.color)} />
+        <rect x={-222} y={-150} width={210} height={124} rx={4} fill={shade(p.color, -0.12)} />
+        <rect x={12} y={-150} width={210} height={124} rx={4} fill={shade(p.color, -0.12)} />
+        <rect x={-240} y={-14} width={480} height={14} fill={shade(p.color, -0.34)} />
         <rect x={-252} y={-190} width={504} height={24} {...f(p.color2)} />
+        <rect x={-252} y={-172} width={504} height={6} fill={shade(p.color2, -0.16)} />
+        <rect x={-190} y={-246} width={42} height={46} rx={3} {...f('#d33b2c')} />
+        <rect x={-190} y={-232} width={42} height={14} fill="#fff" />
+        <rect x={-136} y={-232} width={58} height={32} rx={3} {...f('#f2c230')} />
+        <path d="M -128 -222 h 42 M -128 -212 h 28" stroke="#c9981a" strokeWidth={4} strokeLinecap="round" />
+        <rect x={-66} y={-226} width={30} height={26} rx={4} {...f('#7fbf3f')} />
         <rect x={-240} y={-200} width={260} height={14} rx={7} {...f('#2b2b2f')} />
+        <path d={Array.from({ length: 12 }, (_, i) => `M ${-226 + i * 21} -197 v 8`).join(' ')} stroke="#55555a" strokeWidth={3} />
+        <rect x={32} y={-196} width={38} height={8} rx={2} fill="#b3261e" />
         <g>
           <rect x={80} y={-270} width={150} height={80} rx={6} {...f('#9aa3ad')} />
           <rect x={92} y={-260} width={70} height={30} fill="#7fbf3f" />
+          <path d="M 100 -250 h 44 M 100 -240 h 28" stroke="#3f7d2a" strokeWidth={4} strokeLinecap="round" />
           {[0, 1, 2].map((r) => [0, 1, 2].map((c) => <rect key={`${r}${c}`} x={174 + c * 16} y={-260 + r * 18} width={12} height={12} fill="#e8e4ea" />))}
+          <rect x={92} y={-220} width={70} height={8} rx={3} fill="#6b7078" />
+          <path d="M 198 -270 L 198 -296 L 214 -296 L 214 -270 Z" {...f('#fff')} strokeWidth={2} />
+          <path d="M 202 -288 h 8 M 202 -280 h 8" stroke="#9aa3ad" strokeWidth={2} />
           <rect x={112} y={-300} width={70} height={34} rx={4} {...f('#3d3d44')} />
           <rect x={120} y={-294} width={54} height={20} fill="#2ec4c4" />
+          <path d="M 126 -284 h 30" stroke="#0f6a6a" strokeWidth={4} strokeLinecap="round" />
         </g>
       </g>
     ),
@@ -815,19 +847,26 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 200,
     defaultY: 760,
     defaultColor: '#7a4a2a',
-    render: (p) => (
-      <g>
-        <rect x={-180} y={-180} width={150} height={180} {...f(p.color)} />
-        {[-166, -114, -62].map((y) => (
-          <g key={y}>
-            <rect x={-168} y={y} width={126} height={44} fill={shade(p.color, -0.12)} />
-            <rect x={-122} y={y + 18} width={34} height={8} rx={4} fill="#f2c230" />
-          </g>
-        ))}
-        <rect x={150} y={-180} width={28} height={180} {...f(p.color)} />
-        <rect x={-190} y={-200} width={380} height={26} {...f(shade(p.color, 0.08))} />
-      </g>
-    ),
+    render: (p) => {
+      const seam = shade(p.color, -0.26);
+      return (
+        <g>
+          <rect x={-30} y={-176} width={182} height={92} fill={shade(p.color, -0.24)} />
+          <rect x={-180} y={-180} width={150} height={180} {...f(p.color)} />
+          {[-166, -114, -62].map((y) => (
+            <g key={y}>
+              <rect x={-168} y={y} width={126} height={44} rx={2} fill={shade(p.color, -0.12)} stroke={seam} strokeWidth={2.5} />
+              <rect x={-122} y={y + 18} width={34} height={8} rx={4} fill="#f2c230" />
+            </g>
+          ))}
+          <rect x={-184} y={-12} width={158} height={12} fill={seam} />
+          <rect x={150} y={-180} width={28} height={180} {...f(p.color)} />
+          <rect x={146} y={-12} width={36} height={12} fill={seam} />
+          <rect x={-190} y={-200} width={380} height={26} {...f(shade(p.color, 0.08))} />
+          <path d="M -170 -192 h 110 M -30 -186 h 150 M 130 -193 h 40" stroke={shade(p.color, -0.08)} strokeWidth={2.5} strokeLinecap="round" />
+        </g>
+      );
+    },
   },
   {
     id: 'school-desk',
@@ -842,12 +881,30 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#e4dc4a',
     defaultColor2: '#3b6fd8',
     colors: 'color = desk top, color2 = chair',
-    render: (p) => (
+    render: (p, ctx) => (
       <g>
-        <rect x={-70} y={-196} width={140} height={60} {...f(p.color2)} />
-        <rect x={-100} y={-136} width={200} height={26} {...f(p.color)} />
+        {!ctx.cover && (
+          <g>
+            <rect x={-70} y={-196} width={140} height={60} rx={6} {...f(p.color2)} />
+            <rect x={-44} y={-182} width={88} height={12} rx={6} fill={shade(p.color2, -0.3)} />
+          </g>
+        )}
         <rect x={-86} y={-110} width={14} height={110} {...f('#8e8c92')} />
         <rect x={72} y={-110} width={14} height={110} {...f('#8e8c92')} />
+        <rect x={-72} y={-52} width={144} height={8} fill="#77757b" />
+        <rect x={-90} y={-8} width={22} height={8} rx={3} fill="#3d3d44" />
+        <rect x={68} y={-8} width={22} height={8} rx={3} fill="#3d3d44" />
+        <rect x={-72} y={-110} width={144} height={36} {...f('#77757b')} />
+        <rect x={-64} y={-106} width={128} height={26} fill="#3b3a40" />
+        <rect x={-58} y={-102} width={13} height={22} fill="#d33b2c" />
+        <rect x={-44} y={-100} width={11} height={20} fill="#3b6fd8" />
+        <rect x={-32} y={-103} width={15} height={23} fill="#7fbf3f" />
+        <rect x={-100} y={-136} width={200} height={26} rx={4} {...f(p.color)} />
+        <rect x={-100} y={-118} width={200} height={8} fill={shade(p.color, -0.18)} />
+        <path d="M -70 -128 h 140" stroke={shade(p.color, -0.24)} strokeWidth={3} strokeLinecap="round" />
+        <path d="M -46 -143 L 22 -143 L 34 -140 L 22 -137 L -46 -137 Z" fill="#f2c230" />
+        <rect x={-56} y={-143} width={10} height={6} rx={2} fill="#f27bb4" />
+        <path d="M 26 -142 L 34 -140 L 26 -138 Z" fill="#3d3d44" />
       </g>
     ),
   },
@@ -862,20 +919,35 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 250,
     defaultY: 780,
     defaultColor: '#8a5530',
-    render: (p) => (
-      <g>
-        <rect x={-220} y={-200} width={440} height={200} {...f(p.color)} />
-        <rect x={-190} y={-170} width={380} height={140} fill={shade(p.color, -0.14)} />
-        <rect x={-232} y={-222} width={464} height={26} {...f(shade(p.color, 0.1))} />
-        <circle cx={-150} cy={-244} r={22} {...f('#d33b2c')} />
-        <path d="M -150 -266 q 4 -12 14 -14" fill="none" stroke="#5a3a22" strokeWidth={4} />
-        <ellipse cx={-136} cy={-276} rx={10} ry={5} fill="#7fbf3f" />
-        <rect x={-40} y={-236} width={110} height={14} {...f('#fff')} strokeWidth={2} transform="rotate(-4 15 -229)" />
-        <rect x={-36} y={-248} width={110} height={14} {...f('#fff')} strokeWidth={2} transform="rotate(3 19 -241)" />
-        <rect x={130} y={-262} width={40} height={40} rx={6} {...f('#3b6fd8')} />
-        <path d="M 170 -252 q 16 0 16 12 q 0 12 -16 12" fill="none" stroke={O} strokeWidth={4} />
-      </g>
-    ),
+    render: (p) => {
+      const seam = shade(p.color, -0.26);
+      return (
+        <g>
+          <rect x={-220} y={-200} width={440} height={200} {...f(p.color)} />
+          <rect x={-88} y={-188} width={176} height={188} fill={shade(p.color, -0.26)} />
+          {[-208, 100].map((x) =>
+            [-188, -128, -68].map((y) => (
+              <g key={`${x},${y}`}>
+                <rect x={x} y={y} width={108} height={54} rx={2} fill={shade(p.color, -0.1)} stroke={seam} strokeWidth={2.5} />
+                <rect x={x + 38} y={y + 23} width={32} height={8} rx={4} fill="#c9a227" />
+              </g>
+            )),
+          )}
+          <rect x={-232} y={-222} width={464} height={26} {...f(shade(p.color, 0.1))} />
+          <path d="M -214 -214 h 150 M -30 -207 h 170 M 170 -214 h 44" stroke={shade(p.color, -0.06)} strokeWidth={2.5} strokeLinecap="round" />
+          <circle cx={-150} cy={-244} r={22} {...f('#d33b2c')} />
+          <ellipse cx={-158} cy={-252} rx={5} ry={8} transform="rotate(24 -158 -252)" fill="#fff" opacity={0.5} />
+          <path d="M -150 -266 q 4 -12 14 -14" fill="none" stroke="#5a3a22" strokeWidth={4} />
+          <ellipse cx={-136} cy={-276} rx={10} ry={5} fill="#7fbf3f" />
+          <rect x={-40} y={-236} width={110} height={14} {...f('#fff')} strokeWidth={2} transform="rotate(-4 15 -229)" />
+          <rect x={-36} y={-248} width={110} height={14} {...f('#fff')} strokeWidth={2} transform="rotate(3 19 -241)" />
+          <path d="M -26 -243 h 66 M -26 -239 h 46" stroke="#9fb0c0" strokeWidth={1.5} transform="rotate(3 19 -241)" />
+          <rect x={130} y={-262} width={40} height={40} rx={6} {...f('#3b6fd8')} />
+          <rect x={130} y={-250} width={40} height={8} fill="#fff" />
+          <path d="M 170 -252 q 16 0 16 12 q 0 12 -16 12" fill="none" stroke={O} strokeWidth={4} />
+        </g>
+      );
+    },
   },
   {
     id: 'table',
@@ -888,13 +960,20 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 150,
     defaultY: 780,
     defaultColor: '#a5713d',
-    render: (p) => (
-      <g>
-        <rect x={-140} y={-126} width={18} height={126} {...f(shade(p.color, -0.15))} />
-        <rect x={122} y={-126} width={18} height={126} {...f(shade(p.color, -0.15))} />
-        <rect x={-160} y={-150} width={320} height={28} {...f(p.color)} />
-      </g>
-    ),
+    render: (p) => {
+      const leg = shade(p.color, -0.15);
+      const grain = shade(p.color, -0.16);
+      return (
+        <g>
+          <path d="M -144 -124 L -122 -124 L -126 0 L -138 0 Z" {...f(leg)} />
+          <path d="M 122 -124 L 144 -124 L 138 0 L 126 0 Z" {...f(leg)} />
+          <rect x={-146} y={-124} width={292} height={20} {...f(shade(p.color, -0.08))} />
+          <rect x={-160} y={-150} width={320} height={28} rx={3} {...f(p.color)} />
+          <rect x={-160} y={-150} width={320} height={7} rx={3} fill={shade(p.color, 0.16)} />
+          <path d="M -146 -132 h 76 M -40 -135 h 96 M 84 -130 h 58" stroke={grain} strokeWidth={2.5} strokeLinecap="round" />
+        </g>
+      );
+    },
   },
   {
     id: 'chair',
@@ -907,15 +986,25 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 220,
     defaultY: 780,
     defaultColor: '#a5713d',
-    render: (p) => (
-      <g>
-        <rect x={-50} y={-220} width={100} height={110} rx={8} {...f(p.color)} />
-        <rect x={-34} y={-200} width={68} height={70} rx={6} fill={shade(p.color, -0.15)} />
-        <rect x={-58} y={-112} width={116} height={20} {...f(shade(p.color, 0.08))} />
-        <rect x={-50} y={-92} width={14} height={92} {...f(p.color)} />
-        <rect x={36} y={-92} width={14} height={92} {...f(p.color)} />
-      </g>
-    ),
+    render: (p) => {
+      const slat = shade(p.color, -0.12);
+      return (
+        <g>
+          <rect x={-50} y={-212} width={14} height={104} {...f(p.color)} />
+          <rect x={36} y={-212} width={14} height={104} {...f(p.color)} />
+          {[-184, -158, -132].map((y) => (
+            <rect key={y} x={-36} y={y} width={72} height={13} {...f(slat)} />
+          ))}
+          <rect x={-54} y={-222} width={108} height={26} rx={10} {...f(shade(p.color, 0.08))} />
+          <path d="M -40 -212 h 56" stroke={shade(p.color, 0.3)} strokeWidth={3} strokeLinecap="round" />
+          <path d="M -50 -92 L -36 -92 L -38 0 L -48 0 Z" {...f(p.color)} />
+          <path d="M 36 -92 L 50 -92 L 48 0 L 38 0 Z" {...f(p.color)} />
+          <rect x={-40} y={-46} width={80} height={9} fill={slat} />
+          <rect x={-58} y={-112} width={116} height={20} rx={3} {...f(shade(p.color, 0.08))} />
+          <rect x={-58} y={-98} width={116} height={6} fill={shade(p.color, -0.18)} />
+        </g>
+      );
+    },
   },
   {
     id: 'couch',
@@ -930,15 +1019,36 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#868072',
     defaultColor2: '#f2c230',
     colors: 'color = upholstery, color2 = pillow',
-    render: (p) => (
-      <g>
-        <path d="M -280 -140 Q -300 -280 -200 -280 L 200 -280 Q 300 -280 280 -140 L 300 0 L -300 0 Z" {...f(p.color)} />
-        <rect x={-260} y={-180} width={520} height={90} rx={30} {...f(shade(p.color, 0.1))} />
-        <rect x={-320} y={-180} width={80} height={180} rx={30} {...f(shade(p.color, -0.12))} />
-        <rect x={240} y={-180} width={80} height={180} rx={30} {...f(shade(p.color, -0.12))} />
-        <rect x={-200} y={-240} width={110} height={70} rx={20} {...f(p.color2)} />
-      </g>
-    ),
+    render: (p) => {
+      const fold = shade(p.color, -0.2);
+      const arm = shade(p.color, -0.12);
+      return (
+        <g>
+          <rect x={-292} y={-16} width={34} height={16} rx={3} fill="#5a3a22" />
+          <rect x={258} y={-16} width={34} height={16} rx={3} fill="#5a3a22" />
+          <path d="M -280 -140 Q -300 -280 -200 -280 L 200 -280 Q 300 -280 280 -140 L 300 -8 L -300 -8 Z" {...f(p.color)} />
+          {[-258, -86, 86].map((x) => (
+            <rect key={x} x={x} y={-264} width={172} height={96} rx={26} fill={shade(p.color, 0.05)} stroke={fold} strokeWidth={3} />
+          ))}
+          <rect x={-260} y={-110} width={520} height={102} fill={shade(p.color, -0.08)} />
+          {[-260, -87, 87].map((x) => (
+            <rect key={x} x={x} y={-180} width={173} height={80} rx={26} {...f(shade(p.color, 0.1))} />
+          ))}
+          <path d="M -240 -168 h 120 M -66 -168 h 120 M 108 -168 h 120" stroke={shade(p.color, 0.26)} strokeWidth={4} strokeLinecap="round" />
+          <path d="M -240 -28 h 480" stroke={fold} strokeWidth={3} strokeDasharray="14 10" />
+          <rect x={-320} y={-180} width={80} height={172} rx={30} {...f(arm)} />
+          <rect x={240} y={-180} width={80} height={172} rx={30} {...f(arm)} />
+          <circle cx={-280} cy={-140} r={25} fill="none" stroke={fold} strokeWidth={3} />
+          <circle cx={280} cy={-140} r={25} fill="none" stroke={fold} strokeWidth={3} />
+          <circle cx={-280} cy={-140} r={6} fill={fold} />
+          <circle cx={280} cy={-140} r={6} fill={fold} />
+          <g transform="rotate(-8 -145 -205)">
+            <rect x={-200} y={-240} width={110} height={70} rx={20} {...f(p.color2)} />
+            <path d="M -192 -222 h 94 M -192 -205 h 94 M -192 -188 h 94" stroke={shade(p.color2, -0.2)} strokeWidth={5} />
+          </g>
+        </g>
+      );
+    },
   },
   {
     id: 'armchair',
@@ -951,14 +1061,28 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 260,
     defaultY: 720,
     defaultColor: '#b8433a',
-    render: (p) => (
-      <g>
-        <path d="M -110 -130 Q -126 -260 -50 -260 L 50 -260 Q 126 -260 110 -130 L 120 0 L -120 0 Z" {...f(p.color)} />
-        <rect x={-100} y={-160} width={200} height={80} rx={26} {...f(shade(p.color, 0.12))} />
-        <rect x={-140} y={-170} width={64} height={170} rx={28} {...f(shade(p.color, -0.14))} />
-        <rect x={76} y={-170} width={64} height={170} rx={28} {...f(shade(p.color, -0.14))} />
-      </g>
-    ),
+    render: (p) => {
+      const fold = shade(p.color, -0.26);
+      const arm = shade(p.color, -0.14);
+      return (
+        <g>
+          <rect x={-122} y={-14} width={28} height={14} rx={3} fill="#5a3a22" />
+          <rect x={94} y={-14} width={28} height={14} rx={3} fill="#5a3a22" />
+          <path d="M -110 -130 Q -126 -260 -50 -260 L 50 -260 Q 126 -260 110 -130 L 120 -8 L -120 -8 Z" {...f(p.color)} />
+          <path d="M -82 -152 Q -92 -240 -40 -240 L 40 -240 Q 92 -240 82 -152" fill="none" stroke={fold} strokeWidth={3} />
+          <path d={dots([[-44, -212], [0, -212], [44, -212], [-22, -182], [22, -182]])} stroke={fold} strokeWidth={9} strokeLinecap="round" />
+          <rect x={-100} y={-90} width={200} height={82} fill={shade(p.color, -0.08)} />
+          <rect x={-100} y={-160} width={200} height={80} rx={26} {...f(shade(p.color, 0.12))} />
+          <path d="M -78 -148 h 156" stroke={shade(p.color, 0.3)} strokeWidth={4} strokeLinecap="round" />
+          <rect x={-140} y={-170} width={64} height={162} rx={28} {...f(arm)} />
+          <rect x={76} y={-170} width={64} height={162} rx={28} {...f(arm)} />
+          <circle cx={-108} cy={-138} r={20} fill="none" stroke={fold} strokeWidth={3} />
+          <circle cx={108} cy={-138} r={20} fill="none" stroke={fold} strokeWidth={3} />
+          <circle cx={-108} cy={-138} r={5} fill={fold} />
+          <circle cx={108} cy={-138} r={5} fill={fold} />
+        </g>
+      );
+    },
   },
   {
     id: 'tv',
@@ -975,15 +1099,23 @@ export const KIT_PIECES: KitPieceDef[] = [
     colors: 'color = TV body, color2 = screen',
     render: (p) => (
       <g>
-        <rect x={-150} y={-110} width={300} height={110} {...f('#6b4226')} />
-        <rect x={-130} y={-90} width={120} height={70} fill={shade('#6b4226', -0.15)} />
-        <rect x={10} y={-90} width={120} height={70} fill={shade('#6b4226', -0.15)} />
+        <rect x={-140} y={-10} width={30} height={10} fill={shade('#6b4226', -0.3)} />
+        <rect x={110} y={-10} width={30} height={10} fill={shade('#6b4226', -0.3)} />
+        <rect x={-150} y={-110} width={300} height={102} {...f('#6b4226')} />
+        <rect x={-130} y={-90} width={120} height={64} fill={shade('#6b4226', -0.15)} />
+        <rect x={10} y={-90} width={120} height={64} fill={shade('#6b4226', -0.15)} />
+        <circle cx={-24} cy={-58} r={6} fill="#c9a227" />
+        <circle cx={24} cy={-58} r={6} fill="#c9a227" />
         <path d="M -30 -320 L -70 -380 M 30 -320 L 70 -380" stroke={O} strokeWidth={4} />
+        <circle cx={-70} cy={-382} r={7} fill="#9aa3ad" />
+        <circle cx={70} cy={-382} r={7} fill="#9aa3ad" />
         <rect x={-140} y={-330} width={280} height={210} rx={14} {...f(p.color)} />
         <rect x={-118} y={-310} width={236} height={160} rx={8} fill={p.color2} />
+        <path d="M -104 -298 L -60 -298 L -104 -224 Z" fill="#fff" opacity={0.18} />
         {p.text && fitLabel(p, p.text, -230, 210, 130, '#ffffff', { max: 34, chars: 10, lines: 3 })}
         <circle cx={-90} cy={-134} r={7} fill="#9aa3ad" />
         <circle cx={-66} cy={-134} r={7} fill="#9aa3ad" />
+        <path d="M 20 -139 h 92 M 20 -129 h 92" stroke={shade(p.color, 0.28)} strokeWidth={3.5} strokeLinecap="round" />
       </g>
     ),
   },
@@ -1000,19 +1132,34 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#3b6fd8',
     defaultColor2: '#7a4a2a',
     colors: 'color = blanket, color2 = wood',
-    render: (p) => (
-      <g>
-        <rect x={-240} y={-260} width={40} height={260} rx={10} {...f(p.color2)} />
-        <rect x={200} y={-160} width={40} height={160} rx={10} {...f(p.color2)} />
-        <rect x={-200} y={-80} width={400} height={50} {...f(shade(p.color2, -0.1))} />
-        <rect x={-200} y={-130} width={400} height={56} rx={10} {...f('#f4f4f4')} />
-        <ellipse cx={-150} cy={-140} rx={50} ry={24} {...f('#ffffff')} />
-        <path d="M -100 -150 L 200 -150 L 200 -70 L -110 -70 Q -122 -110 -100 -150 Z" {...f(p.color)} />
-        <path d="M -100 -150 L -60 -150 L -70 -70 L -110 -70 Q -122 -110 -100 -150 Z" fill={shade(p.color, 0.3)} />
-        <rect x={-232} y={-30} width={20} height={30} fill={p.color2} />
-        <rect x={210} y={-30} width={20} height={30} fill={p.color2} />
-      </g>
-    ),
+    render: (p) => {
+      const wood = shade(p.color2, -0.18);
+      const cap = shade(p.color2, 0.14);
+      return (
+        <g>
+          <rect x={-232} y={-30} width={20} height={30} fill={p.color2} />
+          <rect x={210} y={-30} width={20} height={30} fill={p.color2} />
+          <rect x={-240} y={-260} width={40} height={260} rx={10} {...f(p.color2)} />
+          <rect x={-230} y={-244} width={20} height={200} rx={5} fill={wood} />
+          <rect x={-248} y={-272} width={56} height={18} rx={8} {...f(cap)} />
+          <rect x={200} y={-160} width={40} height={160} rx={10} {...f(p.color2)} />
+          <rect x={210} y={-146} width={20} height={106} rx={5} fill={wood} />
+          <rect x={192} y={-172} width={56} height={18} rx={8} {...f(cap)} />
+          <rect x={-200} y={-80} width={400} height={50} {...f(shade(p.color2, -0.1))} />
+          <path d={dots([[-186, -55], [186, -55]])} stroke="#c9a227" strokeWidth={9} strokeLinecap="round" />
+          <rect x={-200} y={-130} width={400} height={56} rx={10} {...f('#f4f4f4')} />
+          <path d="M -194 -92 h 80" stroke="#c9d4de" strokeWidth={3} strokeDasharray="10 7" />
+          <ellipse cx={-156} cy={-148} rx={42} ry={20} {...f('#dfe7ef')} />
+          <ellipse cx={-150} cy={-140} rx={50} ry={24} {...f('#ffffff')} />
+          <path d="M -188 -146 q 18 -12 44 -6 M -176 -132 q 16 6 34 2" fill="none" stroke="#c9d4de" strokeWidth={3} strokeLinecap="round" />
+          <path d="M -100 -150 L 200 -150 L 200 -70 L -110 -70 Q -122 -110 -100 -150 Z" {...f(p.color)} />
+          <path d="M -8 -150 h 28 v 80 h -28 Z M 62 -150 h 28 v 80 h -28 Z M 132 -150 h 28 v 80 h -28 Z" fill={shade(p.color, -0.14)} />
+          <path d="M -110 -128 h 310 v 12 h -310 Z" fill={shade(p.color, 0.16)} opacity={0.7} />
+          <path d="M -100 -150 L -60 -150 L -70 -70 L -110 -70 Q -122 -110 -100 -150 Z" fill={shade(p.color, 0.3)} />
+          <path d="M -60 -78 h 256" stroke={shade(p.color, -0.3)} strokeWidth={3} strokeDasharray="12 8" />
+        </g>
+      );
+    },
   },
   {
     id: 'hospital-bed',
@@ -1058,18 +1205,32 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#b2c475',
     defaultColor2: '#dbb016',
     colors: 'color = shade, color2 = pole',
-    render: (p) => (
-      <g>
-        <rect x={-8} y={-330} width={16} height={330} {...f(p.color2)} />
-        <ellipse cx={0} cy={0} rx={56} ry={12} {...f(p.color2)} />
-        <path d="M -60 -330 L 60 -330 L 34 -440 L -34 -440 Z" {...f(p.color)} />
-      </g>
-    ),
+    render: (p) => {
+      const trim = shade(p.color, -0.22);
+      const collar = shade(p.color2, -0.2);
+      return (
+        <g>
+          <ellipse cx={0} cy={0} rx={56} ry={12} {...f(p.color2)} />
+          <ellipse cx={0} cy={-3} rx={34} ry={7} fill={shade(p.color2, 0.26)} />
+          <rect x={-8} y={-330} width={16} height={330} {...f(p.color2)} />
+          <path d="M -3 -320 V -14" stroke={shade(p.color2, 0.4)} strokeWidth={3} strokeLinecap="round" />
+          <rect x={-12} y={-24} width={24} height={10} rx={3} fill={collar} />
+          <rect x={-12} y={-190} width={24} height={10} rx={3} fill={collar} />
+          <path d="M 22 -330 V -282" stroke="#8d939b" strokeWidth={2.5} strokeDasharray="3 3" />
+          <circle cx={22} cy={-278} r={5} fill={collar} />
+          <rect x={-16} y={-342} width={32} height={14} rx={3} fill={collar} />
+          <path d={LAMP_SHADE} {...f(p.color)} />
+          <path d={LAMP_TRIM} fill={trim} />
+          <path d="M -30 -344 L -18 -428 M 0 -344 L 0 -428 M 30 -344 L 18 -428" stroke={shade(p.color, -0.1)} strokeWidth={2.5} />
+        </g>
+      );
+    },
     lights: (p, ctx) =>
       isDim(ctx) ? (
         <g>
           {glow(0, -380, 120)}
-          <path d="M -60 -330 L 60 -330 L 34 -440 L -34 -440 Z" fill={shade(p.color, 0.55)} />
+          <path d={LAMP_SHADE} fill={shade(p.color, 0.55)} />
+          <path d={LAMP_TRIM} fill={shade(p.color, 0.2)} />
         </g>
       ) : null,
   },
@@ -1402,16 +1563,27 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 450,
     defaultY: 700,
     defaultColor: '#8e9aa6',
-    render: (p) => (
-      <g>
-        <rect x={-140} y={-450} width={20} height={410} {...f(shade(p.color, -0.1))} />
-        <rect x={120} y={-450} width={20} height={410} {...f(shade(p.color, -0.1))} />
-        <rect x={-120} y={-400} width={240} height={350} {...f(p.color)} />
-        <rect x={84} y={-240} width={24} height={14} rx={3} fill="#c9c9c9" />
-        <rect x={-148} y={-40} width={12} height={40} fill="#9aa3ad" />
-        <rect x={136} y={-40} width={12} height={40} fill="#9aa3ad" />
-      </g>
-    ),
+    render: (p) => {
+      const line = shade(p.color, -0.16);
+      return (
+        <g>
+          <rect x={-140} y={-450} width={20} height={410} {...f(shade(p.color, -0.1))} />
+          <rect x={120} y={-450} width={20} height={410} {...f(shade(p.color, -0.1))} />
+          <rect x={-148} y={-462} width={296} height={14} rx={3} {...f(shade(p.color, -0.26))} />
+          <rect x={-120} y={-400} width={240} height={350} {...f(p.color)} />
+          <rect x={-100} y={-380} width={200} height={310} rx={4} fill="none" stroke={line} strokeWidth={4} />
+          <rect x={-128} y={-360} width={20} height={28} rx={3} fill="#c9c9c9" />
+          <rect x={-128} y={-120} width={20} height={28} rx={3} fill="#c9c9c9" />
+          <rect x={76} y={-252} width={40} height={36} rx={4} fill="#9aa3ad" />
+          <rect x={84} y={-240} width={24} height={14} rx={3} fill="#d33b2c" />
+          <path d="M -8 -352 v 12 q 0 8 8 8 q 8 0 8 -8" fill="none" stroke="#c9c9c9" strokeWidth={5} strokeLinecap="round" />
+          <Label p={p} y={-272} lines={['WUZ', 'HERE']} size={26} fill={shade(p.color, -0.42)} font={CHALK} weight={700} />
+          <path d="M -40 -212 q 40 -16 80 -2 M -30 -196 q 30 -8 58 2" fill="none" stroke={shade(p.color, -0.42)} strokeWidth={3} strokeLinecap="round" />
+          <rect x={-148} y={-40} width={12} height={40} fill="#9aa3ad" />
+          <rect x={136} y={-40} width={12} height={40} fill="#9aa3ad" />
+        </g>
+      );
+    },
   },
   {
     id: 'trophy-case',
@@ -1483,17 +1655,25 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 140,
     defaultY: 780,
     defaultColor: '#9aa3ad',
-    render: (p, ctx) => (
-      <g>
-        <path d="M -42 0 L -48 -120 L 48 -120 L 42 0 Z" {...f(p.color)} />
-        {[-24, 0, 24].map((x) => (
-          <path key={x} d={`M ${x} -110 L ${x * 0.9} -10`} stroke={shade(p.color, -0.2)} strokeWidth={4} />
-        ))}
-        <ellipse cx={0} cy={-122} rx={54} ry={12} {...f(shade(p.color, 0.1))} />
-        <rect x={-12} y={-142} width={24} height={14} rx={6} {...f(shade(p.color, -0.1))} />
-        {isSnowy(ctx.set) && <path className={nat} d="M -52 -126 Q -30 -146 0 -138 Q 30 -150 52 -126 Z" fill={SNOW} />}
-      </g>
-    ),
+    render: (p, ctx) => {
+      const band = shade(p.color, -0.16);
+      return (
+        <g>
+          <path d="M -46 -96 q -16 -2 -14 12 q 2 10 15 6 M 46 -96 q 16 -2 14 12 q -2 10 -15 6" fill="none" stroke={shade(p.color, -0.32)} strokeWidth={6} strokeLinecap="round" />
+          <path d="M -42 0 L -48 -120 L 48 -120 L 42 0 Z" {...f(p.color)} />
+          <path d="M 24 -110 L 48 -120 L 42 0 L 22 0 Z" fill={shade(p.color, -0.1)} />
+          {[-24, 0, 24].map((x) => (
+            <path key={x} d={`M ${x} -100 L ${x * 0.9} -20`} stroke={shade(p.color, -0.22)} strokeWidth={4} />
+          ))}
+          <path d="M -47 -110 L 47 -110 L 46 -98 L -46 -98 Z M -43.4 -18 L 43.4 -18 L 42 0 L -42 0 Z" fill={band} />
+          <ellipse cx={-14} cy={-58} rx={9} ry={15} transform="rotate(12 -14 -58)" fill={shade(p.color, 0.2)} />
+          <ellipse cx={0} cy={-122} rx={54} ry={12} {...f(shade(p.color, 0.1))} />
+          <ellipse cx={0} cy={-124} rx={38} ry={7} fill="none" stroke={band} strokeWidth={3} />
+          <path d="M -15 -128 q 15 -24 30 0" fill="none" stroke={shade(p.color, -0.26)} strokeWidth={7} strokeLinecap="round" />
+          {isSnowy(ctx.set) && <path className={nat} d="M -52 -126 Q -30 -146 0 -138 Q 30 -150 52 -126 Z" fill={SNOW} />}
+        </g>
+      );
+    },
   },
 
   /* ---------- buildings ---------- */
@@ -1803,6 +1983,11 @@ export const KIT_PIECES: KitPieceDef[] = [
     render: (p, ctx) => (
       <g className={nat}>
         <path d={scallop(0, -54, 100, 50, 9, 0.1)} fill={p.color} />
+        <path d={scallop(6, -28, 76, 20, 8, 0.1)} fill={shade(p.color, -0.16)} />
+        <path d={scallop(-34, -66, 48, 28, 7, 0.12)} fill={shade(p.color, 0.14)} />
+        <path d={scallop(40, -58, 38, 24, 6, 0.12)} fill={shade(p.color, 0.08)} />
+        <path d="M -72 -66 q 8 -9 16 0 M -36 -82 q 8 -9 16 0 M -18 -52 q 8 -9 16 0 M 26 -66 q 8 -9 16 0 M 56 -48 q 8 -9 16 0 M -56 -36 q 8 -9 16 0" fill="none" stroke={shade(p.color, -0.26)} strokeWidth={3.5} strokeLinecap="round" />
+        <path d={dots([[-52, -54], [-8, -74], [14, -40], [50, -66], [76, -44], [-24, -30]])} stroke="#d33b2c" strokeWidth={8} strokeLinecap="round" />
         {isSnowy(ctx.set) && <path d={`M -96 -70 Q -60 -118 0 -108 Q 60 -122 96 -70 Q 50 -86 0 -78 Q -50 -90 -96 -70 Z`} fill={SNOW} />}
       </g>
     ),
@@ -1817,18 +2002,22 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 130,
     defaultY: 760,
     defaultColor: '#a5713d',
-    render: (p, ctx) => (
-      <g>
-        <rect x={-160} y={-96} width={320} height={16} {...f(shade(p.color, -0.12))} />
-        <rect x={-160} y={-44} width={320} height={16} {...f(shade(p.color, -0.12))} />
-        {Array.from({ length: 8 }, (_, i) => {
-          const x = -152 + i * 40;
-          return <path key={i} d={`M ${x} 0 L ${x} -110 L ${x + 13} -128 L ${x + 26} -110 L ${x + 26} 0 Z`} {...f(p.color)} />;
-        })}
-        {isSnowy(ctx.set) &&
-          Array.from({ length: 8 }, (_, i) => <path key={i} className={nat} d={`M ${-154 + i * 40} -110 L ${-139 + i * 40} -132 L ${-124 + i * 40} -110 Z`} fill={SNOW} />)}
-      </g>
-    ),
+    render: (p, ctx) => {
+      const xs = Array.from({ length: 8 }, (_, i) => -152 + i * 40);
+      return (
+        <g>
+          <rect x={-160} y={-96} width={320} height={16} {...f(shade(p.color, -0.12))} />
+          <rect x={-160} y={-44} width={320} height={16} {...f(shade(p.color, -0.12))} />
+          {xs.map((x) => (
+            <path key={x} d={`M ${x} 0 L ${x} -110 L ${x + 13} -128 L ${x + 26} -110 L ${x + 26} 0 Z`} {...f(p.color)} />
+          ))}
+          <path d={xs.map((x, i) => `M ${x + 8 + (i % 3) * 3} ${-104 + (i % 2) * 12} v ${40 + (i % 3) * 8} M ${x + 18 - (i % 2) * 4} ${-58 + (i % 3) * 6} v 34`).join(' ')} stroke={shade(p.color, -0.2)} strokeWidth={2} strokeLinecap="round" />
+          <path d={dots(xs.flatMap((x) => [[x + 13, -88], [x + 13, -36]] as [number, number][]))} stroke={shade(p.color, -0.5)} strokeWidth={4.5} strokeLinecap="round" />
+          {isSnowy(ctx.set) &&
+            Array.from({ length: 8 }, (_, i) => <path key={i} className={nat} d={`M ${-154 + i * 40} -110 L ${-139 + i * 40} -132 L ${-124 + i * 40} -110 Z`} fill={SNOW} />)}
+        </g>
+      );
+    },
   },
   {
     id: 'streetlight',
@@ -1840,15 +2029,26 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 440,
     defaultY: 740,
     defaultColor: '#3d3d44',
-    render: (p) => (
-      <g>
-        <rect x={-30} y={-16} width={60} height={16} {...f(p.color)} />
-        <rect x={-9} y={-380} width={18} height={370} {...f(p.color)} />
-        <path d="M -30 -380 L 30 -380 L 20 -430 L -20 -430 Z" {...f(p.color)} />
-        <circle cx={0} cy={-404} r={11} fill="#fff6a8" />
-        <path d="M -24 -430 L 24 -430 L 0 -446 Z" {...f(p.color)} />
-      </g>
-    ),
+    render: (p) => {
+      const ring = shade(p.color, 0.2);
+      return (
+        <g>
+          <rect x={-30} y={-16} width={60} height={16} {...f(p.color)} />
+          <path d="M -18 -16 L -13 -76 L 13 -76 L 18 -16 Z" {...f(p.color)} />
+          <rect x={-9} y={-380} width={18} height={310} {...f(p.color)} />
+          <path d="M -3 -366 V -84" stroke={shade(p.color, 0.32)} strokeWidth={3} strokeLinecap="round" />
+          <rect x={-14} y={-80} width={28} height={8} rx={3} fill={ring} />
+          <rect x={-13} y={-300} width={26} height={7} rx={3} fill={ring} />
+          <path d="M -30 -348 H 30" stroke={p.color} strokeWidth={6} strokeLinecap="round" />
+          <path d="M -30 -380 L 30 -380 L 20 -430 L -20 -430 Z" {...f(p.color)} />
+          <path d="M -24 -384 L 24 -384 L 17 -426 L -17 -426 Z" fill="#fff1b0" />
+          <circle cx={0} cy={-404} r={11} fill="#fff6a8" />
+          <path d="M 0 -384 V -426 M -21 -405 H 21" stroke={p.color} strokeWidth={3} />
+          <path d="M -24 -430 L 24 -430 L 0 -446 Z" {...f(p.color)} />
+          <circle cx={0} cy={-450} r={5} fill={p.color} />
+        </g>
+      );
+    },
     lights: (_p, ctx) =>
       isDim(ctx) ? (
         <g>
@@ -1869,17 +2069,28 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 130,
     defaultY: 800,
     defaultColor: '#a5713d',
-    render: (p, ctx) => (
-      <g>
-        <rect x={-110} y={-60} width={14} height={60} {...f('#6b4226')} />
-        <rect x={96} y={-60} width={14} height={60} {...f('#6b4226')} />
-        <rect x={-130} y={-80} width={260} height={22} {...f(p.color)} />
-        <rect x={-130} y={-126} width={260} height={20} {...f(p.color)} />
-        <rect x={-104} y={-106} width={10} height={26} fill="#6b4226" />
-        <rect x={94} y={-106} width={10} height={26} fill="#6b4226" />
-        {isSnowy(ctx.set) && <path className={nat} d="M -130 -126 q 130 -18 260 0" fill="none" stroke="#fff" strokeWidth={10} strokeLinecap="round" />}
-      </g>
-    ),
+    render: (p, ctx) => {
+      const iron = '#3d3d44';
+      const grain = shade(p.color, -0.2);
+      return (
+        <g>
+          <rect x={-110} y={-60} width={14} height={60} {...f(iron)} />
+          <rect x={96} y={-60} width={14} height={60} {...f(iron)} />
+          <rect x={-118} y={-6} width={30} height={6} rx={2} fill={iron} />
+          <rect x={88} y={-6} width={30} height={6} rx={2} fill={iron} />
+          <rect x={-104} y={-126} width={10} height={46} fill={iron} />
+          <rect x={94} y={-126} width={10} height={46} fill={iron} />
+          <rect x={-130} y={-126} width={260} height={9} rx={2} {...f(p.color)} />
+          <rect x={-130} y={-114} width={260} height={9} rx={2} {...f(p.color)} />
+          <rect x={-130} y={-80} width={260} height={10} rx={2} {...f(p.color)} />
+          <rect x={-130} y={-68} width={260} height={10} rx={2} {...f(p.color)} />
+          <path d="M -80 -122 h 60 M 10 -110 h 70 M -66 -75 h 44 M 30 -63 h 60" stroke={grain} strokeWidth={2} strokeLinecap="round" />
+          <path d={dots([[-99, -121], [-99, -109], [-99, -75], [-99, -63], [99, -121], [99, -109], [99, -75], [99, -63]])} stroke="#c9c9c9" strokeWidth={4} strokeLinecap="round" />
+          <path d="M -122 -60 V -88 Q -122 -98 -110 -98 H -94 M 122 -60 V -88 Q 122 -98 110 -98 H 94" fill="none" stroke={iron} strokeWidth={8} strokeLinecap="round" />
+          {isSnowy(ctx.set) && <path className={nat} d="M -130 -126 q 130 -18 260 0" fill="none" stroke="#fff" strokeWidth={10} strokeLinecap="round" />}
+        </g>
+      );
+    },
   },
   {
     id: 'car',
@@ -1895,14 +2106,22 @@ export const KIT_PIECES: KitPieceDef[] = [
       <g>
         <path d="M -100 -110 L -70 -176 L 80 -176 L 120 -110 Z" {...f(p.color)} />
         <path d="M -82 -114 L -60 -162 L -6 -162 L -6 -114 Z M 6 -114 L 6 -162 L 70 -162 L 100 -114 Z" {...f(isDim(ctx) ? '#2e3a5c' : '#bfe6ff')} />
+        <path d="M -60 -156 L -46 -156 L -68 -118 L -76 -118 Z M 22 -158 L 36 -158 L 18 -128 L 8 -128 Z" fill="#fff" opacity={0.5} />
         <rect x={-176} y={-120} width={352} height={84} rx={30} {...f(p.color)} />
+        <path d="M -150 -108 H 150" stroke={shade(p.color, 0.28)} strokeWidth={4} strokeLinecap="round" />
+        <path d="M 96 -122 q 4 -12 22 -11 q 5 7 -3 13 Z" fill={shade(p.color, -0.3)} />
         <rect x={150} y={-104} width={24} height={18} rx={6} fill="#fff6a8" />
         <rect x={-176} y={-100} width={18} height={16} rx={4} fill="#d33b2c" />
-        <path d="M -6 -114 L -6 -50 M 20 -88 L 40 -88" stroke={O} strokeWidth={3} />
+        <rect x={158} y={-56} width={30} height={14} rx={6} fill="#9aa3ad" />
+        <rect x={-188} y={-56} width={30} height={14} rx={6} fill="#9aa3ad" />
+        <path d="M -6 -114 L -6 -50 M 20 -88 L 40 -88 M -46 -88 L -26 -88" stroke={O} strokeWidth={3} />
+        <circle cx={-134} cy={-86} r={7} fill={shade(p.color, -0.22)} />
+        <path d="M -150 -36 A 42 42 0 0 1 -66 -36 Z M 66 -36 A 42 42 0 0 1 150 -36 Z" fill="#1f1f22" />
         {[-108, 108].map((x) => (
           <g key={x}>
             <circle cx={x} cy={-34} r={34} {...f('#2b2b2f')} />
             <circle cx={x} cy={-34} r={14} {...f('#c9c9c9')} strokeWidth={2} />
+            <circle cx={x} cy={-34} r={5} fill="#7a7a80" />
           </g>
         ))}
         {isSnowy(ctx.set) && <path className={nat} d="M -72 -176 Q 0 -196 80 -176 Z" fill={SNOW} />}
@@ -1948,9 +2167,17 @@ export const KIT_PIECES: KitPieceDef[] = [
       <g>
         <rect x={-38} y={-40} width={12} height={40} fill="#2b2b2f" />
         <rect x={26} y={-40} width={12} height={40} fill="#2b2b2f" />
+        <rect x={-44} y={-6} width={24} height={6} rx={2} fill="#2b2b2f" />
+        <rect x={20} y={-6} width={24} height={6} rx={2} fill="#2b2b2f" />
         <path d="M -46 -40 L -46 -140 Q -46 -176 0 -176 Q 46 -176 46 -140 L 46 -40 Z" {...f(p.color)} />
+        <path d="M 26 -40 L 26 -168 Q 46 -160 46 -140 L 46 -40 Z" fill={shade(p.color, -0.18)} />
+        <path d="M -32 -150 Q -30 -164 -12 -168" fill="none" stroke={shade(p.color, 0.34)} strokeWidth={4} strokeLinecap="round" />
+        <rect x={-34} y={-148} width={68} height={24} rx={4} fill={shade(p.color, -0.24)} />
         <rect x={-30} y={-140} width={60} height={10} rx={4} fill="#2b2b2f" />
+        <rect x={-14} y={-150} width={28} height={6} rx={3} fill="#c9c9c9" />
         <rect x={-30} y={-110} width={60} height={30} fill="#fff" />
+        <Label p={p} y={-95} lines={['MAIL']} size={19} fill={p.color} />
+        <rect x={-46} y={-60} width={92} height={7} fill={shade(p.color, 0.22)} />
         {isSnowy(ctx.set) && <path className={nat} d="M -44 -150 Q -40 -186 0 -184 Q 40 -186 44 -150 Q 20 -164 0 -160 Q -20 -166 -44 -150 Z" fill={SNOW} />}
       </g>
     ),
@@ -1965,15 +2192,29 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 110,
     defaultY: 810,
     defaultColor: '#d33b2c',
-    render: (p) => (
-      <g>
-        <rect x={-30} y={-10} width={60} height={10} {...f(shade(p.color, -0.2))} />
-        <rect x={-22} y={-86} width={44} height={78} rx={6} {...f(p.color)} />
-        <rect x={-38} y={-66} width={76} height={20} rx={8} {...f(p.color)} />
-        <path d="M -24 -86 Q -24 -112 0 -112 Q 24 -112 24 -86 Z" {...f(p.color)} />
-        <rect x={-6} y={-124} width={12} height={14} fill={shade(p.color, -0.2)} />
-      </g>
-    ),
+    render: (p) => {
+      const dark = shade(p.color, -0.2);
+      const deep = shade(p.color, -0.36);
+      return (
+        <g>
+          <rect x={-30} y={-10} width={60} height={10} {...f(dark)} />
+          <path d={dots([[-22, -5], [-7, -5], [7, -5], [22, -5]])} stroke="#c9c9c9" strokeWidth={3.5} strokeLinecap="round" />
+          <rect x={-22} y={-86} width={44} height={78} rx={6} {...f(p.color)} />
+          <path d="M -13 -80 V -18" stroke={shade(p.color, 0.34)} strokeWidth={4} strokeLinecap="round" />
+          <rect x={-22} y={-34} width={44} height={7} fill="#f4f4f4" />
+          <rect x={-38} y={-66} width={76} height={20} rx={8} {...f(p.color)} />
+          <rect x={-46} y={-64} width={10} height={16} rx={3} fill={dark} />
+          <rect x={36} y={-64} width={10} height={16} rx={3} fill={dark} />
+          <path d="M -40 -50 q 8 18 28 8" fill="none" stroke="#c9c9c9" strokeWidth={2.5} strokeDasharray="3 3" />
+          <circle cx={0} cy={-56} r={13} fill={dark} />
+          <path d="M -6 -56 L -3 -61 L 3 -61 L 6 -56 L 3 -51 L -3 -51 Z" fill={deep} />
+          <path d="M -24 -86 Q -24 -112 0 -112 Q 24 -112 24 -86 Z" {...f(p.color)} />
+          <rect x={-27} y={-90} width={54} height={7} rx={3} fill={dark} />
+          <path d={dots([[-16, -86.5], [0, -86.5], [16, -86.5]])} stroke="#c9c9c9" strokeWidth={3} strokeLinecap="round" />
+          <path d="M -8 -124 L 8 -124 L 10 -110 L -10 -110 Z" fill={dark} />
+        </g>
+      );
+    },
   },
   {
     id: 'snowman',
@@ -2026,11 +2267,14 @@ export const KIT_PIECES: KitPieceDef[] = [
       return (
         <g>
           <rect x={-10} y={-200} width={20} height={200} {...f('#6f604c')} />
+          <path d="M -3 -180 v 70 M 4 -130 v 90 M -4 -60 v 44" stroke="#544836" strokeWidth={2.5} strokeLinecap="round" />
           {Array.from({ length: planks }, (_, i) => {
             const top = -300 + i * ph;
             const tilt = i % 2 ? 3 : -2;
             return <path key={i} d={`M -140 ${top + tilt} L 140 ${top - tilt} L 140 ${top + ph - tilt} L -140 ${top + ph + tilt} Z`} {...f(i % 2 ? '#8a7863' : '#97846c')} />;
           })}
+          <path d="M -134 -288 h 16 M -136 -272 h 12 M 118 -286 h 16 M 122 -272 h 12 M -134 -246 h 12 M 120 -244 h 14 M -134 -208 h 16 M 118 -206 h 16" stroke="#6f604c" strokeWidth={2.5} strokeLinecap="round" />
+          <path d={dots([[-126, -280], [126, -280], [-126, -240], [126, -240], [-126, -200], [126, -200]])} stroke="#3d3528" strokeWidth={5} strokeLinecap="round" />
           <Label p={p} y={-240} lines={lines} size={size} fill="#2e2a26" font={PAINT} weight={700} />
           {isSnowy(ctx.set) && <path className={nat} d="M -142 -300 q 142 -20 284 0 l 0 10 q -142 -14 -284 0 Z" fill={SNOW} />}
         </g>
@@ -2050,7 +2294,14 @@ export const KIT_PIECES: KitPieceDef[] = [
     defaultColor: '#8e8c92',
     render: (p, ctx) => (
       <g className={nat}>
+        <ellipse cx={-112} cy={-7} rx={18} ry={9} fill={shade(p.color, -0.1)} />
+        <ellipse cx={116} cy={-5} rx={13} ry={7} fill={shade(p.color, 0.08)} />
         <path d="M -100 0 Q -110 -60 -60 -90 Q -10 -118 50 -96 Q 104 -76 100 0 Z" fill={p.color} />
+        <path d="M 50 -96 Q 104 -76 100 0 L 28 0 Q 46 -50 14 -103 Q 32 -104 50 -96 Z" fill={shade(p.color, -0.16)} />
+        <path d="M -92 -18 Q -60 -36 -30 -20 Q -12 -10 -6 0 L -100 0 Q -100 -10 -92 -18 Z" fill={shade(p.color, -0.08)} />
+        <path d="M -38 -40 l 14 -14 l -4 -14 l 16 -10 M -24 -54 l -16 -5" fill="none" stroke={shade(p.color, -0.32)} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M 54 -60 l -10 14 l 8 12" fill="none" stroke={shade(p.color, -0.36)} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={dots([[-60, -58], [-74, -40], [-8, -28], [12, -46], [70, -28], [46, -16], [-50, -10]])} stroke={shade(p.color, -0.24)} strokeWidth={4.5} strokeLinecap="round" />
         <path d="M -50 -76 Q -10 -96 30 -84" fill="none" stroke={shade(p.color, 0.3)} strokeWidth={8} strokeLinecap="round" />
         {isSnowy(ctx.set) && <path d="M -72 -82 Q -10 -126 64 -92 Q 20 -96 -10 -86 Q -40 -92 -72 -82 Z" fill={SNOW} />}
       </g>
@@ -2108,19 +2359,33 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 200,
     defaultY: 780,
     defaultColor: '#2f6b4f',
-    render: (p, ctx) => (
-      <g>
-        <path d="M -140 -20 L -150 -170 L 150 -170 L 140 -20 Z" {...f(p.color)} />
-        <path d="M -156 -170 L 156 -170 L 150 -196 L -150 -186 Z" {...f(shade(p.color, -0.25))} />
-        {[-80, 0, 80].map((x) => (
-          <path key={x} d={`M ${x} -150 L ${x} -40`} stroke={shade(p.color, -0.25)} strokeWidth={5} />
-        ))}
-        {[-110, 110].map((x) => (
-          <circle key={x} cx={x} cy={-12} r={12} {...f('#2b2b2f')} />
-        ))}
-        {isSnowy(ctx.set) && <path className={nat} d="M -156 -186 Q 0 -214 156 -196 Z" fill={SNOW} />}
-      </g>
-    ),
+    render: (p, ctx) => {
+      const rib = shade(p.color, -0.16);
+      const lid = shade(p.color, -0.25);
+      return (
+        <g>
+          <path d="M -112 -176 q 8 -34 42 -22 q 16 -16 34 6 L -36 -176 Z" fill="#2b2b2f" />
+          <path d="M -80 -196 q 10 8 22 -2" fill="none" stroke="#55555a" strokeWidth={3} strokeLinecap="round" />
+          <rect x={30} y={-206} width={66} height={40} rx={2} transform="rotate(-10 62 -186)" fill="#c9a07a" />
+          <path d="M -140 -20 L -150 -170 L 150 -170 L 140 -20 Z" {...f(p.color)} />
+          {[-110, -38, 38, 110].map((x) => (
+            <rect key={x} x={x - 8} y={-160} width={16} height={128} rx={3} fill={rib} />
+          ))}
+          <rect x={-147} y={-138} width={294} height={10} rx={3} fill={shade(p.color, -0.3)} />
+          <path d="M -134 -30 q 12 -16 26 -4 q 8 8 2 14 L -134 -20 Z M 96 -158 q 18 -8 44 -2 q -2 18 -20 14 q -18 2 -24 -12 Z" fill="#8a5a32" opacity={0.75} />
+          <Label p={p} y={-82} lines={['TRASH']} size={38} fill={shade(p.color, 0.42)} />
+          <path d="M -156 -170 L 0 -170 L 0 -192 L -150 -186 Z M 156 -170 L 0 -170 L 0 -192 L 150 -196 Z" {...f(lid)} />
+          <path d="M -120 -180 h 60 M 60 -182 h 60" stroke={shade(lid, -0.3)} strokeWidth={4} strokeLinecap="round" />
+          {[-110, 110].map((x) => (
+            <g key={x}>
+              <circle cx={x} cy={-12} r={12} {...f('#2b2b2f')} />
+              <circle cx={x} cy={-12} r={4} fill="#9aa3ad" />
+            </g>
+          ))}
+          {isSnowy(ctx.set) && <path className={nat} d="M -156 -186 Q 0 -214 156 -196 Z" fill={SNOW} />}
+        </g>
+      );
+    },
   },
 
   /* ---------- sky ---------- */
@@ -2134,7 +2399,12 @@ export const KIT_PIECES: KitPieceDef[] = [
     h: 110,
     defaultY: 200,
     defaultColor: '#ffffff',
-    render: (p) => cloud(0, -55, 1.4, p.color),
+    render: (p) => (
+      <g>
+        {cloud(0, -55, 1.4, p.color)}
+        <path className={nat} d="M -92 -44 q 16 -16 32 -2 M -18 -36 q 18 -16 36 -2 M 54 -46 q 16 -14 32 0 M -36 -72 q 14 -14 28 -2" fill="none" stroke={shade(p.color, -0.1)} strokeWidth={5} strokeLinecap="round" />
+      </g>
+    ),
   },
   {
     id: 'sun-moon',
@@ -2145,17 +2415,36 @@ export const KIT_PIECES: KitPieceDef[] = [
     w: 180,
     h: 180,
     defaultY: 260,
-    render: (_p, ctx) =>
-      ctx.time === 'night' ? null : (
-        <circle className={nat} cx={0} cy={-90} r={ctx.time === 'dusk' ? 84 : 66} fill={ctx.time === 'dusk' ? '#ff9a3c' : '#ffe25c'} />
-      ),
+    render: (_p, ctx) => {
+      if (ctx.time === 'night') return null;
+      const dusk = ctx.time === 'dusk';
+      const r = dusk ? 84 : 66;
+      const rays = Array.from({ length: 12 }, (_, i) => {
+        const a = (i * Math.PI) / 6;
+        const at = (d: number, off: number) => `${(Math.cos(a + off) * d).toFixed(1)} ${(-90 + Math.sin(a + off) * d).toFixed(1)}`;
+        return `M ${at(r + 8, -0.13)} L ${at(r + 34, 0)} L ${at(r + 8, 0.13)} Z`;
+      }).join(' ');
+      return (
+        <g className={nat}>
+          {!dusk && <path d={rays} fill="#ffd23c" />}
+          <circle cx={0} cy={-90} r={r} fill={dusk ? '#ff9a3c' : '#ffe25c'} />
+          <circle cx={0} cy={-90} r={r * 0.72} fill={dusk ? '#ffb45e' : '#fff0a0'} />
+        </g>
+      );
+    },
     lights: (_p, ctx) =>
       ctx.time === 'night' ? (
         <g>
           <circle cx={0} cy={-90} r={70} fill="#fff6c4" stroke={O} strokeWidth={3} />
+          <path d="M 28 -154 A 70 70 0 0 1 28 -26 A 84 84 0 0 0 28 -154 Z" fill="#efe3a6" />
           <circle cx={-24} cy={-110} r={12} fill="#e9dfa8" />
+          <circle cx={-27} cy={-113} r={8} fill="#ddd196" />
           <circle cx={30} cy={-64} r={8} fill="#e9dfa8" />
           <circle cx={10} cy={-120} r={6} fill="#e9dfa8" />
+          <circle cx={-34} cy={-64} r={9} fill="#e9dfa8" />
+          <circle cx={-36} cy={-66} r={5.5} fill="#ddd196" />
+          <circle cx={4} cy={-58} r={4} fill="#e9dfa8" />
+          <circle cx={38} cy={-108} r={5} fill="#e9dfa8" />
         </g>
       ) : null,
   },
@@ -2606,7 +2895,7 @@ export function renderKitPiece(set: KitSet, pieceId: string): ReactNode {
   return (
     <g className="sp-scene">
       {tint && tintDef(set.time)}
-      <g filter={tint}>{placed(p, def.render(p, { time: set.time, set }), p.id)}</g>
+      <g filter={tint}>{placed(p, def.render(p, { time: set.time, set, cover: true }), p.id)}</g>
     </g>
   );
 }
