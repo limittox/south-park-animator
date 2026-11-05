@@ -76,7 +76,9 @@ function swing(g: BodyGeo, side: -1 | 1, deg: number, r: number): Pt {
  * one-armed gestures (waving, pointing), normally the side the character is facing.
  */
 export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number, talk = 0): ArmsPose {
-  const mouth: Pt = [g.headCx + lead * g.headRx * 0.14, g.headCy + g.headRy * (g.isAdult ? 0.52 : 0.74)];
+  // Side on, the face is out at the front of the head.
+  const faceX = (front: number, side: -1 | 1) => g.headCx + (g.profile ? g.headRx * 0.62 : side * g.headRx * front);
+  const mouth: Pt = [faceX(0.14, lead), g.headCy + g.headRy * (g.isAdult ? 0.52 : 0.74)];
   const arm = (side: -1 | 1): ArmState => {
     const isLead = side === lead;
     switch (gesture) {
@@ -98,9 +100,9 @@ export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number
         return reach(g, side, swing(g, side, 122 + Math.sin(t * TAU * 8 + side) * 5, 0.72), 0.42, 'down');
       // Hand-to-face gestures are drawn over the head, with the elbow kept out to the side so the arm reads as one gentle bend.
       case 'facepalm':
-        return isLead ? reach(g, side, [g.headCx + side * g.headRx * 0.1, g.headCy + g.headRy * 0.14], 0.14, 'out', true) : restArm(g, side);
+        return isLead ? reach(g, side, [faceX(0.1, side), g.headCy + g.headRy * 0.14], 0.14, 'out', true) : restArm(g, side);
       case 'thinking':
-        return isLead ? reach(g, side, [g.headCx + side * g.headRx * 0.3, g.headCy + g.headRy * 0.68], 0.12, 'out', true) : restArm(g, side);
+        return isLead ? reach(g, side, [faceX(0.3, side), g.headCy + g.headRy * 0.68], 0.12, 'out', true) : restArm(g, side);
       case 'hipHands':
         return reach(g, side, [g.cx + side * (g.hip + 4), g.torsoBottom - 26], 0.55, 'out');
       case 'explain': {
@@ -109,7 +111,7 @@ export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number
         return reach(g, side, swing(g, side, 62 + bob, 0.86), 0.26, 'down');
       }
       case 'coverEars':
-        return reach(g, side, [g.headCx + side * g.headRx * 0.96, g.headCy + g.headRy * 0.12], 0.3, 'out', true);
+        return reach(g, side, [g.profile ? g.headCx : g.headCx + side * g.headRx * 0.96, g.headCy + g.headRy * 0.12], 0.3, 'out', true);
       // Food goes in with the prop hand: up to the mouth and back for a bite, up and tipped for a drink.
       case 'eat': {
         if (side !== 1) return restArm(g, side);
@@ -128,6 +130,18 @@ export function poseArms(g: BodyGeo, gesture: GestureId, lead: -1 | 1, t: number
         return restArm(g, side);
     }
   };
+  // Side on, both arms go the way they're facing.
+  return [g.profile ? mirrorArm(arm(-1), g.cx) : arm(-1), arm(1)];
+}
+
+function mirrorArm(a: ArmState, cx: number): ArmState {
+  const m = (p: Pt): Pt => [2 * cx - p[0], p[1]];
+  return { ...a, start: m(a.start), ctrl: m(a.ctrl), end: m(a.end), hand: m(a.hand) };
+}
+
+/** Walking side on: the arms swing against each other. `stride` runs -1 (near arm back) to 1. */
+export function walkArms(g: BodyGeo, stride: number): ArmsPose {
+  const arm = (side: -1 | 1): ArmState => reach(g, side, swing(g, side, stride * 24, 1), 0.06, 'down');
   return [arm(-1), arm(1)];
 }
 

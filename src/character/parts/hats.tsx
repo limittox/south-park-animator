@@ -14,6 +14,10 @@ export interface HatDef extends ItemBase {
   muffles?: boolean;
   /** Eyes (and brows and glasses) are drawn over the hat, like eyes peeking out over a hood's fur. */
   eyesOver?: boolean;
+  /** Side on, facing right, where the front art won't do. */
+  side?: Render;
+  /** From behind, where the front art won't do. */
+  rear?: Render;
 }
 
 const f = (color: string) => ({ fill: color, ...ink });
@@ -43,6 +47,41 @@ function pomPom(color: string, cy = -124) {
   );
 }
 
+function capPeak(color: string) {
+  return (
+    <g>
+      <path d={DOME(-40, -132, 124)} {...f(color)} />
+      <path d="M 0 -132 L 0 -44 M -60 -124 Q -44 -80 -46 -44 M 60 -124 Q 44 -80 46 -44" fill="none" stroke={shade(color, -0.3)} strokeWidth={2} />
+      <path d="M -128 -44 Q 0 -62 128 -44 Q 134 -26 114 -20 Q 0 -38 -114 -20 Q -134 -26 -128 -44 Z" {...f(shade(color, -0.2))} />
+      <circle cx={0} cy={-132} r={7} {...f(shade(color, -0.2))} strokeWidth={2} />
+    </g>
+  );
+}
+
+/** A cap with its adjuster at the front: a backwards cap, or any cap from behind. */
+function capStrap(c: { color: string; c: { skin: string } }) {
+  return (
+    <g>
+      <path d={DOME(-40, -132, 124)} {...f(c.color)} />
+      <path d="M -30 -42 Q 0 -86 30 -42 Z" fill={c.c.skin} {...ink} />
+      <path d="M -24 -52 L 24 -52" stroke={shade(c.color, -0.35)} strokeWidth={4} />
+      <circle cx={0} cy={-132} r={7} {...f(shade(c.color, -0.2))} strokeWidth={2} />
+    </g>
+  );
+}
+
+/** A cap side on, with the peak sticking out at the front (1) or the back (-1). */
+function capSide(color: string, peak: 1 | -1) {
+  return (
+    <g>
+      <path d={`M ${peak * 96} -48 Q ${peak * 196} -48 ${peak * 214} -24 Q ${peak * 160} -30 ${peak * 96} -30 Z`} {...f(shade(color, -0.2))} />
+      <path d={DOME(-40, -132, 124)} {...f(color)} />
+      <path d="M 40 -128 Q 56 -80 50 -42 M -40 -128 Q -56 -80 -50 -42" fill="none" stroke={shade(color, -0.3)} strokeWidth={2} />
+      <circle cx={0} cy={-132} r={7} {...f(shade(color, -0.2))} strokeWidth={2} />
+    </g>
+  );
+}
+
 export const HATS: HatDef[] = [
   { id: 'none', name: 'No Hat', quip: 'Brain fully exposed to the elements. Bold.' },
   {
@@ -65,6 +104,16 @@ export const HATS: HatDef[] = [
     quip: 'For when your ears have frostbite feelings. Pom-pom included at no extra charge.',
     defaultColor: '#2ec4c4',
     clipHairAbove: -30,
+    side: (c) => (
+      <g>
+        <path d={KNIT_CROWN} {...f(c.color)} />
+        <path d="M -44 -30 L -46 34 Q -30 54 -12 34 L -12 -30 Z" {...f(c.color)} />
+        <path d="M -29 44 L -32 78" fill="none" stroke={accent(c.color)} strokeWidth={4} />
+        <circle cx={-32} cy={82} r={6} {...f(accent(c.color))} strokeWidth={2} />
+        <path d={KNIT_BAND} {...f(accent(c.color))} />
+        {pomPom(accent(c.color))}
+      </g>
+    ),
     front: (c) => (
       <g>
         <Mirror>
@@ -102,14 +151,9 @@ export const HATS: HatDef[] = [
     quip: 'Has never played baseball. Has strong opinions about baseball.',
     defaultColor: '#d33b2c',
     clipHairAbove: -40,
-    front: (c) => (
-      <g>
-        <path d={DOME(-40, -132, 124)} {...f(c.color)} />
-        <path d="M 0 -132 L 0 -44 M -60 -124 Q -44 -80 -46 -44 M 60 -124 Q 44 -80 46 -44" fill="none" stroke={shade(c.color, -0.3)} strokeWidth={2} />
-        <path d="M -128 -44 Q 0 -62 128 -44 Q 134 -26 114 -20 Q 0 -38 -114 -20 Q -134 -26 -128 -44 Z" {...f(shade(c.color, -0.2))} />
-        <circle cx={0} cy={-132} r={7} {...f(shade(c.color, -0.2))} strokeWidth={2} />
-      </g>
-    ),
+    side: (c) => capSide(c.color, 1),
+    rear: (c) => capStrap(c),
+    front: (c) => capPeak(c.color),
   },
   {
     id: 'backcap',
@@ -117,14 +161,9 @@ export const HATS: HatDef[] = [
     quip: 'Too cool for forwards. Walks into doors a lot.',
     defaultColor: '#26367a',
     clipHairAbove: -40,
-    front: (c) => (
-      <g>
-        <path d={DOME(-40, -132, 124)} {...f(c.color)} />
-        <path d="M -30 -42 Q 0 -86 30 -42 Z" fill={c.c.skin} {...ink} />
-        <path d="M -24 -52 L 24 -52" stroke={shade(c.color, -0.35)} strokeWidth={4} />
-        <circle cx={0} cy={-132} r={7} {...f(shade(c.color, -0.2))} strokeWidth={2} />
-      </g>
-    ),
+    front: (c) => capStrap(c),
+    side: (c) => capSide(c.color, -1),
+    rear: (c) => capPeak(c.color),
   },
   {
     id: 'tophat',
@@ -267,6 +306,22 @@ export const HATS: HatDef[] = [
     quip: 'Concussion protocol: optional. Brain cells: also optional.',
     defaultColor: '#8a1f2b',
     clipHairAbove: -30,
+    side: (c) => (
+      <g>
+        <path d="M -148 96 C -160 -112 -72 -152 0 -152 C 72 -152 144 -112 140 -40 L 56 -34 Q 22 6 34 96 Z" {...f(c.color)} />
+        <path d="M -150 -44 C -110 -130 -40 -151 40 -146" fill="none" stroke="#fff" strokeWidth={12} />
+        <circle cx={-16} cy={14} r={13} {...f(shade(c.color, -0.3))} strokeWidth={2} />
+        <g fill="none" stroke="#9aa3ad" strokeWidth={7} strokeLinecap="round">
+          <path d="M 34 14 Q 100 16 154 2 M 36 54 Q 100 66 148 42 M 110 8 L 112 62" />
+        </g>
+      </g>
+    ),
+    rear: (c) => (
+      <g>
+        <path d="M -144 90 C -152 -112 -72 -152 0 -152 C 72 -152 152 -112 144 90 Q 0 120 -144 90 Z" {...f(c.color)} />
+        <path d="M -14 -151 L -14 104 M 14 -151 L 14 104" stroke="#fff" strokeWidth={8} />
+      </g>
+    ),
     front: (c) => (
       <g>
         <path d="M -144 44 C -152 -112 -72 -152 0 -152 C 72 -152 152 -112 144 44 L 114 44 L 114 -28 Q 0 -52 -114 -28 L -114 44 Z" {...f(c.color)} />
@@ -396,6 +451,12 @@ export const HATS: HatDef[] = [
     quip: 'Arrr. Says "arrr" a lot. Has been asked to stop saying "arrr".',
     defaultColor: '#1f1f22',
     clipHairAbove: -52,
+    rear: (c) => (
+      <g>
+        <path d="M -156 -50 Q -124 -176 0 -152 Q 124 -176 156 -50 Q 0 -92 -156 -50 Z" {...f(c.color)} />
+        <path d="M -150 -58 Q 0 -100 150 -58" fill="none" stroke="#f2c230" strokeWidth={5} />
+      </g>
+    ),
     front: (c) => (
       <g>
         <path d="M -156 -50 Q -124 -176 0 -152 Q 124 -176 156 -50 Q 0 -92 -156 -50 Z" {...f(c.color)} />
@@ -415,6 +476,25 @@ export const HATS: HatDef[] = [
     hidesHair: true,
     muffles: true,
     eyesOver: true,
+    side: (c) => (
+      <g>
+        <path
+          d="M -164 40 C -168 -96 -92 -136 0 -136 C 92 -136 168 -96 164 40 C 162 96 100 122 0 122 C -100 122 -162 96 -164 40 Z M 134 4 A 42 66 0 1 0 50 4 A 42 66 0 1 0 134 4 Z"
+          fill={c.color}
+          fillRule="evenodd"
+          {...ink}
+        />
+        <ellipse cx={92} cy={4} rx={52} ry={78} fill="none" stroke="#6b4226" strokeWidth={22} />
+        <ellipse cx={92} cy={4} rx={63} ry={90} fill="none" stroke={shade(c.color, -0.18)} strokeWidth={4} />
+        <path d="M 86 78 Q 84 100 80 112" fill="none" stroke="#4a2c17" strokeWidth={4} strokeLinecap="round" />
+      </g>
+    ),
+    rear: (c) => (
+      <g>
+        <path d="M -164 40 C -168 -96 -92 -136 0 -136 C 92 -136 168 -96 164 40 C 162 96 100 122 0 122 C -100 122 -162 96 -164 40 Z" {...f(c.color)} />
+        <path d="M 0 -134 Q -8 -10 0 120" fill="none" stroke={shade(c.color, -0.18)} strokeWidth={4} />
+      </g>
+    ),
     front: (c) => (
       <g>
         {/* Measured from the show: a round hood wider than it is tall, an upright face opening ringed by
@@ -466,6 +546,20 @@ export const HATS: HatDef[] = [
     quip: 'Respect the authority. Authority pending. Please hold.',
     defaultColor: '#26367a',
     clipHairAbove: -52,
+    side: (c) => (
+      <g>
+        <path d="M -128 -62 C -140 -134 -60 -156 0 -156 C 70 -156 150 -134 150 -76 Z" {...f(c.color)} />
+        <path d="M -118 -80 L 118 -80 L 120 -52 L -120 -52 Z" {...f('#1f1f22')} />
+        <path d="M 96 -60 Q 150 -62 174 -36 Q 130 -40 92 -40 Z" {...f('#1f1f22')} />
+        <path d={starPath(92, -102, 14)} fill="#f2c230" {...ink} strokeWidth={2} />
+      </g>
+    ),
+    rear: (c) => (
+      <g>
+        <path d="M -128 -62 C -140 -134 -60 -156 0 -156 C 60 -156 140 -134 128 -62 Z" {...f(c.color)} />
+        <path d="M -118 -80 L 118 -80 L 120 -52 L -120 -52 Z" {...f('#1f1f22')} />
+      </g>
+    ),
     front: (c) => (
       <g>
         <path d="M -128 -62 C -140 -134 -60 -156 0 -156 C 60 -156 140 -134 128 -62 Z" {...f(c.color)} />
@@ -480,6 +574,14 @@ export const HATS: HatDef[] = [
     name: 'Headphones',
     quip: "Can't hear you. Doesn't want to hear you. Listening to whale sounds.",
     defaultColor: '#1f1f22',
+    side: (c) => (
+      <g>
+        <path d="M -14 -18 Q -30 -116 -8 -128" fill="none" stroke={O} strokeWidth={20} />
+        <path d="M -14 -18 Q -30 -116 -8 -128" fill="none" stroke={c.color} strokeWidth={13} />
+        <rect x={-44} y={-40} width={58} height={70} rx={22} {...f(c.color)} />
+        <rect x={-30} y={-26} width={30} height={42} rx={13} fill={accent(c.color)} />
+      </g>
+    ),
     front: (c) => (
       <g>
         <path d="M -134 -6 C -144 -170 144 -170 134 -6" fill="none" stroke={O} strokeWidth={20} />
@@ -607,6 +709,25 @@ export const HATS: HatDef[] = [
     colorable: false,
     hidesHair: true,
     hidesFace: true,
+    side: () => (
+      <g>
+        <path d="M -140 -150 L 140 -150 L 150 130 L -150 130 Z" {...f('#c9a07a')} />
+        <path d={`M -140 -150 ${scallopEdge(-140, -150, 140, -150, 9, 12)}`} fill="none" stroke={O} strokeWidth={3} />
+        <path d="M -150 130 L -120 108 L -90 130 L -60 108 L -30 130 L 0 108 L 30 130 L 60 108 L 90 130 L 120 108 L 150 130" fill="none" stroke="#9a744f" strokeWidth={2} />
+        <ellipse cx={58} cy={-6} rx={14} ry={26} fill={O} />
+        <ellipse cx={108} cy={-6} rx={14} ry={26} fill={O} />
+        <path d="M 66 66 Q 90 82 112 66" fill="none" stroke={O} strokeWidth={4} strokeLinecap="round" />
+        <path d="M -120 -110 L -100 120" stroke="#b28b62" strokeWidth={2} />
+      </g>
+    ),
+    rear: () => (
+      <g>
+        <path d="M -140 -150 L 140 -150 L 150 130 L -150 130 Z" {...f('#c9a07a')} />
+        <path d={`M -140 -150 ${scallopEdge(-140, -150, 140, -150, 9, 12)}`} fill="none" stroke={O} strokeWidth={3} />
+        <path d="M -150 130 L -120 108 L -90 130 L -60 108 L -30 130 L 0 108 L 30 130 L 60 108 L 90 130 L 120 108 L 150 130" fill="none" stroke="#9a744f" strokeWidth={2} />
+        <path d="M -120 -110 L -100 120 M 110 -120 L 128 110 M 0 -150 L 0 118" stroke="#b28b62" strokeWidth={2} />
+      </g>
+    ),
     front: () => (
       <g>
         <path d="M -140 -150 L 140 -150 L 150 130 L -150 130 Z" {...f('#c9a07a')} />

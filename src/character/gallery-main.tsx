@@ -8,11 +8,12 @@
  *   page, per  paging for long categories
  *   bg    background colour without the #, e.g. fff to check pale parts against snow
  *   vb    a viewBox to zoom into, e.g. -60,340,150,150 for a sidekick up close
+ *   turn  side or back, to check the part from another angle; stride -1 to 1 takes a step side on
  */
 import { createRoot } from 'react-dom/client';
 import '@fontsource/luckiest-guy/400.css';
 import '@fontsource/nunito/900.css';
-import type { CategoryId, CharacterState } from '../types';
+import type { CategoryId, CharacterState, View } from '../types';
 import type { GestureId } from '../episode/types';
 import { CATEGORIES, GROUPS, thumbViewBox } from '../data/catalog';
 import { GESTURE_LIST } from '../episode/catalog';
@@ -20,7 +21,7 @@ import { DEFAULT_CHARACTER } from '../data/defaults';
 import { applyItem } from '../lib/apply';
 import { CharacterSvg } from './Character';
 import { installFlatStyle } from './flat';
-import { frameViewBox, getGeo } from './geometry';
+import { frameViewBox, getGeo, sideGeo } from './geometry';
 import { poseArms } from './pose';
 
 installFlatStyle();
@@ -31,6 +32,8 @@ const bodies = (q.get('body') ?? 'kid,adult').split(',');
 const cols = Number(q.get('cols') ?? 6);
 const per = Number(q.get('per') ?? 999);
 const page = Number(q.get('page') ?? 0);
+const turn = (q.get('turn') ?? 'front') as View;
+const stride = Number(q.get('stride') ?? 0);
 
 /** A neutral model, so the part under review is what you see. */
 function base(body: string): CharacterState {
@@ -58,8 +61,8 @@ function Cell({ id, name, make }: { id: string; name: string; make: (c: Characte
           const c = make(base(b));
           const g = getGeo(c.body, c.headShape);
           const viewBox = q.get('vb')?.replaceAll(',', ' ') ?? (view === 'full' ? frameViewBox(g) : thumbViewBox(view as never, g));
-          const arms = cat === 'pose' ? poseArms(g, id as GestureId, 1, 0.2) : undefined;
-          return <CharacterSvg key={b} c={c} viewBox={viewBox} arms={arms} />;
+          const arms = cat === 'pose' ? poseArms(turn === 'side' ? sideGeo(g) : g, id as GestureId, 1, 0.2) : undefined;
+          return <CharacterSvg key={b} c={c} viewBox={viewBox} arms={arms} view={turn} stride={stride} />;
         })}
       </div>
       <div className="nm">{name}</div>

@@ -5,6 +5,38 @@ import { ink, Mirror, scallop, scallopArc, scallopEdge } from './common';
 export interface HairDef extends ItemBase {
   back?: Render;
   front?: Render;
+  /** How far down the back of the head it comes (head coordinates). */
+  nape?: number;
+  /** A ring round the sides and back with a bare crown. */
+  ring?: boolean;
+  /** A strip down the middle of the head and nothing else. */
+  strip?: boolean;
+  /** Hangs behind the head in one mass, so the head's outline doesn't show through it. */
+  mass?: boolean;
+  /** The front art has it hanging off one side, which goes to the back side on. */
+  tail?: boolean;
+  /** Side on, facing right, where the front art won't do. */
+  side?: Render;
+}
+
+/**
+ * The hair that fills the back of the head, which the front art doesn't show. `fill` goes over
+ * the head, cut to its shape; `line` is its edge. Side on it stops at a hairline running from the
+ * forehead down past the ear.
+ */
+export function hairCover(def: HairDef, view: 'side' | 'back'): { fill: string; line: string } | null {
+  if (!def.front && !def.back) return null;
+  const n = def.nape ?? 46;
+  if (view === 'back') {
+    if (def.strip) return { fill: 'M -30 -300 H 30 V 300 H -30 Z', line: 'M -30 -300 V 300 M 30 -300 V 300' };
+    const foot = `M -300 ${n} Q 0 ${n + 28} 300 ${n}`;
+    if (def.ring) return { fill: `${foot} V -34 Q 0 -8 -300 -34 Z`, line: `${foot} M 300 -34 Q 0 -8 -300 -34` };
+    return { fill: `${foot} V -300 H -300 Z`, line: foot };
+  }
+  if (def.strip) return null;
+  const line = `M 34 -50 C 12 -44 8 -30 2 -8 C -6 22 -30 ${n} -66 ${n + 6} C -120 ${n + 14} -200 ${n + 8} -300 ${n}`;
+  if (def.ring) return { fill: `${line} V -40 H 34 Z`, line: `${line} M -300 -40 H 34` };
+  return { fill: `${line} V -300 H 34 Z`, line };
 }
 
 const fill = (color: string) => ({ fill: color, ...ink });
@@ -49,6 +81,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'buzz',
     name: 'Buzz Cut',
+    nape: 30,
     quip: 'Mom did it in the kitchen with the dog clippers.',
     front: (c) => (
       <path
@@ -63,6 +96,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'messy',
     name: 'Messy',
+    nape: 58,
     quip: 'Rolled out of bed. Literally. Fell on the floor. Came to school.',
     front: (c) => (
       <path
@@ -99,6 +133,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'afro',
     name: 'Big Afro',
+    nape: 84,
+    mass: true,
     quip: 'Volume level: maximum. Has lost three pencils and a hamster in there.',
     back: (c) => <path d={scallop(0, -60, 168, 138, 22, 0.05)} {...fill(c.color)} />,
     front: (c) => (
@@ -108,6 +144,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'curly',
     name: 'Curly Mop',
+    nape: 70,
     quip: 'Hair so curly it has its own zip code. And a mayor.',
     front: (c) => (
       <path d={`M -140 -20 ${scallopArc(0, -20, 140, 124, Math.PI, Math.PI * 2, 11, 0.06)} Q 126 -40 104 -50 ${scallopEdge(104, -50, -104, -50, 9, 16)} Q -126 -40 -140 -20 Z`} {...fill(c.color)} />
@@ -116,6 +153,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'long',
     name: 'Long & Straight',
+    nape: 96,
+    mass: true,
     // Like the show: the long part hangs behind the round head; only the crown and fringe sit in front.
     quip: 'Washes it with the tears of their enemies. And conditioner.',
     back: (c) => <path d="M -140 -20 C -144 -104 -74 -128 0 -128 C 74 -128 140 -104 136 -20 L 136 100 Q 136 134 110 138 L -110 138 Q -136 134 -136 100 Z" {...fill(shade(c.color, -0.12))} />,
@@ -129,6 +168,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'wavy',
     name: 'Shampoo Ad',
+    nape: 96,
+    mass: true,
     quip: 'Flips hair in slow motion. Even in real life. Somehow.',
     back: (c) => (
       <path
@@ -165,6 +206,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'ponytail',
     name: 'Ponytail',
+    tail: true,
     quip: 'Means business. The business is recess.',
     back: (c) => (
       <path d="M 70 -100 C 150 -120 200 -60 180 40 C 172 80 150 100 140 90 C 160 40 150 -40 90 -60 Z" {...fill(shade(c.color, -0.06))} />
@@ -179,6 +221,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'bob',
     name: 'The Bob',
+    nape: 72,
+    mass: true,
     quip: 'Would like to speak to the manager. Is eight years old.',
     back: (c) => <path d="M -142 -20 C -146 -104 -74 -128 0 -128 C 74 -128 146 -104 142 -20 L 146 76 Q 0 92 -146 76 Z" {...fill(shade(c.color, -0.12))} />,
     front: (c) => (
@@ -191,6 +235,14 @@ export const HAIR: HairDef[] = [
   {
     id: 'mohawk',
     name: 'Mohawk',
+    strip: true,
+    // Side on the fin runs along the top of the head, from the forehead to the neck.
+    side: (c) => (
+      <g>
+        <path d={`${dome(124, -40, -114)} C 80 -70 -80 -70 -124 -40 Z`} fill={c.color} opacity={0.3} />
+        <path d="M 92 -72 L 116 -122 L 80 -108 L 84 -172 L 48 -128 L 28 -196 L 2 -132 L -32 -200 L -50 -126 L -92 -172 L -92 -102 L -130 -122 L -122 -44 C -96 -116 50 -128 92 -72 Z" {...fill(c.color)} />
+      </g>
+    ),
     quip: 'Punk rock forever. Bedtime is 8:30 though.',
     front: (c) => (
       <g>
@@ -203,6 +255,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'mullet',
     name: 'Mullet',
+    nape: 96,
+    mass: true,
     quip: 'Business in the front, party in the back. Mostly party.',
     back: (c) => <path d="M -130 -40 L -138 150 Q -90 170 -70 130 L 70 130 Q 90 170 138 150 L 130 -40 Z" {...fill(shade(c.color, -0.1))} />,
     front: (c) => (
@@ -226,6 +280,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'combover',
     name: 'Comb-Over',
+    ring: true,
+    nape: 30,
     quip: 'Fooling absolutely no one. Especially not the wind.',
     front: (c) => (
       <g>
@@ -240,6 +296,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'emo',
     name: 'Emo Fringe',
+    nape: 60,
+    mass: true,
     quip: "Hates conformity. Dresses exactly like all their friends. You wouldn't understand.",
     back: (c) => <path d="M -138 -20 C -142 -104 -74 -128 0 -128 C 74 -128 142 -104 138 -20 L 140 60 Q 0 74 -140 60 Z" {...fill(shade(c.color, -0.12))} />,
     front: (c) => (
@@ -270,6 +328,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'locs',
     name: 'Locs',
+    nape: 96,
     quip: 'Effortlessly cool. (It took a lot of effort.)',
     // A curtain of locs hanging behind the head to past the shoulders, a crown of rounded roots,
     // and a few in front framing the face, two of them with gold cuffs.
@@ -313,6 +372,8 @@ export const HAIR: HairDef[] = [
   {
     id: 'horseshoe',
     name: 'Horseshoe',
+    ring: true,
+    nape: 30,
     quip: 'Hair said goodbye. The sides did not get the memo.',
     front: (c) => (
       <g>
@@ -325,6 +386,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'braids',
     name: 'Long Braids',
+    mass: true,
     quip: 'Could use them as jump ropes. Has. Twice.',
     back: (c) => <path d="M -136 -20 C -140 -104 -72 -128 0 -128 C 72 -128 140 -104 136 -20 L 130 40 Q 0 54 -130 40 Z" {...fill(shade(c.color, -0.12))} />,
     front: (c) => (

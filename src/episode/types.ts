@@ -93,6 +93,9 @@ export interface Shot {
   follow?: boolean;
 }
 
+/** Which way someone can be told to face (or a cast id, to face them). */
+export type Facing = 'front' | 'away' | 'left' | 'right';
+
 export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'lie' | 'stand' | 'approach' | 'getIn' | 'getOut' | 'crash' | 'joinScreen' | 'leaveScreen';
 
 export interface Move {
@@ -101,8 +104,8 @@ export interface Move {
   kind: MoveKind;
   /** Target x for walk / enter / appear, the spot to sit near for sit; ignored otherwise. */
   x?: number;
-  /** Side of the screen for enter / exit. */
-  side?: 'left' | 'right';
+  /** Side of the screen for enter / exit. An exit "back" walks away from the camera: through a door, or off into the distance outdoors. */
+  side?: 'left' | 'right' | 'back';
   /** Run instead of walk (walk / enter / exit / sit / approach). */
   run?: boolean;
   /** Creep along, crouched, instead of walking. Without an x, a walk heads across the stage. */
@@ -174,6 +177,8 @@ export interface Beat {
   drift?: { item: string; style?: 'blow' | 'roll' | 'fall'; from?: 'left' | 'right'; x?: number };
   /** Cast id `who` looks at; defaults to the nearest other character. On a silent beat only their eyes move: a side-eye. */
   lookAt?: string;
+  /** Which way `who` (and `also`) face from this beat on: "front", "away" (back to the camera), "left", "right" or a cast id (side on, toward them). Walking anywhere resets it. */
+  face?: string;
   /** Camera cut at the start of the beat. Leave out to keep the previous shot. */
   shot?: Shot;
   sfx?: SfxId;
@@ -208,6 +213,8 @@ export interface Blocking {
   hold?: string;
   /** On the set's TV or the video call instead of on stage. */
   screen?: boolean;
+  /** Which way they face when the scene starts, as for a beat's `face`. */
+  face?: string;
 }
 
 export type VehicleType = 'car' | 'police' | 'bus';

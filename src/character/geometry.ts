@@ -282,6 +282,34 @@ export function seatedGeo(g: BodyGeo, hipY: number | undefined): BodyGeo {
   return { ...g, headCy: g.headCy + d, torsoTop: g.torsoTop + d, torsoBottom: g.torsoBottom + d, legTop: g.legTop + d, shoulderY: g.shoulderY + d, handY: g.handY + d };
 }
 
+/**
+ * The body side on. Clothes are drawn from the front, so the left half of the art is wrapped round
+ * the whole body: the seam down the middle lands on the chest, and buttons and zips go with it.
+ */
+export function sideBody(g: BodyGeo) {
+  const half = Math.max(g.shoulder + g.belly, g.hip + g.belly * 0.6);
+  const w = half * 0.62;
+  const x = g.cx + w;
+  const { torsoTop: top, torsoBottom: bot, belly } = g;
+  const mid = top + (bot - top) * 0.55;
+  const chest = `M ${x - 12} ${top} Q ${x} ${top} ${x} ${top + 24} C ${x + belly} ${mid - 20} ${x + belly} ${mid + 20} ${x} ${bot - 14} Q ${x} ${bot} ${x - 14} ${bot}`;
+  return {
+    /** Half the body's width. */
+    w,
+    /** Maps the art's left half onto the body. */
+    wrap: `translate(${x} 0) scale(${((2 * w) / half).toFixed(3)} 1) translate(${-g.cx} 0)`,
+    /** The line of the chest and belly. */
+    chest,
+    /** Everything behind that line. */
+    behind: `${chest} L ${x - 14} ${bot + 40} L ${g.cx - 700} ${bot + 40} L ${g.cx - 700} ${top - 400} L ${x - 12} ${top - 400} Z`,
+  };
+}
+
+/** Side on, for the arms: they hang from the middle of the body. */
+export function sideGeo(g: BodyGeo): BodyGeo {
+  return { ...g, profile: true, shoulder: 8, hip: sideBody(g).w, handX: Math.min(14, g.handX * 0.2) };
+}
+
 /** Body outline for shirts and everything worn on the torso. */
 export function torsoPath(g: BodyGeo, inset = 0): string {
   const { cx, torsoTop: top, torsoBottom: bot, belly } = g;

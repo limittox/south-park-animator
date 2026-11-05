@@ -1,5 +1,5 @@
 import type { CharacterState } from '../types';
-import type { Beat, Blocking, CastMember, Crowd, Episode, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, VoiceSpec } from './types';
+import type { Beat, Blocking, CastMember, Crowd, Episode, Facing, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, VoiceSpec } from './types';
 import { ACTION_IDS, BURST_IDS, CROWD_IDS, EFFECT_IDS, GESTURE_IDS, MOOD_IDS, SFX_IDS, SHOT_IDS, TRANSITION_IDS, WEATHER_IDS } from './catalog';
 import { CATEGORIES } from '../data/catalog';
 import { DEFAULT_CHARACTER, normalizeCharacter } from '../data/defaults';
@@ -419,7 +419,8 @@ function normalizeMove(input: unknown, cast: CastMember[], vehicles: Vehicle[], 
   const target = !vehicle && (alias.kind === 'walk' || alias.kind === 'approach') ? resolveCast(cast, input.on ?? input.to) : undefined;
   const kind: Move['kind'] = target && x === undefined ? 'approach' : alias.kind;
   if (kind === 'approach' && (!target || target === who)) return null;
-  const side = oneOf(input.side, ['left', 'right'] as const);
+  // Only people can walk away from the camera, and only on the way out.
+  const side = oneOf(input.side, kind === 'exit' && !vehicle ? (['left', 'right', 'back'] as const) : (['left', 'right'] as const));
   const pace = String(input.speed ?? input.pace ?? '');
   const run = !vehicle && (alias.run || input.run === true || /^run/i.test(pace));
   const sneak = !vehicle && !run && (alias.sneak || input.sneak === true || /^(sneak|creep|tiptoe)/i.test(pace));
@@ -457,6 +458,17 @@ function normalizeVehicle(input: unknown, taken: Set<string>): Vehicle | null {
     ...(input.flip === true ? { flip: true } : {}),
     ...(lane === 'front' ? { lane } : {}),
   };
+}
+
+const FACE_ALIASES: Record<string, Facing> = { front: 'front', forward: 'front', camera: 'front', audience: 'front', away: 'away', back: 'away', behind: 'away', backward: 'away', backwards: 'away', left: 'left', right: 'right' };
+
+/** "away", "the camera", or someone to turn toward, but not yourself. */
+function faceId(input: unknown, cast: CastMember[], who: string | undefined): string | undefined {
+  if (typeof input !== 'string') return undefined;
+  const word = FACE_ALIASES[squash(input.replace(/^\s*the\s+/i, ''))];
+  if (word) return word;
+  const person = resolveCast(cast, input);
+  return person && person !== who ? person : undefined;
 }
 
 export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehicle[] = []): Beat | null {
@@ -516,6 +528,8 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   }
   const lookAt = resolveCast(cast, input.lookAt);
   if (lookAt && lookAt !== who) beat.lookAt = lookAt;
+  const face = faceId(input.face, cast, who);
+  if (face) beat.face = face;
   const shot = normalizeShot(input.shot, cast);
   if (shot) beat.shot = shot;
   const sfx = oneOf(input.sfx, SFX_IDS);
@@ -531,7 +545,7 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   // A line needs a speaker; a beat needs to do *something*.
   if (beat.text && !beat.who) return null;
   const doesSomething =
-    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt || beat.becomes || beat.crowd || beat.burst || beat.drift;
+    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt || beat.face || beat.becomes || beat.crowd || beat.burst || beat.drift;
   return doesSomething ? beat : null;
 }
 
@@ -543,6 +557,7 @@ function normalizeBlocking(input: unknown, cast: CastMember[], vehicles: Vehicle
   const lie = input.lie === true ? 'floor' : str(input.lie, 40);
   const ride = input.in !== undefined || input.vehicle !== undefined ? resolveVehicle(vehicles, input.in ?? input.vehicle) : undefined;
   const hold = propId(input.hold);
+  const face = faceId(input.face, cast, who);
   return {
     who,
     x: clamp(num(input.x) ?? 800, 140, 1460),
@@ -553,6 +568,7 @@ function normalizeBlocking(input: unknown, cast: CastMember[], vehicles: Vehicle
     ...(ride ? { in: ride } : sit ? { sit } : lie ? { lie } : {}),
     ...(hold ? { hold } : {}),
     ...(input.screen === true ? { screen: true } : {}),
+    ...(face ? { face } : {}),
   };
 }
 

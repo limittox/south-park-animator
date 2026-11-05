@@ -31,8 +31,8 @@ export function sweatFx(step: number): ReactNode {
 }
 
 /** A green arc from the mouth to a growing puddle, on the side they're facing (character coordinates). */
-export function vomitFx(g: BodyGeo, side: -1 | 1, step: number): ReactNode {
-  const x0 = g.headCx + side * g.headRx * 0.3;
+export function vomitFx(g: BodyGeo, side: -1 | 1, step: number, mouth = 0.3): ReactNode {
+  const x0 = g.headCx + side * g.headRx * mouth;
   const y0 = g.headCy + g.headRy * (g.isAdult ? 0.55 : 0.75);
   const x1 = x0 + side * 110;
   const y1 = GROUND_Y - 4;

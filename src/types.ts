@@ -84,7 +84,12 @@ export interface BodyGeo {
   handR: number;
   armW: number;
   isAdult: boolean;
+  /** Seen side on: arms hang from the middle of the body and both reach forward. */
+  profile?: boolean;
 }
+
+/** Which way someone faces: at the camera, side on, or with their back to it. */
+export type View = 'front' | 'side' | 'back';
 
 /** A talking mouth: wide open, open and wide, teeth together, round, puckered, teeth on the lip, tongue up. */
 export type MouthShape = 'ah' | 'eh' | 'ee' | 'oh' | 'oo' | 'fv' | 'th';

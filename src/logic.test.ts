@@ -12,9 +12,12 @@ import { applyCrew, applyEdit } from './ai/director';
 import { extractJson } from './ai/openrouter';
 import { envelope, processVoice, resample, timeStretch, trimSilence } from './audio/dsp';
 import { directionMode, speechFormat, speechRequest } from './audio/voices';
-import { poseArms, restArms } from './character/pose';
-import { getGeo, seatedGeo } from './character/geometry';
+import { poseArms, restArms, walkArms } from './character/pose';
+import { getGeo, seatedGeo, sideGeo } from './character/geometry';
 import { CharacterGroup } from './character/Character';
+import { HAIR } from './character/parts/hair';
+import { HATS } from './character/parts/hats';
+import { BOTTOMS, NECKWEAR, SHOES, TOPS } from './character/parts/clothes';
 import { talkingMouth } from './character/parts/face';
 import { mouthTrack, sounds } from './episode/lipSync';
 import { DEFAULT_CHARACTER } from './data/defaults';
@@ -1638,7 +1641,8 @@ describe('staging', () => {
       const { sc, frame } = packed({ count: 12, mood: 'sad' }, [{ crowd: 'cheer' }, { who: 'Dad', duration: 4 }]);
       const { start } = sc.beats[0];
       const moods = (t: number) => frame(t).crowd.map((a) => a.c.mouth);
-      expect(new Set(moods(start)).size).toBeGreaterThan(1);
+      // Each extra is up to three poses late, and scene ids are random, so look across those poses rather than at one.
+      expect([0, 1, 2, 3].some((i) => new Set(moods(start + i / POSE_FPS)).size > 1)).toBe(true);
       const late = frame(start + 0.5);
       expect(late.crowd.every((a) => a.arms)).toBe(true);
       expect(new Set(late.crowd.map((a) => a.lift)).size).toBe(2);
@@ -1814,5 +1818,312 @@ KENNY leaves the call.`).scenes[0];
     expect(scene.beats[0]).toMatchObject({ becomes: 'bat', crowd: 'cheer', burst: { kind: 'fire', at: 'car', stay: true }, drift: { item: 'mask', style: 'roll', from: 'right' } });
     expect(scene.beats).toHaveLength(2);
     expect(scene.beats[1]).toMatchObject({ burst: { kind: 'smoke' }, drift: { item: 'football' } });
+  });
+});
+
+describe('side and back views', () => {
+  const play = (script: string) => {
+    const ep = parseScript(script);
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[0];
+    const actor = (id: string, t: number) => (sampleEpisode(c, sc.start + t) as SceneFrame).actors.find((a) => a.castId === id);
+    return { ep, sc, actor, beat: (i: number) => sc.beats[i] };
+  };
+  const STREET = 'EXT. MAIN STREET - DAY\nDEX: Hi.\nPRIYA: Hi.\n';
+  /** Every pose from t0 to t1. */
+  const poses = (t0: number, t1: number) => Array.from({ length: Math.round((t1 - t0) * POSE_FPS) + 1 }, (_, i) => t0 + i / POSE_FPS);
+
+  describe('walking', () => {
+    it('walks side on, mirrored to go left, and faces the camera again afterwards', () => {
+      const right = play(`${STREET}Dex walks up to Priya.`);
+      expect(right.actor('dex', right.beat(2).start + 0.5)).toMatchObject({ view: 'side', flip: false });
+      expect(right.actor('dex', right.sc.duration - 0.1)?.view).toBeUndefined();
+      const left = play(`${STREET}Priya walks up to Dex.`);
+      expect(left.actor('priya', left.beat(2).start + 0.5)).toMatchObject({ view: 'side', flip: true });
+    });
+
+    it('takes steps: the feet part and meet, leading with the other one each time', () => {
+      const { beat, actor } = play(`${STREET}Dex walks up to Priya.`);
+      const t0 = beat(2).start + 0.3;
+      const strides = poses(t0, t0 + 1.2).map((t) => actor('dex', t)?.stride ?? 0);
+      expect(Math.max(...strides)).toBe(1);
+      expect(Math.min(...strides)).toBe(-1);
+      expect(strides).toContain(0);
+    });
+
+    it('swings the arms against the legs, near arm back as the near leg goes forward', () => {
+      const { beat, actor } = play(`${STREET}Dex walks up to Priya.`);
+      const t0 = beat(2).start + 0.3;
+      const stepping = poses(t0, t0 + 1.2).map((t) => actor('dex', t)!).find((a) => a.stride === 1)!;
+      const [far, near] = stepping.arms!;
+      expect(near.hand[0]).toBeLessThan(near.start[0]);
+      expect(far.hand[0]).toBeGreaterThan(far.start[0]);
+    });
+
+    it('walks up a room from behind and back down it from the front', () => {
+      const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ set: { kind: 'kit', place: 'interior', pieces: [{ type: 'couch', x: 800 }] }, blocking: [{ who: 'A', x: 790, depth: 0 }], beats: [{ who: 'A', moves: [{ who: 'A', kind: 'sit', on: 'couch' }] }, { who: 'A', moves: [{ who: 'A', kind: 'walk', x: 800 }] }] }] }, '');
+      const c = compileEpisode(ep, new Map());
+      const sc = c.scenes[0];
+      const upAndDown = sc.tracks[0].moves.filter((m) => Math.abs(m.y1 - m.y0) > Math.abs(m.x1 - m.x0));
+      const midway = (m: (typeof upAndDown)[number]) => (sampleEpisode(c, sc.start + (m.t0 + m.t1) / 2) as SceneFrame).actors[0];
+      const [up, down] = upAndDown;
+      expect(up.y1).toBeLessThan(up.y0);
+      expect(midway(up).view).toBe('back');
+      expect(down.y1).toBeGreaterThan(down.y0);
+      expect(midway(down).view).toBeUndefined();
+      expect(midway(down).turn).toBe(0);
+    });
+
+    it('keeps waving, cheering and dancing to the camera', () => {
+      const waving = play(`${STREET}Priya turns to Dex.\nPriya waves.\nPriya dances.`);
+      expect(waving.actor('priya', waving.beat(2).end - 0.1)?.view).toBe('side');
+      expect(waving.actor('priya', waving.beat(3).start + 0.5)?.view).toBeUndefined();
+      expect(waving.actor('priya', waving.beat(4).start + 0.5)?.view).toBeUndefined();
+    });
+  });
+
+  describe('turning', () => {
+    it('turns away for good, and walking resets it', () => {
+      const { beat, actor, sc } = play(`${STREET}Priya turns her back.\nPRIYA: Go away.\nPriya walks up to Dex.`);
+      expect(beat(2).beat.face).toBe('away');
+      expect(actor('priya', beat(3).start + 0.3)?.view).toBe('back');
+      expect(actor('priya', sc.duration - 0.1)?.view).toBeUndefined();
+    });
+
+    it('goes round through the views in between, a pose each, instead of snapping', () => {
+      const { beat, actor } = play(`${STREET}Priya turns her back.`);
+      const t0 = beat(2).start;
+      const seen = poses(t0, t0 + 0.5).map((t) => actor('priya', t)!);
+      expect(seen.map((a) => a.view ?? 'front')).toEqual(['front', 'side', 'back', 'back', 'back', 'back', 'back']);
+      expect(Math.abs(seen[0].turn)).toBe(1);
+    });
+
+    it('goes through the front to change sides', () => {
+      const ep = normalizeEpisode({ cast: [{ name: 'A' }, { name: 'B' }, { name: 'C' }], scenes: [{ blocking: [{ who: 'A', x: 800 }, { who: 'B', x: 400 }, { who: 'C', x: 1200 }], beats: [{ who: 'A', face: 'B', duration: 1 }, { who: 'A', face: 'C', duration: 1 }] }] }, '');
+      const c = compileEpisode(ep, new Map());
+      const sc = c.scenes[0];
+      const a = (t: number) => (sampleEpisode(c, sc.start + t) as SceneFrame).actors.find((x) => x.castId === 'a')!;
+      const t1 = sc.beats[1].start;
+      expect(a(t1 - 0.1)).toMatchObject({ view: 'side', flip: true });
+      expect(a(t1 + 0.01).view).toBeUndefined();
+      expect(a(t1 + 1 / POSE_FPS + 0.01)).toMatchObject({ view: 'side', flip: false });
+    });
+
+    it('faces someone wherever they are', () => {
+      const { beat, actor, ep } = play(`${STREET}Dex turns to Priya.`);
+      expect(beat(2).beat.face).toBe('priya');
+      const dexX = ep.scenes[0].blocking.find((b) => b.who === 'dex')!.x;
+      const priyaX = ep.scenes[0].blocking.find((b) => b.who === 'priya')!.x;
+      expect(actor('dex', beat(2).end)).toMatchObject({ view: 'side', flip: priyaX < dexX });
+    });
+
+    it('turns side on to reach for someone even with their back turned', () => {
+      const { beat, actor } = play(`${STREET}Dex holds a snowball.\nDex turns his back.\nDex throws a snowball at Priya.`);
+      expect(actor('dex', beat(3).end - 0.05)?.view).toBe('back');
+      expect(actor('dex', beat(4).start + 0.2)?.view).toBe('side');
+    });
+
+    it('stays put for a side-eye', () => {
+      const { beat, actor } = play(`${STREET}Dex turns his back.\nDex side-eyes Priya.`);
+      expect(actor('dex', beat(3).start + 0.3)?.view).toBe('back');
+    });
+
+    it('faces the way it was told at the start of a scene, with no turn', () => {
+      const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ blocking: [{ who: 'A', x: 800, face: 'away' }], beats: [{ who: 'A', text: 'Hi.' }] }] }, '');
+      const c = compileEpisode(ep, new Map());
+      const f = sampleEpisode(c, c.scenes[0].start) as SceneFrame;
+      expect(f.actors[0].view).toBe('back');
+    });
+
+    it('keeps people lying down and on a screen as they were', () => {
+      const lying = play(`${STREET}Dex lies down on the floor.\nDex turns his back.`);
+      expect(lying.actor('dex', lying.beat(3).end)?.view).toBeUndefined();
+      const screen = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ blocking: [{ who: 'A', x: 800, screen: true, face: 'away' }], beats: [{ who: 'A', text: 'Hi.' }] }] }, '');
+      const c = compileEpisode(screen, new Map());
+      expect((sampleEpisode(c, c.scenes[0].start + 0.3) as SceneFrame).actors[0].view).toBeUndefined();
+    });
+
+    it('sits side on to talk to the person next to them', () => {
+      const { beat, actor } = play('INT. LIVING ROOM - NIGHT\nDEX: Hi.\nMRS TILLY: Hi.\nMrs Tilly sits on the couch.\nMrs Tilly turns to Dex.');
+      const a = actor('mrs-tilly', beat(3).end)!;
+      expect(a.view).toBe('side');
+      expect(a.hipY).toBeDefined();
+      expect(a.stride).toBeUndefined();
+    });
+  });
+
+  describe('walking away from the camera', () => {
+    it('heads off into the distance outdoors, shrinking from behind, then is gone', () => {
+      const { beat, actor, sc } = play(`${STREET}Dex walks away.`);
+      expect(beat(2).beat.moves?.[0]).toMatchObject({ kind: 'exit', side: 'back' });
+      const t = beat(2).start;
+      const start = actor('dex', t - 0.05)!;
+      const mid = actor('dex', t + 1)!;
+      const late = actor('dex', t + 2.2)!;
+      expect(mid.view).toBe('back');
+      expect(mid.scale).toBeLessThan(start.scale);
+      expect(late.scale).toBeLessThan(mid.scale * 0.8);
+      expect(late.y).toBeLessThan(mid.y);
+      expect(actor('dex', sc.duration - 0.1)).toBeUndefined();
+    });
+
+    it('goes along to a door first, side on, then through it', () => {
+      const ep = normalizeEpisode({ cast: [{ name: 'A' }], scenes: [{ set: { kind: 'kit', place: 'interior', pieces: [{ type: 'door', x: 300 }] }, blocking: [{ who: 'A', x: 1000 }], beats: [{ who: 'A', moves: [{ who: 'A', kind: 'exit', side: 'back' }] }] }] }, '');
+      const c = compileEpisode(ep, new Map());
+      const moves = c.scenes[0].tracks[0].moves;
+      expect(moves).toHaveLength(2);
+      expect(moves[0]).toMatchObject({ kind: 'walk', x1: 300 });
+      expect(moves[1]).toMatchObject({ kind: 'exit', x0: 300, x1: 300 });
+      expect(moves[1].y1).toBeLessThan(moves[1].y0);
+    });
+
+    it('leaves by the side in a room with no door', () => {
+      const { sc } = play('INT. LIVING ROOM - NIGHT\nDEX: Hi.\nDex walks out the door.');
+      const m = sc.tracks[0].moves.at(-1)!;
+      expect(m.kind).toBe('exit');
+      expect(m.x1).not.toBe(m.x0);
+      expect(m.away).toBeUndefined();
+    });
+  });
+
+  it('sits passengers side on until there is someone to talk to', () => {
+    const { actor, beat, sc } = play('EXT. MAIN STREET - DAY\nDEX: Get in.\nPRIYA: Okay.\nA car pulls up.\nDex gets in the car.\nPriya gets in the car.\nDEX: Buckle up.\nThe car drives off.');
+    const talking = beat(5);
+    expect(actor('dex', talking.start + 0.3)?.view).toBeUndefined();
+    expect(actor('dex', sc.duration - 1)?.view).toBe('side');
+  });
+
+  it('stands a queue side on until it has something to react to', () => {
+    const ep = parseScript('EXT. MAIN STREET - DAY\nA line of townspeople waits.\nDEX: Hello.\nThe crowd cheers.');
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[0];
+    const at = (t: number) => (sampleEpisode(c, sc.start + t) as SceneFrame).crowd;
+    expect(at(0.1).every((e) => e.view === 'side')).toBe(true);
+    const cheer = sc.beats.find((b) => b.beat.crowd)!;
+    expect(at(cheer.start + 0.8).some((e) => e.view === undefined)).toBe(true);
+  });
+
+  describe('drawing', () => {
+    const draw = (c: typeof DEFAULT_CHARACTER, view: 'front' | 'side' | 'back', more: object = {}) => renderToStaticMarkup(createElement('svg', null, createElement(CharacterGroup, { c, view, ...more })));
+
+    it('draws every hat, hairdo, top, bottom, shoe and neck from every side', () => {
+      for (const [cat, list] of Object.entries({ hat: HATS, hair: HAIR, top: TOPS, bottom: BOTTOMS, shoes: SHOES, neck: NECKWEAR }))
+        for (const { id } of list)
+          for (const body of ['kid', 'adult'])
+            for (const view of ['side', 'back'] as const) {
+              const svg = draw({ ...DEFAULT_CHARACTER, body, [cat]: id }, view, { stride: 1 });
+              expect(svg).not.toContain('NaN');
+              expect(svg).not.toContain('undefined');
+            }
+    });
+
+    it('hides the face from behind and keeps it on the head side on', () => {
+      const c = { ...DEFAULT_CHARACTER, eyes: 'normal', glasses: 'round' };
+      const front = draw(c, 'front');
+      expect(draw(c, 'back').length).toBeLessThan(front.length);
+      expect(draw(c, 'side')).toContain('translate(74 0)');
+    });
+
+    it('wraps clothes round the body side on, and leaves prints on the front', () => {
+      const c = { ...DEFAULT_CHARACTER, top: 'graphic', topColor: '#123456' };
+      expect(draw(c, 'side')).toContain('#8a5530');
+      expect(draw(c, 'back')).not.toContain('#8a5530');
+      // A pattern that goes all the way round is still there.
+      expect(draw({ ...c, top: 'stripes' }, 'back').length).toBeGreaterThan(draw({ ...c, top: 'tshirt' }, 'back').length);
+    });
+
+    it('turns a cap the right way round', () => {
+      const cap = (hat: string, view: 'front' | 'back') => draw({ ...DEFAULT_CHARACTER, hat, hatColor: '#123456' }, view);
+      const STRAP = 'M -30 -42 Q 0 -86 30 -42 Z';
+      const PEAK = 'M -128 -44 Q 0 -62 128 -44';
+      expect(cap('cap', 'front')).toContain(PEAK);
+      expect(cap('cap', 'back')).toContain(STRAP);
+      expect(cap('cap', 'back')).not.toContain(PEAK);
+      expect(cap('backcap', 'front')).toContain(STRAP);
+      expect(cap('backcap', 'back')).toContain(PEAK);
+    });
+
+    it('fits a walking arm to the side-on body', () => {
+      const g = getGeo('kid', 'round');
+      const s = sideGeo(g);
+      expect(s.profile).toBe(true);
+      expect(s.shoulder).toBeLessThan(g.shoulder);
+      const [far, near] = walkArms(s, 1);
+      expect(near.hand[0]).toBeGreaterThan(s.cx);
+      expect(far.hand[0]).toBeLessThan(s.cx);
+    });
+
+    it('sends both arms forward side on', () => {
+      const s = sideGeo(getGeo('adult', 'round'));
+      const [far, near] = poseArms(s, 'explain', 1, 0.2);
+      expect(near.hand[0]).toBeGreaterThan(s.cx);
+      expect(far.hand[0]).toBeGreaterThanOrEqual(s.cx);
+    });
+  });
+
+  describe('scripts', () => {
+    const facing = (direction: string, before = '') => {
+      const beats = parseScript(`EXT. MAIN STREET - DAY\nGUS: Hi.\nTILLY: Hi.\n${before}${direction}`).scenes[0].beats;
+      return beats.at(-1)?.face;
+    };
+
+    it('reads turning away', () => {
+      for (const d of ['Gus turns his back.', 'Gus turns away.', 'Gus faces away.', 'Gus faces the window.', 'Gus looks out the window.', 'Gus stares out of the window.', 'Gus stands with his back to Tilly.']) expect(facing(d), d).toBe('away');
+    });
+
+    it('reads turning to someone, not faces being pulled at them', () => {
+      expect(facing('Gus turns to Tilly.')).toBe('tilly');
+      expect(facing('Gus faces Tilly.')).toBe('tilly');
+      expect(facing('Gus turns back to Tilly.')).toBe('tilly');
+      expect(facing('Gus makes faces at Tilly.')).toBeUndefined();
+    });
+
+    it('reads turning to the camera', () => {
+      expect(facing('Gus turns to the camera.')).toBe('front');
+      expect(facing('Gus faces front.')).toBe('front');
+    });
+
+    it('reads turning around from whichever way they were facing', () => {
+      expect(facing('Gus turns around.')).toBe('away');
+      expect(facing('Gus turns around.', 'Gus turns his back.\n')).toBe('front');
+      expect(facing('Gus turns around.', 'Gus turns his back.\nGus turns around.\n')).toBe('away');
+    });
+
+    it('leaves turning into something and spinning alone', () => {
+      expect(facing('Gus turns into a frog.')).toBeUndefined();
+      expect(facing('Gus spins around.')).toBeUndefined();
+    });
+
+    it('turns several people at once', () => {
+      const beat = parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nTILLY: Hi.\nGus and Tilly turn around.').scenes[0].beats.at(-1)!;
+      expect(beat).toMatchObject({ who: 'gus', face: 'away', also: ['tilly'] });
+    });
+
+    it('reads walking away and leaves other exits to the side', () => {
+      const exit = (d: string) => parseScript(`EXT. MAIN STREET - DAY\nGUS: Hi.\n${d}`).scenes[0].beats.at(-1)?.moves?.[0];
+      for (const d of ['Gus walks away.', 'Gus trudges away.', 'Gus wanders off into the distance.', 'Gus walks into the snow.', 'Gus walks out the door.', 'Gus goes through the door.']) expect(exit(d), d).toMatchObject({ kind: 'exit', side: 'back' });
+      expect(exit('Gus walks off.')?.side).toBeUndefined();
+      expect(exit('Gus storms off.')?.side).toBeUndefined();
+    });
+
+    it('promises facing words the parser understands', () => {
+      const prompt = scriptWritingPrompt();
+      for (const words of ['turns his back', 'turns around', 'turns to', 'faces the window', 'looks out the window', 'walks away', 'walks out the door']) expect(prompt).toContain(words);
+    });
+
+    it('keeps facing from the director and drops what it cannot do', () => {
+      const ep = normalizeEpisode(
+        {
+          cast: [{ name: 'A' }, { name: 'B' }],
+          scenes: [{ blocking: [{ who: 'A', face: 'the camera' }, { who: 'B', face: 'sideways' }], vehicles: [{ type: 'car' }], beats: [{ who: 'A', face: 'B' }, { who: 'A', face: 'back' }, { who: 'A', face: 'LEFT' }, { who: 'A', face: 'A' }, { who: 'A', moves: [{ who: 'A', kind: 'exit', side: 'back' }, { who: 'B', kind: 'enter', side: 'back' }, { who: 'car', kind: 'exit', side: 'back' }] }] }],
+        },
+        '',
+      );
+      const [scene] = ep.scenes;
+      expect(scene.blocking[0].face).toBe('front');
+      expect(scene.blocking[1].face).toBeUndefined();
+      expect(scene.beats.map((b) => b.face)).toEqual(['b', 'away', 'left', undefined]);
+      expect(scene.beats[3].moves?.map((m) => m.side)).toEqual(['back', undefined, undefined]);
+    });
   });
 });

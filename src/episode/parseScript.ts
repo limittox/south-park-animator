@@ -54,6 +54,7 @@ interface RawBeat {
   hug?: string;
   also?: string[];
   lookAt?: string;
+  face?: string;
   caption?: string;
   becomes?: string;
   crowd?: CrowdReaction;
@@ -73,6 +74,8 @@ interface RawScene {
   riders: Map<string, string>;
   people: string[];
   offscreen: Set<string>;
+  /** Who has their back to the camera, so that turning round brings them back. */
+  turned: Set<string>;
   transition?: Transition;
   crowd?: Crowd;
   split?: { set: RawScene['set']; who: string[] };
@@ -113,6 +116,17 @@ const CROWD = /\b(?:crowds?|mobs?|townspeople|townsfolk|villagers|neighbou?rs|au
 /** A thing going by on its own, with the thing named before the verb. */
 const DRIFTS = /\b(blows?|drifts?|floats?|flutters?|sails?|flies|rolls?|tumbles?|falls?)\s+(?:past|by|across|through|along|over|down|in)\b/i;
 const TURNS = /\b(?:turns?|turning|transforms?|transforming|morphs?|morphing|changes?|changing)\s+into\s+(?:(?:a|an|the)\s+)?([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
+
+/** "turns his back", "her back to the room", "turns away", "faces the window", "looks out the window". */
+const AWAY = /\b(?:turns?|turning)\s+(?:his|her|their|its)\s+back\b|\b(?:his|her|their)\s+back\s+(?:is\s+)?to\b|\b(?:turns?|turning|faces?|facing)\s+away\b|\b(?:faces?|facing)\s+(?:the\s+)?(?:wall|window|board|blackboard|chalkboard|door|horizon|corner|tv|television|screen|stage)\b|\b(?:looks?|looking|stares?|staring|gazes?|gazing|peers?|peering)\s+out\s+(?:of\s+)?(?:the|a)\s+window\b/i;
+/** "turns to the camera", "turns back to us", "faces front". */
+const TO_CAMERA = /\b(?:turns?|turning)\s+(?:back\s+)?(?:(?:a)?round\s+)?(?:to|toward|towards)\s+(?:face\s+)?(?:the\s+camera|the\s+audience|the\s+front|us)\b|\b(?:faces?|facing)\s+(?:the\s+camera|the\s+audience|the\s+front|front|forward|us)\b/i;
+/** "turns around": which way they end up depends on which way they were facing. */
+const TURNS_ROUND = /\b(?:turns?|turning|whirls?|swings?)\s+(?:back\s+)?(?:a)?round\b/i;
+/** "turns to Kyle", "faces Kyle". Not "makes faces at Kyle". */
+const TURNS_TO = /\b(?:turns?|turning)\s+(?:back\s+)?(?:to|toward|towards)\b|(?<!\bmak(?:es?|ing)\s)\b(?:faces?|facing)\b/i;
+/** Off into the distance or out through a door, rather than off to one side. */
+const WALKS_AWAY = /\b(?:walks?|goes|heads?|wanders?|trudges?|shuffles?|limps?|stumbles?)\s+(?:slowly\s+|sadly\s+|quietly\s+)?(?:away|off into|into the (?:distance|night|snow|sunset|darkness|fog))\b|\b(?:walks?|goes|heads?|steps?|leaves?)\s+(?:out\s+|back\s+)?(?:through|out)\s+(?:of\s+)?(?:the|a)\s+(?:\w+\s+)?door\b/i;
 
 /** Arm poses, the first match winning. */
 const GESTURE_WORDS: [RegExp, string][] = [
@@ -357,6 +371,8 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
     beat.moves = subjects.map((s) => ({ who: s, kind: 'leaveScreen' }));
   } else if (/\b(enters?|walks? in|comes? in|arrives?|runs? in|shows? up|steps? in|rushes in|bursts? in|(?:sneaks?|creeps?|tiptoes?|slinks?|prowls?) in)\b/i.test(text)) {
     beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'enter', ...pace }));
+  } else if (WALKS_AWAY.test(text)) {
+    beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'exit', side: 'back', ...pace }));
   } else if (/\b(leaves?|exits?|walks? (off|out|away)|storms? off|runs? (off|away|out)|goes? home|bolts?|flees|(?:sneaks?|creeps?|tiptoes?|slinks?|prowls?) (?:off|out|away))\b/i.test(text)) {
     beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'exit', ...pace }));
   } else if (LIES.test(text) && (on || /\b(?:down|flat|asleep|sleeps?|sleeping)\b/i.test(text))) {
@@ -417,16 +433,21 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   if (/\bflash(es)?\b/i.test(text) && !beat.effect) beat.effect = 'flash';
   beat.gesture = drinks ? 'drink' : eats ? 'eat' : GESTURE_WORDS.find(([re]) => re.test(text))?.[1];
   if (object && /\b(?:looks?|glances?|stares?|glares?|peeks?)\s+(?:\w+\s+)?at\b|\bside-?eyes\b/i.test(text)) beat.lookAt = object;
+  if (AWAY.test(text)) beat.face = 'away';
+  else if (TO_CAMERA.test(text)) beat.face = 'front';
+  else if (TURNS_ROUND.test(text)) beat.face = who && scene.turned.has(who) ? 'front' : 'away';
+  else if (object && TURNS_TO.test(text)) beat.face = object;
+  if (beat.face) for (const s of [who, ...crowd]) if (s) scene.turned[beat.face === 'away' ? 'add' : 'delete'](s);
   if (subjects.length >= 2 && /\b(?:hugs?|hugging|embraces?)\b/i.test(text)) beat.hug = object ?? subjects[1];
   if (/\b(?:cries|crying|sobs|sobbing|weeps|weeping|bawls|bawling|bursts? into tears|in tears)\b/i.test(text)) beat.mood = 'cry';
   else if (/\b(?:sweats?|sweating)\b/i.test(text)) beat.mood = 'nervous';
   // Several people, or a group that's worked out once we know who's in the scene.
   const team = group ? [group] : crowd;
-  if (team.length && !beat.hug && (beat.action || beat.gesture || beat.hold)) beat.also = team;
+  if (team.length && !beat.hug && (beat.action || beat.gesture || beat.hold || beat.face)) beat.also = team;
   if (/\bsnow(ing|s)?\b/i.test(text) && /\b(start|begin|it'?s)\b/i.test(text)) scene.weather = 'snow';
   if (!beat.moves?.length) delete beat.moves;
-  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.hug && !beat.mood && !beat.caption && !beat.shot && !beat.lookAt && !beat.crowd && !beat.burst && !beat.drift && !beat.becomes) return null;
-  if ((beat.hold || beat.give) && !who && !beat.also) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot || beat.crowd || beat.burst || beat.drift ? { ...beat, hold: undefined, give: undefined } : null;
+  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.hug && !beat.mood && !beat.caption && !beat.shot && !beat.lookAt && !beat.face && !beat.crowd && !beat.burst && !beat.drift && !beat.becomes) return null;
+  if ((beat.hold || beat.give) && !who && !beat.also) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot || beat.crowd || beat.burst || beat.drift || beat.face ? { ...beat, hold: undefined, give: undefined } : null;
   if (who) beat.who = who;
   return beat;
 }
@@ -450,6 +471,7 @@ export function parseScript(script: string): Episode {
       riders: new Map(),
       people: [],
       offscreen: new Set(),
+      turned: new Set(),
       ...(nextTransition ? { transition: nextTransition } : {}),
     };
     nextTransition = undefined;
@@ -582,7 +604,7 @@ export function parseScript(script: string): Episode {
       });
       if (b.moves && !b.moves.length) delete b.moves;
     });
-    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.hug || b.mood || b.caption || b.shot || b.lookAt || b.crowd || b.burst || b.drift || b.becomes);
+    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.hug || b.mood || b.caption || b.shot || b.lookAt || b.face || b.crowd || b.burst || b.drift || b.becomes);
     // A built set gets the furniture people sit on: "sit at a table" in a bar needs a table.
     const set = s.set;
     if (set.kind === 'kit') {

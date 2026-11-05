@@ -1,14 +1,14 @@
-import type { CharacterState, MouthShape } from '../types';
+import type { CharacterState, MouthShape, View } from '../types';
 import type { ActionId, Beat, BurstId, CastMember, CrowdReaction, Episode, GestureId, MoodId, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, Weather } from './types';
-import { getGeo, GROUND_Y, seatedGeo } from '../character/geometry';
-import { danceArms, handOverArms, hugArms, lerpArms, poseArms, restArms, runArms, sneakArms, throwArms, type ArmsPose } from '../character/pose';
+import { getGeo, GROUND_Y, seatedGeo, sideGeo } from '../character/geometry';
+import { danceArms, handOverArms, hugArms, lerpArms, poseArms, restArms, runArms, sneakArms, throwArms, walkArms, type ArmsPose } from '../character/pose';
 import { MOODS } from '../character/parts/face';
 import { HELD } from '../character/parts/held';
 import { getScene, SCENE_H, SCENE_W } from '../scenes/backgrounds';
 import { kitGroundY } from '../sets/kit';
 import { getVehicleDef } from '../sets/vehicles';
 import { seeded } from '../character/parts/common';
-import { findSeat, pickSlot, screenOf, seatSlots, seatsOf, type ScreenSpot, type SeatSpot } from './seats';
+import { findSeat, pickSlot, screenOf, seatSlots, seatsOf, wayOut, type ScreenSpot, type SeatSpot } from './seats';
 import { mouthTrack, type MouthPose } from './lipSync';
 import { stockCharacter } from './normalize';
 import { DEFAULT_CHARACTER } from '../data/defaults';
@@ -119,6 +119,8 @@ interface MoveSeg {
   kind: Move['kind'];
   run: boolean;
   sneak?: boolean;
+  /** Walking away from the camera: how much smaller they've got by the end. */
+  away?: number;
 }
 
 /** Sitting from `t` on (hips `h` above the feet, maybe behind a table), or standing again (null). */
@@ -199,6 +201,8 @@ interface ActorTrack {
   baseY: number;
   startSeat: Posture['seat'];
   moves: MoveSeg[];
+  /** Which way they've been told to face, from `t` on. */
+  faces: { t: number; face: string }[];
   postures: Posture[];
   rides: { t0: number; t1: number; vehicle: string; slot: number }[];
   holds: { t: number; item: string; color: string }[];
@@ -301,6 +305,7 @@ function beatLength(beat: Beat, clips: ClipMap, moveTime: number): number {
   if (beat.action === 'throw') d = Math.max(d, 1.3);
   if (beat.becomes) d = Math.max(d, MORPH_TIME + 0.3);
   if (beat.crowd || beat.burst) d = Math.max(d, 1.2);
+  if (beat.face) d = Math.max(d, 0.75);
   if (beat.drift) d = Math.max(d, beat.drift.style === 'fall' ? FALL_TIME : DRIFT_TIME);
   return Math.max(d, moveTime);
 }
@@ -313,14 +318,16 @@ function placeOn(moves: MoveSeg[], x: number, y: number, visible: boolean, t: nu
     if (t < m.t1) {
       let k = (t - m.t0) / (m.t1 - m.t0);
       if (smooth && m.kind !== 'crash') k = ease(k);
-      return { x: m.x0 + (m.x1 - m.x0) * k, y: m.y0 + (m.y1 - m.y0) * k, visible: true, moving: true, dir: Math.sign(m.x1 - m.x0) || dir || 1, moveT: t - m.t0, run: m.run, sneak: !!m.sneak };
+      // Mostly up or down the floor is walking away from the camera or toward it.
+      const up = Math.abs(m.y1 - m.y0) > Math.abs(m.x1 - m.x0) ? Math.sign(m.y1 - m.y0) : 0;
+      return { x: m.x0 + (m.x1 - m.x0) * k, y: m.y0 + (m.y1 - m.y0) * k, visible: true, moving: true, dir: Math.sign(m.x1 - m.x0) || dir || 1, moveT: t - m.t0, run: m.run, sneak: !!m.sneak, up, away: (m.away ?? 0) * k };
     }
     x = m.x1;
     y = m.y1;
     visible = m.kind !== 'exit' && m.kind !== 'vanish';
     if (m.x1 !== m.x0) dir = Math.sign(m.x1 - m.x0);
   }
-  return { x, y, visible, moving: false, dir, moveT: 0, run: false, sneak: false };
+  return { x, y, visible, moving: false, dir, moveT: 0, run: false, sneak: false, up: 0, away: 0 };
 }
 
 const vehicleAt = (vt: VehicleTrack, t: number) => placeOn(vt.moves, vt.vehicle.x, vt.y, !vt.vehicle.offstage, t, true);
@@ -403,6 +410,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         baseY,
         startSeat: null,
         moves: [],
+        faces: b?.face ? [{ t: -1, face: b.face }] : [],
         postures: [],
         rides: [],
         holds: b?.hold ? [{ t: 0, item: b.hold, color: propColor(member.look, b.hold) }] : [],
@@ -572,6 +580,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       t0 += dur;
       p.x = x1;
       p.y = y1;
+      tr.faces.push({ t: t0, face: 'front' });
     };
     const getUp = (animate: boolean) => {
       if (!p.seat) return;
@@ -663,13 +672,20 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         let x1 = p.x;
         let y0 = p.y;
         let y1 = tr.baseY;
+        // Walking away from the camera: along the front to the door first, if there is one.
+        const out = m.kind === 'exit' && m.side === 'back' ? wayOut(scene.set, p.x, groundY) : null;
         if (m.kind === 'enter') {
           x1 = clamp(m.x ?? p.x, 140, 1460);
           const side = m.side ?? (x1 < SCENE_W / 2 ? 'left' : 'right');
           x0 = side === 'left' ? OFF_LEFT : OFF_RIGHT;
           y0 = y1;
+        } else if (out) {
+          walkTo(out.x, p.y);
+          x0 = x1 = p.x;
+          y0 = p.y;
+          y1 = out.y;
         } else if (m.kind === 'exit') {
-          const side = m.side ?? (p.x < SCENE_W / 2 ? 'left' : 'right');
+          const side = m.side === 'left' || m.side === 'right' ? m.side : p.x < SCENE_W / 2 ? 'left' : 'right';
           x1 = side === 'left' ? OFF_LEFT : OFF_RIGHT;
         } else if (m.kind === 'walk') {
           // Someone prowling with nowhere in particular to go heads across the stage.
@@ -680,10 +696,11 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         } else {
           y1 = y0;
         }
-        const dur = m.kind === 'appear' || m.kind === 'vanish' ? 0 : Math.max(0.35, Math.hypot(x1 - x0, y1 - y0) / speed);
-        tr.moves.push({ t0, t1: t0 + dur, x0, x1, y0, y1, kind: m.kind, ...pace });
+        const dur = m.kind === 'appear' || m.kind === 'vanish' ? 0 : out ? out.time : Math.max(0.35, Math.hypot(x1 - x0, y1 - y0) / speed);
+        tr.moves.push({ t0, t1: t0 + dur, x0, x1, y0, y1, kind: m.kind, ...pace, ...(out ? { away: out.shrink } : {}) });
         Object.assign(p, { x: x1, y: y1, visible: m.kind !== 'exit' && m.kind !== 'vanish' });
         t0 += dur;
+        if (x1 !== x0) tr.faces.push({ t: t0, face: 'front' });
         return done();
       }
     }
@@ -758,6 +775,8 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         const c = cast.get(tr.castId)?.look ?? look;
         if (beat.gesture && beat.gesture !== 'none') tr.gestures.push({ t0: t, t1: Math.max(end, t + 0.9), gesture: beat.gesture });
         if (beat.hold) tr.holds.push({ t, item: beat.hold, color: propColor(c, beat.hold) });
+        // Once they've got there, if they're walking somewhere first.
+        if (beat.face) tr.faces.push({ t: Math.max(t, pos.get(tr.castId)?.busyUntil ?? t), face: beat.face });
         if (beat.action === 'throw') fling(tr, t, beat.lookAt, beat.id);
         else if (beat.action) tr.actions.push({ t, t1: end, action: beat.action });
       }
@@ -819,6 +838,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
 
   for (const tr of tracks.values()) {
     tr.holds.sort((a, b) => a.t - b.t);
+    tr.faces.sort((a, b) => a.t - b.t);
     // Blinks and glances every few seconds, at times that stay put between renders.
     const rnd = seeded(hashOf(tr.castId + scene.id));
     for (let bt = 0.6 + rnd() * 2.4; bt < duration; bt += 2.2 + rnd() * 3.2) tr.blinks.push(bt);
@@ -862,6 +882,10 @@ export interface ActorFrame {
   scale: number;
   flip: boolean;
   turn: number;
+  /** Side on or from behind; facing the camera if it's missing. */
+  view?: View;
+  /** Walking side on: how far apart the legs are, -1 to 1. */
+  stride?: number;
   talk: number;
   mouth: MouthShape;
   blink: boolean;
@@ -1226,11 +1250,14 @@ const REACTIONS: Record<CrowdReaction, { mood: MoodId; gesture: GestureId; bob: 
 function sampleCrowd(sc: CompiledScene, t: number): ActorFrame[] {
   const now = sc.reactions.find((r) => t >= r.t0 && t < r.t1);
   const calm = sc.scene.crowd?.mood ?? 'happy';
+  const queue = sc.scene.crowd?.layout === 'line';
   return sc.extras
     .map((e) => {
       const dt = now ? t - now.t0 - e.delay : -1;
       const how = now && dt >= 0 ? REACTIONS[now.kind] : undefined;
       const g = getGeo(e.look.body, e.look.headShape);
+      // A queue stands side on until something makes them turn round and react.
+      const sideOn = queue && (!how || how.gesture === 'none' || SIDE_GESTURES.has(how.gesture));
       return {
         castId: e.id,
         name: '',
@@ -1241,6 +1268,7 @@ function sampleCrowd(sc: CompiledScene, t: number): ActorFrame[] {
         scale: BASE_SCALE * (1 - e.depth * 0.42),
         flip: false,
         turn: e.turn * 0.42,
+        ...(sideOn ? { view: 'side' as const } : {}),
         talk: 0,
         mouth: 'ah' as const,
         blink: false,
@@ -1249,7 +1277,7 @@ function sampleCrowd(sc: CompiledScene, t: number): ActorFrame[] {
         vomit: 0,
         gazeX: e.turn * GAZE_LOOK,
         gazeY: 0,
-        arms: how && how.gesture !== 'none' ? poseArms(g, how.gesture, e.turn < 0 ? -1 : 1, dt) : undefined,
+        arms: how && how.gesture !== 'none' ? poseArms(sideOn ? sideGeo(g) : g, how.gesture, e.turn < 0 ? -1 : 1, dt) : undefined,
         lift: how?.bob && Math.floor((t + e.delay) * 6 + 1e-6) % 2 ? 20 : 0,
         rotate: 0,
         squash: 1,
@@ -1299,6 +1327,70 @@ function sampleProps(sc: CompiledScene, t: number, actors: ActorFrame[]): PropFr
     });
 }
 
+/** Gestures that read side on. The rest need both arms on show, so anyone doing them turns to the camera. */
+const SIDE_GESTURES = new Set<GestureId>(['point', 'grab', 'explain', 'cross', 'hipHands', 'thinking', 'facepalm', 'eat', 'drink', 'coverEars']);
+
+/** How someone is turned: `dir` is the way they point side on, or look on a three-quarter turn. */
+interface Stance {
+  view: View;
+  dir: number;
+  quarter?: boolean;
+}
+
+/** The way someone means to be facing at t, with no turning in between. */
+function stanceAt(tr: ActorTrack, t: number, here: number, where: Map<string, number>): Stance {
+  const toward = (id: string | undefined) => {
+    const x = id === undefined ? undefined : where.get(id);
+    return x === undefined ? 0 : Math.sign(x - here) || 1;
+  };
+  // People hug side on.
+  const hug = tr.hugs.find((h) => t >= h.t0 && t < h.t1 + GESTURE_BLEND);
+  if (hug && toward(hug.toward)) return { view: 'side', dir: toward(hug.toward) };
+  const place = placeOn(tr.moves, tr.startX, tr.startY, tr.startVisible, t);
+  let s: Stance = { view: 'front', dir: 0 };
+  if (place.moving) s = place.up ? { view: place.up < 0 ? 'back' : 'front', dir: 0 } : { view: 'side', dir: place.dir };
+  else {
+    const face = lastAt(tr.faces, t)?.face ?? 'front';
+    if (face === 'away') s = { view: 'back', dir: 0 };
+    else if (face === 'left' || face === 'right') s = { view: 'side', dir: face === 'left' ? -1 : 1 };
+    else if (toward(face)) s = { view: 'side', dir: toward(face) };
+  }
+  // Their back can't be turned on someone they're passing something to.
+  const passing = tr.handoffs.find((h) => t >= h.t0 && t < h.t1 + GESTURE_BLEND);
+  const thrown = tr.throws.find((h) => t >= h.t0 && t < h.t1);
+  const target = toward(passing?.toward ?? thrown?.toward) || (thrown?.dir ?? 0);
+  if (s.view === 'back' && target) return { view: 'side', dir: target };
+  // Dancing, waving and so on are done to the camera.
+  const gs = gestureAt(tr, t);
+  if (s.view === 'side' && (actionAt(tr, t).dance !== undefined || (gs && !SIDE_GESTURES.has(gs.gesture)))) return { view: 'front', dir: s.dir, quarter: true };
+  return s;
+}
+
+/** Cut-outs swap rather than rotate: a pose of each view on the way round, then the new one. */
+function turnStep(from: Stance, to: Stance, k: number): Stance {
+  const dir = to.dir || from.dir || 1;
+  const quarter: Stance = { view: 'front', dir, quarter: true };
+  const sideOn: Stance = { view: 'side', dir };
+  let path: Stance[] = [];
+  if (from.view === to.view) path = to.view === 'side' ? [{ view: 'front', dir: 0 }] : [];
+  else if (from.view === 'back') path = to.view === 'front' ? [sideOn, quarter] : [];
+  else if (to.view === 'back') path = from.view === 'front' ? [quarter, sideOn] : [];
+  else path = [quarter];
+  return path[k] ?? to;
+}
+
+const sameStance = (a: Stance, b: Stance) => a.view === b.view && (a.view !== 'side' || a.dir === b.dir);
+
+/** The way someone is facing on this pose, partway round if they've just turned. */
+function stanceNow(tr: ActorTrack, t: number, here: number, where: Map<string, number>): Stance {
+  const at = (back: number) => stanceAt(tr, t - back / POSE_FPS + 1e-6, here, where);
+  const now = stanceAt(tr, t, here, where);
+  const last = at(1);
+  if (!sameStance(now, last)) return turnStep(last, now, 0);
+  const before = at(2);
+  return sameStance(last, before) ? now : turnStep(before, now, 1);
+}
+
 function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicles: VehicleFrame[]): ActorFrame[] {
   const out: ActorFrame[] = [];
   const where = whereabouts(sc, vehicles, t);
@@ -1335,7 +1427,7 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
     let { level, shape } = spoken;
     if (act.vomit) [level, shape] = [1, 'ah'];
     else if (!talk && gs?.gesture === 'eat') [level, shape] = [Math.floor((t - gs.t0) * 6 + 1e-6) % 2 ? 0.5 : 0, 'oh'];
-    let scale = BASE_SCALE * (1 - tr.depth * 0.28);
+    let scale = BASE_SCALE * (1 - tr.depth * 0.28) * (1 - place.away);
     let x = place.x;
     let y = place.y;
     const walking = !ride && place.moving;
@@ -1378,7 +1470,9 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
     const hug = tr.hugs.find((h) => t >= h.t0 && t < h.t1 + GESTURE_BLEND);
     const thrown = tr.throws.find((h) => t >= h.t0 && t < h.t1);
     let lookDir = 0;
-    if (walking) lookDir = place.dir;
+    // Passengers with nobody to look at sit side on, like the car.
+    let road = false;
+    if (walking) lookDir = place.up ? 0 : place.dir;
     else if (!tile) {
       let targetX: number | null = null;
       if (handoff) targetX = where.get(handoff.toward) ?? null;
@@ -1398,25 +1492,41 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
         }
       } else if (speaker && speaker.id !== tr.castId) targetX = speaker.x;
       if (targetX !== null && Math.abs(targetX - here) > 30) lookDir = Math.sign(targetX - here);
-      else if (vehicle) lookDir = vehicle.flip ? -1 : 1;
+      else if (vehicle) {
+        lookDir = vehicle.flip ? -1 : 1;
+        road = true;
+      }
     }
-    const turn = walking ? lookDir : (lookDir || (act.vomit ? 1 : 0)) * (talk || act.vomit ? 0.55 : 0.42);
+
+    // Which way they're turned. Anyone lying down, on a screen or in a car talking stays as they are.
+    const stance: Stance = road ? { view: 'side', dir: lookDir } : ride || tile || sit.lie ? { view: 'front', dir: 0 } : stanceNow(tr, t, here, where);
+    const { view } = stance;
+    if (view === 'back') lookDir = 0;
+    else if (view === 'side' || stance.quarter) lookDir = stance.dir || lookDir;
+    const flip = view === 'side' ? lookDir < 0 : tr.flip;
+    const quarterTurn = stance.quarter || walking;
+    const turn = view === 'side' ? 1 : view === 'back' ? 0 : quarterTurn ? lookDir : (lookDir || (act.vomit ? 1 : 0)) * (talk || act.vomit ? 0.55 : 0.42);
     const gaze = gazeAt(tr, t, lookDir, here, where, !!talk);
 
-    // Arms: hand-overs, then gestures, then pumping while running.
+    // Arms: hand-overs, then gestures, then pumping while running. Side on they hang from the middle of the body.
+    const ag = view === 'side' ? sideGeo(g) : g;
     const lead = (lookDir || 1) as -1 | 1;
-    const charLead = (tr.flip ? -lead : lead) as -1 | 1;
-    let arms: ArmsPose | undefined;
-    if (handoff) arms = blendIn(g, handOverArms(g, charLead), t, handoff.t0, handoff.t1);
-    else if (hug) arms = blendIn(g, hugArms(g, charLead), t, hug.t0, hug.t1);
-    else if (thrown) arms = throwArms(g, charLead, t - thrown.t0, WIND_UP);
-    else if (act.dance !== undefined) arms = danceArms(g, act.dance);
-    else if (gs) arms = blendIn(g, poseArms(g, gs.gesture, charLead, t - gs.t0, level), t, gs.t0, gs.t1);
-    else if (walking && place.run) arms = runArms(g, place.moveT);
-    else if (walking && place.sneak) arms = sneakArms(g, charLead, place.moveT);
-
+    const charLead = (flip ? -lead : lead) as -1 | 1;
     const period = place.run ? RUN_HOP : place.sneak ? SNEAK_HOP : HOP_PERIOD;
     const hop = walking ? Math.round((1 - Math.abs(2 * ((place.moveT / period) % 1) - 1)) * 2) / 2 : 0;
+    // Feet apart between hops, together at the top of each one, leading with the other foot every time.
+    const stride = walking && view === 'side' ? (Math.floor(place.moveT / period + 1e-6) % 2 ? -1 : 1) * (1 - hop) : 0;
+    let arms: ArmsPose | undefined;
+    if (handoff) arms = blendIn(ag, handOverArms(ag, charLead), t, handoff.t0, handoff.t1);
+    else if (hug) arms = blendIn(ag, hugArms(ag, charLead), t, hug.t0, hug.t1);
+    else if (thrown) arms = throwArms(ag, charLead, t - thrown.t0, WIND_UP);
+    else if (act.dance !== undefined) arms = danceArms(ag, act.dance);
+    else if (gs) arms = blendIn(ag, poseArms(ag, gs.gesture, charLead, t - gs.t0, level), t, gs.t0, gs.t1);
+    else if (walking && place.run) arms = runArms(ag, place.moveT);
+    else if (walking && place.sneak) arms = sneakArms(ag, charLead, place.moveT);
+    else if (walking && view === 'side') arms = walkArms(ag, -stride);
+    else if (view === 'side') arms = restArms(ag);
+
     const blink = !talk && mood !== 'love' && tr.blinks.some((b) => t >= b && t < b + 0.13);
     // Runners lean into it, and so does anyone creeping along, hugging or being sick.
     const lean = walking ? place.dir * (place.run ? 7 : place.sneak ? 5 : 0) : (hug ? lookDir * 5 : 0) + (act.vomit ? (lookDir || 1) * 10 : 0);
@@ -1428,15 +1538,17 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
       x: x + act.jitter,
       y,
       scale,
-      flip: tr.flip,
-      turn: tr.flip ? -turn : turn,
+      flip,
+      turn: flip ? -turn : turn,
+      ...(view !== 'front' ? { view } : {}),
+      ...(walking && view === 'side' ? { stride } : {}),
       talk: level,
       mouth: shape,
       blink,
       tears: mood === 'cry' ? drip : 0,
       sweat: mood === 'nervous' ? drip : 0,
       vomit: act.vomit,
-      gazeX: tr.flip ? -gaze.x : gaze.x,
+      gazeX: flip ? -gaze.x : gaze.x,
       gazeY: gaze.y,
       arms,
       lift: hop * (place.run ? 34 : place.sneak ? 10 : 26) + act.lift + level * 3 + raise + (form === 'bat' ? 150 + (Math.floor(t * 6 + 1e-6) % 2) * 22 : 0),

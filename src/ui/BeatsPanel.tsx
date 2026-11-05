@@ -3,6 +3,7 @@ import type { Beat, CastMember, Episode, Move, Scene, Shot } from '../episode/ty
 import { ACTION_LIST, BURST_LIST, CROWD_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST } from '../episode/catalog';
 import { insertBeat, moveBeat, removeBeat, updateBeat } from '../episode/edit';
 import { seatsOf } from '../episode/seats';
+import { FaceSelect } from './FaceSelect';
 import { getVehicleDef } from '../sets/vehicles';
 import { HELD, SIDEKICKS } from '../character/parts/held';
 import type { VoiceStatus } from '../audio/useVoiceBank';
@@ -159,6 +160,7 @@ function MovesEditor({ moves, cast, scene, onChange }: { moves: Move[]; cast: Ca
                 <option value="">{vehicle ? 'the way it faces' : 'nearest side'}</option>
                 <option value="left">from/to left</option>
                 <option value="right">from/to right</option>
+                {!vehicle && m.kind === 'exit' && <option value="back">away from the camera</option>}
               </select>
             )}
             {m.kind === 'approach' && <CastSelect cast={cast.filter((c) => c.id !== m.who)} value={m.on} onChange={(v) => set(i, { on: v })} />}
@@ -444,6 +446,10 @@ function BeatCard(props: {
           <label className="span2" title={isLine ? undefined : 'Just the eyes move: a side-eye'}>
             Looks at
             <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.lookAt} onChange={(v) => set({ lookAt: v })} allowNone />
+          </label>
+          <label className="span2" title="From this beat until they next walk">
+            Turns to face
+            <FaceSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.face} onChange={(v) => set({ face: v })} />
           </label>
           <div className="span2">
             <span className="lbl">Movement</span>

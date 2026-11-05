@@ -86,6 +86,21 @@ export function screenOf(set: SetSpec): ScreenSpot {
   return BIG_SCREEN;
 }
 
+const OUTDOORS = new Set(['busstop', 'mainstreet', 'pond', 'townsign', 'campfire']);
+
+/** Where someone walking away from the camera ends up: the nearest door, or the distance outdoors. Null in a room with no door. */
+export function wayOut(set: SetSpec, x: number, groundY: number): { x: number; y: number; shrink: number; time: number } | null {
+  if (set.kind === 'kit') {
+    const doors = set.pieces.filter((p) => p.type === 'door').map((p) => resolvePiece(set, p));
+    if (doors.length) {
+      const door = doors.reduce((a, b) => (Math.abs(b.x - x) < Math.abs(a.x - x) ? b : a));
+      return { x: door.x, y: door.y, shrink: 0.3, time: 1 };
+    }
+  }
+  const outside = set.kind === 'kit' ? set.place === 'exterior' : OUTDOORS.has(set.preset);
+  return outside ? { x, y: groundY - 210, shrink: 0.72, time: 2.4 } : null;
+}
+
 /** Squeezed up, people sit this close. */
 const SQUEEZE_W = 170;
 

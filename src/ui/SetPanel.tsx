@@ -6,6 +6,7 @@ import { SCENES } from '../scenes/backgrounds';
 import { defaultKitSet, getPieceDef, KIT_PIECES } from '../sets/kit';
 import { newId } from '../episode/normalize';
 import { SetLayer } from '../render/FrameSvg';
+import { FaceSelect } from './FaceSelect';
 
 interface Props {
   scene: Scene;
@@ -23,6 +24,11 @@ function Staging({ scene, cast, onScene }: Props & { cast: CastMember[] }) {
   const toggleScreen = (id: string) => {
     const has = scene.blocking.some((b) => b.who === id);
     const blocking = has ? scene.blocking.map((b) => (b.who === id ? { ...b, screen: b.screen ? undefined : true } : b)) : [...scene.blocking, { who: id, x: 800, depth: 0, mood: 'happy' as const, screen: true }];
+    onScene({ ...scene, blocking });
+  };
+  const setFace = (id: string, face: string | undefined) => {
+    const has = scene.blocking.some((b) => b.who === id);
+    const blocking = has ? scene.blocking.map((b) => (b.who === id ? { ...b, face } : b)) : [...scene.blocking, { who: id, x: 800, depth: 0, mood: 'happy' as const, face }];
     onScene({ ...scene, blocking });
   };
   const split = scene.split;
@@ -43,6 +49,12 @@ function Staging({ scene, cast, onScene }: Props & { cast: CastMember[] }) {
           <option value="line">A line</option>
         </select>
       </label>
+      {here.map((c) => (
+        <label key={c.id}>
+          {c.name} faces
+          <FaceSelect cast={here.filter((o) => o.id !== c.id)} value={scene.blocking.find((b) => b.who === c.id)?.face} onChange={(v) => setFace(c.id, v)} start />
+        </label>
+      ))}
       <div className="span2">
         <span className="lbl">On the TV or video call</span>
         <div className="chips">

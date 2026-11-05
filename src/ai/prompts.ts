@@ -162,7 +162,7 @@ Scene = {
   "title": "short name", "description": "what happens",
   "set": SetSpec,
   "weather": one of ${WEATHER_LIST.map((w) => w.id).join(', ')},
-  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "lie": "bed", "in": "car", "hold": "phone", "screen": true } ],  // sit / lie / in / hold / screen only when needed
+  "blocking": [ { "who": "name", "x": 560, "depth": 0, "mood": "happy", "offstage": false, "flip": false, "sit": "couch", "lie": "bed", "in": "car", "hold": "phone", "screen": true, "face": "away" } ],  // sit / lie / in / hold / screen / face only when needed
   "vehicles": [ { "id": "car", "type": "car|police|bus", "x": 800, "color": "#hex", "offstage": true, "lane": "back|front" } ],  // only if a vehicle appears
   "beats": [ Beat ],
   "hold": seconds of establishing wide shot before the first beat (about 1.2; 0.6 for the first scene),
@@ -181,7 +181,7 @@ Beat = {
   "gesture": arm pose of "who" during the beat,
   "action": one-shot body action of "who",
   "also": ["names"],  // others doing the same gesture, action and hold at the same moment
-  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|lie|stand|approach|getIn|getOut|crash|joinScreen|leaveScreen", "x": 800, "side": "left|right", "run": true, "sneak": true, "on": "seat, vehicle or person" } ],
+  "moves": [ { "who": "name or vehicle id", "kind": "walk|enter|exit|appear|vanish|sit|lie|stand|approach|getIn|getOut|crash|joinScreen|leaveScreen", "x": 800, "side": "left|right|back", "run": true, "sneak": true, "on": "seat, vehicle or person" } ],
   "hold": "prop id",  // what "who" holds from this beat on ("none" puts it away)
   "give": "name",  // "who" hands their prop to this person during the beat
   "hug": "name",  // "who" walks up to this person and they hug
@@ -190,6 +190,7 @@ Beat = {
   "burst": { "kind": "smoke", "at": "name or vehicle id", "x": 800, "stay": false },  // smoke and fire; "stay" keeps it going until the scene ends
   "drift": { "item": "prop id", "style": "blow|roll|fall", "from": "left|right", "x": 800 },  // a prop going by on its own
   "lookAt": "name the speaker looks at (default: nearest person); on a silent beat only the eyes move, a side-eye",
+  "face": "front|away|left|right or a name",  // which way "who" and "also" face from this beat on
   "shot": { "type": "wide|medium|close", "on": ["names"], "push": false, "pan": false, "follow": false },  // camera change at the start of the beat; omit to keep the current shot
   "sfx": sound effect, "effect": screen effect,
   "caption": "on-screen text for time jumps or signs",
@@ -231,6 +232,7 @@ STAGE BUSINESS
 - Throwing: the "throw" action sends what "who" holds at "lookAt", or out of shot if there's no "lookAt". Set "hold" on the same beat if they aren't holding it yet. The prop leaves their hand.
 - Props: "hold" puts a prop in "who"'s hand (pick something up, pull out a phone); "give" hands it to someone, who should be standing near them. Blocking "hold" sets the prop they start the scene with.
 - Camera moves: a shot normally cuts. "pan": true glides there from the last shot over about a second: from one person to another, in on someone, or back out to wide. "follow": true keeps a medium or close shot on "on" as they walk or run. "push": true creeps in slowly during the beat.
+- Facing: people face the camera, and turn side on by themselves to walk or run. "face" turns "who" and stays until they next walk: "away" puts their back to the camera (brooding, ignoring someone, looking out of a window, watching a stage); "left", "right" or a person's name turns them side on (squaring up to someone, a talk in profile); "front" brings them back. Blocking "face" sets it at the start of a scene. An "exit" with "side": "back" walks away from the camera, through the nearest door or off into the distance outdoors, for a sad or dramatic exit; indoors with no door they leave by the side instead.
 - Eyes: a silent beat with "lookAt" slides just the eyes to that person, with no head turn. Good for a side-eye before a deadpan line.
 - Crowds: "crowd" fills the rows behind the cast with extras ("line" queues them across the stage instead). Beat "crowd" makes them react. Use it for audiences, classes, mobs and queues. The cast stay separate from the extras.
 - Screens: blocking "screen": true puts someone on the set's TV or computer, or on a big video screen on the back wall if it has none; several people share it as a video call. "joinScreen" and "leaveScreen" moves put people on and take them off during the scene. They can talk as normal, and everyone on stage looks at the screen when they do. Use it for news anchors, people "on the TV" and video calls.
@@ -260,7 +262,7 @@ DIRECTING RULES
 7. Camera: wide by default. Cut to a close-up for punchlines, outbursts and reaction shots, a medium shot for intimate two-person moments, then cut back to wide. Don't cut on every line. Pans and follows are rare: save them for a reveal or a chase.
 8. Comic timing: pauseAfter 0.6 to 1.2 before deadpan answers and after shocking lines; a silent reaction beat (duration 1 to 1.5, with reactions) is often funnier than a line.
 9. Outdoor town scenes usually have "weather": "snow" unless the script says otherwise. Scene changes are hard cuts unless the script asks for a fade or a dissolve, or a big jump in time calls for one.
-10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who lie down lie down; people who run run; people who sneak sneak; people who dance dance; anything someone picks up, eats, drinks, reads, throws or hands over becomes a "hold", "give" or "throw"; arrivals and departures by car or bus use a vehicle; anyone "on the TV" or "on the call" is on the screen; crowds, crashes, fires and transformations are shown, not skipped.`;
+10. Act out the stage directions: people who sit (at desks, on the couch, around the campfire) sit; people who lie down lie down; people who run run; people who sneak sneak; people who dance dance; anything someone picks up, eats, drinks, reads, throws or hands over becomes a "hold", "give" or "throw"; arrivals and departures by car or bus use a vehicle; anyone "on the TV" or "on the call" is on the screen; people who turn their backs or walk away do; crowds, crashes, fires and transformations are shown, not skipped.`;
 }
 
 export function editSystem(): string {

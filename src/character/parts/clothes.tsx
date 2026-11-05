@@ -34,6 +34,11 @@ function buttons(c: RenderCtx, x: number, from: number, to: number, n: number, c
   ));
 }
 
+/** A top from behind: its own back if it has one, otherwise plain, with none of the buttons, pockets and prints. */
+export function topBack(top: TopDef, c: RenderCtx): ReactNode {
+  return top.back ? top.back(c) : top.allOver ? top.torso(c) : base(c);
+}
+
 /* ------------------------------------------------------------------ tops */
 
 export interface TopDef extends ItemBase {
@@ -46,6 +51,8 @@ export interface TopDef extends ItemBase {
   skirt?: Render;
   /** Legs take the top's colour (overalls, onesies). */
   legsMatch?: boolean;
+  /** The pattern goes all the way round, so from behind it looks the same as from the front. */
+  allOver?: boolean;
 }
 
 export const TOPS: TopDef[] = [
@@ -166,6 +173,7 @@ export const TOPS: TopDef[] = [
   {
     id: 'sweater',
     name: "Grandma's Sweater",
+    allOver: true,
     quip: 'Grandma knitted it. Itchy with love. Mostly itchy.',
     defaultColor: '#26367a',
     sleeves: 'long',
@@ -356,6 +364,7 @@ export const TOPS: TopDef[] = [
   },
   {
     id: 'stripes',
+    allOver: true,
     name: 'Striped Shirt',
     quip: 'Somewhere, a guy in a bobble hat is very upset about this.',
     defaultColor: '#d33b2c',
@@ -383,6 +392,7 @@ export const TOPS: TopDef[] = [
   {
     id: 'flannel',
     name: 'Flannel',
+    allOver: true,
     quip: 'Chops wood. Emotionally. Has never seen an axe.',
     defaultColor: '#d33b2c',
     sleeves: 'long',
@@ -564,6 +574,7 @@ export const TOPS: TopDef[] = [
   },
   {
     id: 'hawaiian',
+    allOver: true,
     name: 'Hawaiian Shirt',
     quip: 'On vacation. Mentally. Permanently. Please leave a message.',
     defaultColor: '#2ec4c4',
@@ -655,6 +666,7 @@ export const TOPS: TopDef[] = [
   },
   {
     id: 'poncho',
+    allOver: true,
     name: 'Poncho',
     quip: 'Is it a blanket? Is it a shirt? Yes. Yes it is.',
     defaultColor: '#f0742a',
@@ -751,6 +763,22 @@ export const TOPS: TopDef[] = [
     defaultColor: '#d33b2c',
     sleeves: 'long',
     mittens: () => '#1f1f22',
+    back: (c) => {
+      const { g } = c;
+      return (
+        <g>
+          {base(c)}
+          {torsoClip(
+            c,
+            <g>
+              <rect x={g.cx - 200} y={g.torsoBottom - 14} width={400} height={30} fill="#fff" stroke={O} strokeWidth={2} />
+              <rect x={g.cx - 200} y={g.torsoBottom - 40} width={400} height={16} {...f('#1f1f22')} strokeWidth={2} />
+            </g>,
+          )}
+          {outline(c)}
+        </g>
+      );
+    },
     torso: (c) => {
       const { g } = c;
       const ch = chinY(g);
@@ -812,6 +840,7 @@ export const TOPS: TopDef[] = [
   },
   {
     id: 'tiedye',
+    allOver: true,
     name: 'Tie-Dye',
     quip: 'Smells like patchouli and questionable decisions. Wants to save the whales.',
     defaultColor: '#8b5cc7',
@@ -839,6 +868,7 @@ export const TOPS: TopDef[] = [
   },
   {
     id: 'gown',
+    allOver: true,
     name: 'Hospital Gown',
     quip: 'Breezy in the back. Do NOT turn around. We are begging you.',
     defaultColor: '#a8d8f0',
@@ -875,11 +905,15 @@ export const TOPS: TopDef[] = [
 
 export interface BottomDef extends ItemBase {
   render: Render;
+  /** Hangs from the waist: it stays put when they walk. */
+  skirted?: boolean;
 }
 
 export function legsPath(g: BodyGeo, y0 = g.legTop, y1 = g.legBottom, flare = 0): string {
   const lo = g.cx - g.legSep - g.legW / 2;
   const ro = g.cx + g.legSep + g.legW / 2;
+  // Side on there's one leg, so no gap between them.
+  if (!g.legSep) return `M ${lo} ${y0} L ${lo - flare} ${y1} L ${ro + flare} ${y1} L ${ro} ${y0} Z`;
   const il = Math.min(g.cx - g.legSep + g.legW / 2, g.cx - 1.5);
   const ir = Math.max(g.cx + g.legSep - g.legW / 2, g.cx + 1.5);
   const crotch = y0 + (y1 - y0) * 0.3;
@@ -952,6 +986,7 @@ export const BOTTOMS: BottomDef[] = [
   {
     id: 'skirt',
     name: 'Skirt',
+    skirted: true,
     quip: 'Swishy. So swishy. Maximum swish achieved.',
     defaultColor: '#8b5cc7',
     render: (c) => (
@@ -1052,6 +1087,7 @@ export const BOTTOMS: BottomDef[] = [
   },
   {
     id: 'kilt',
+    skirted: true,
     name: 'Kilt',
     quip: 'Breezy. Very breezy. Please do not ask what is under it.',
     defaultColor: '#2e8b47',
@@ -1099,6 +1135,7 @@ export const BOTTOMS: BottomDef[] = [
   },
   {
     id: 'tutu',
+    skirted: true,
     name: 'Tutu',
     quip: 'Ballet recital survivor. Fell off the stage. Got a standing ovation anyway.',
     defaultColor: '#f27bb4',
@@ -1365,6 +1402,8 @@ export const SHOES: ShoeDef[] = [
 export interface NeckDef extends ItemBase {
   back?: Render;
   front?: Render;
+  /** Goes right round the neck, so it still shows from behind. */
+  wraps?: boolean;
   /** Wraps up under the chin, so it is drawn in front of the head. */
   overHead?: boolean;
 }
@@ -1373,6 +1412,7 @@ export const NECKWEAR: NeckDef[] = [
   { id: 'none', name: 'Nothing', quip: 'Neck: unadorned. Vulnerable. Free.' },
   {
     id: 'scarf',
+    wraps: true,
     name: 'Scarf',
     quip: 'Knitted by a nervous aunt. Seven feet long. Tripped on it twice.',
     defaultColor: '#d33b2c',

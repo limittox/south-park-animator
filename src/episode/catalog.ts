@@ -1,4 +1,4 @@
-import type { ActionId, BurstId, CrowdReaction, GestureId, MoodId, ScreenEffect, SfxId, ShotType, Transition, Weather } from './types';
+import type { ActionId, BurstId, CrowdReaction, Facing, GestureId, MoodId, ScreenEffect, SfxId, ShotType, Transition, Weather } from './types';
 
 /** The animation vocabulary: shown in the editor and handed to the LLM, so every entry says what it looks like. */
 export interface VocabEntry<T extends string> {
@@ -98,6 +98,13 @@ export const CROWD_LIST: VocabEntry<CrowdReaction>[] = [
   { id: 'panic', label: 'Panic', desc: 'shocked, flailing and bobbing' },
 ];
 
+export const FACE_LIST: VocabEntry<Facing>[] = [
+  { id: 'front', label: 'The camera', desc: 'facing the camera (the usual)' },
+  { id: 'away', label: 'Away', desc: 'back to the camera' },
+  { id: 'left', label: 'Left', desc: 'side on, facing left' },
+  { id: 'right', label: 'Right', desc: 'side on, facing right' },
+];
+
 export const TRANSITION_LIST: VocabEntry<Transition>[] = [
   { id: 'cut', label: 'Hard cut', desc: 'straight to the new scene (the usual)' },
   { id: 'fade', label: 'Fade through black', desc: 'the last scene fades to black, then this one fades up (act breaks, big time jumps)' },
@@ -120,6 +127,7 @@ export const SHOT_IDS = SHOT_LIST.map((m) => m.id);
 export const SFX_IDS = SFX_LIST.map((m) => m.id);
 export const EFFECT_IDS = EFFECT_LIST.map((m) => m.id);
 export const TRANSITION_IDS = TRANSITION_LIST.map((m) => m.id);
+export const FACE_IDS = FACE_LIST.map((m) => m.id);
 export const BURST_IDS = BURST_LIST.map((m) => m.id);
 export const CROWD_IDS = CROWD_LIST.map((m) => m.id);
 export const WEATHER_IDS = WEATHER_LIST.map((m) => m.id);
