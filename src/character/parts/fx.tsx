@@ -19,17 +19,6 @@ export function tearsFx(step: number): ReactNode {
   );
 }
 
-/** Beads flying off the sides of the head (head coordinates). */
-export function sweatFx(step: number): ReactNode {
-  const bead = (k: number, s: number) => drop(-118 - (k % 4) * 14, -52 + (k % 4) * 22, s);
-  return (
-    <Mirror>
-      {bead(step, 1.7)}
-      {bead(step + 2, 1.15)}
-    </Mirror>
-  );
-}
-
 /** A green arc from the mouth to a growing puddle, on the side they're facing (character coordinates). */
 export function vomitFx(g: BodyGeo, side: -1 | 1, step: number, mouth = 0.3): ReactNode {
   const x0 = g.headCx + side * g.headRx * mouth;

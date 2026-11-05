@@ -896,13 +896,13 @@ export const MOODS: MoodDef[] = [
   { id: 'rage', name: 'Screaming', quip: 'Storming off home in a huff. Will be back in five minutes for snacks.', set: { eyes: 'angry', brows: 'angry', mouth: 'shout' } },
   { id: 'sad', name: 'Bummed', quip: 'Dropped their ice cream. On a puppy. Both were sad.', set: { eyes: 'sad', brows: 'worried', mouth: 'frown' } },
   { id: 'cry', name: 'Sobbing', quip: 'Their sandwich was cut into squares, not triangles.', set: { eyes: 'sad', brows: 'worried', mouth: 'wail' } },
-  { id: 'nervous', name: 'Sweating', quip: 'Definitely not hiding anything. Why would you even ask?', set: { eyes: 'wide', brows: 'worried', mouth: 'grimace' } },
+  { id: 'nervous', name: 'Nervous', quip: 'Definitely not hiding anything. Why would you even ask?', set: { eyes: 'wide', brows: 'worried', mouth: 'wavy' } },
   { id: 'shock', name: 'Shocked', quip: 'Did they just say that on network TV?', set: { eyes: 'wide', brows: 'raised', mouth: 'oshock' } },
   { id: 'smug', name: 'Smug', quip: 'Told you so. Told you so. Told you so.', set: { eyes: 'shifty', brows: 'raised', mouth: 'smug' } },
-  { id: 'evil', name: 'Evil Plotting', quip: 'Planning revenge on whoever invented homework.', set: { eyes: 'demon', brows: 'angry', mouth: 'fangs' } },
+  { id: 'evil', name: 'Evil Plotting', quip: 'Planning revenge on whoever invented homework.', set: { eyes: 'angry', brows: 'angry', mouth: 'smug' } },
   { id: 'sick', name: 'Green Around the Gills', quip: 'Mystery meat Monday strikes again.', set: { eyes: 'tired', brows: 'worried', mouth: 'wavy' } },
   { id: 'love', name: 'Lovestruck', quip: 'Wrote a love letter. Signed it "anonymous". Wrote their address on it.', set: { eyes: 'hearts', brows: 'thin', mouth: 'kissy' } },
   { id: 'deadpan', name: 'Deadpan', quip: 'Whatever, dude.', set: { eyes: 'sleepy', brows: 'none', mouth: 'flat' } },
-  { id: 'crazy', name: 'Unhinged', quip: 'Ate a whole bag of sugar. For science.', set: { eyes: 'crazy', brows: 'raised', mouth: 'grimace' } },
+  { id: 'crazy', name: 'Unhinged', quip: 'Ate a whole bag of sugar. For science.', set: { eyes: 'wide', brows: 'angry', mouth: 'grin' } },
 ];
 

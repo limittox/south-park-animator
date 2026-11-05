@@ -19,7 +19,7 @@ import { CharacterGroup } from './character/Character';
 import { HAIR } from './character/parts/hair';
 import { HATS } from './character/parts/hats';
 import { BOTTOMS, NECKWEAR, SHOES, TOPS } from './character/parts/clothes';
-import { talkingMouth } from './character/parts/face';
+import { MOODS, talkingMouth } from './character/parts/face';
 import { mouthTrack, sounds } from './episode/lipSync';
 import { DEFAULT_CHARACTER } from './data/defaults';
 import type { Episode } from './episode/types';
@@ -1104,17 +1104,31 @@ describe('acting', () => {
     return { c, sc, frame, who: (t: number, id: string) => frame(t).actors.find((a) => a.castId === id)! };
   };
 
-  it('runs tears and sweat for as long as the mood lasts', () => {
+  it('runs tears for as long as the mood lasts', () => {
     const { sc, who } = play({ blocking: [{ who: 'Kid', x: 800 }], beats: [{ who: 'Kid', mood: 'cry', duration: 2 }, { who: 'Kid', mood: 'nervous', duration: 2 }, { who: 'Kid', mood: 'happy', duration: 1 }] });
     const [cry, nervous, happy] = sc.beats;
     const tears = [0, 2, 4, 6].map((i) => who(cry.start + i / POSE_FPS, 'kid').tears);
     expect(tears.every(Boolean)).toBe(true);
     expect(new Set(tears).size).toBe(4);
     expect(who(cry.start + 1, 'kid').c.mouth).toBe('wail');
-    expect(who(cry.start + 1, 'kid').sweat).toBe(0);
-    expect(who(nervous.start + 1, 'kid').sweat).toBeGreaterThan(0);
     expect(who(nervous.start + 1, 'kid').tears).toBe(0);
-    expect(who(happy.start + 0.5, 'kid').sweat).toBe(0);
+    expect(who(happy.start + 0.5, 'kid').tears).toBe(0);
+  });
+
+  it('shows nerves on the face, with a wobbly mouth and no water or gritted teeth', () => {
+    const { sc, frame, who } = play({ blocking: [{ who: 'Kid', x: 800 }], beats: [{ who: 'Kid', mood: 'nervous', duration: 2 }] });
+    const t = sc.beats[0].start + 1;
+    expect(who(t, 'kid').c).toMatchObject({ eyes: 'wide', brows: 'worried', mouth: 'wavy' });
+    const markup = renderToStaticMarkup(createElement(FrameSvg, { frame: frame(t) }));
+    expect(markup).not.toContain('#9fd8ff');
+    expect(MOODS.some((m) => m.set.mouth === 'grimace')).toBe(false);
+  });
+
+  it('keeps evil and unhinged faces plain: white eyes that match, and no fangs', () => {
+    const face = (id: string) => MOODS.find((m) => m.id === id)!.set;
+    expect(face('evil')).toEqual({ eyes: 'angry', brows: 'angry', mouth: 'smug' });
+    expect(face('crazy')).toEqual({ eyes: 'wide', brows: 'angry', mouth: 'grin' });
+    expect(MOODS.some((m) => m.set.eyes === 'demon' || m.set.eyes === 'crazy' || m.set.mouth === 'fangs')).toBe(false);
   });
 
   it('reads crying and sweating from acting notes and directions', () => {

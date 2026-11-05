@@ -228,7 +228,7 @@ STAGE BUSINESS
 - Together: "also" makes other people do the same gesture, action and hold as "who" at the same moment. Use it whenever a group dances, cheers, raises something or throws. Separate beats would play one after the other.
 - Sitting: a "sit" move walks the character to a seat and sits them down; "on" is a seat id, a seat type ("couch", "bench", "chair", "table", "desk", "log") or "floor". A "stand" move gets them up; walking anywhere also gets them up. Blocking "sit" starts them seated. Seats are the "seat" pieces of a kit set (sitters face the camera; at tables and desks they sit behind it) or the seats listed for a preset. Several people share a couch or table side by side.
 - Lying down: a "lie" move works like "sit", but they stretch out along the seat ("couch", "bed", "bench") or on the "floor", and stay there until a "stand" or a walk. Blocking "lie" starts them lying down. "faint" is falling over; "lie" is lying down on purpose: sleeping, hungover, sunbathing.
-- Tears and sweat: the "cry" and "nervous" moods run them for as long as the mood lasts.
+- Tears: the "cry" mood runs them for as long as the mood lasts.
 - Food and drink: the "eat" and "drink" gestures use whatever "who" holds, so set "hold" on the same beat if they aren't holding it yet.
 - Throwing: the "throw" action sends what "who" holds at "lookAt", or out of shot if there's no "lookAt". Set "hold" on the same beat if they aren't holding it yet. The prop leaves their hand.
 - Props: "hold" puts a prop in "who"'s hand (pick something up, pull out a phone); "give" hands it to someone, who should be standing near them. Blocking "hold" sets the prop they start the scene with.

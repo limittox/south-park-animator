@@ -69,7 +69,7 @@ export function scriptWritingPrompt({ crew = [], draft = '' }: PromptContext = {
 - For a phone call, put SPLIT SCREEN on its own line under the heading, naming the other person and their place: "SPLIT SCREEN: Gus and Tilly at the bus stop." Tilly is then on the other half of the screen, at the bus stop, and both hold phones. "It starts snowing." makes it snow from that moment, and "It stops snowing." ends it. A caption reads "Three hours later." puts words on screen.
 - Scenes change with a hard cut. For something softer, put FADE OUT. or DISSOLVE TO: on its own line between two scenes.
 - Leave ordinary camera work to the app, but when a joke needs a particular shot, a stage direction can ask for it: "Close on Gus.", "Zoom in on Gus.", "The camera pans to Tilly.", "The camera follows Gus.", "The camera pulls back."
-- Acting notes also set the character's face: angry, yelling, screaming, sad, crying (with tears), shocked, scared, nervous (with sweat), excited, happy, sarcastic, smug, evil, scheming, deadpan, bored, sick, dreamy, in love, hysterical. A line in ALL CAPS with an exclamation mark is screamed.`,
+- Acting notes also set the character's face: angry, yelling, screaming, sad, crying (with tears), shocked, scared, nervous, excited, happy, sarcastic, smug, evil, scheming, deadpan, bored, sick, dreamy, in love, hysterical. A line in ALL CAPS with an exclamation mark is screamed.`,
 
     `WRITING TIPS
 - A text-to-speech voice reads every line aloud, so write words exactly as they're spoken: no emoji, no markdown, no *asterisk actions*, no sound effects inside dialogue.

@@ -60,7 +60,7 @@ export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
   return (
     <g transform={actorTransform(a)}>
       <MirroredPart.Provider value={a.flip}>
-        <CharacterGroup c={a.c} talk={a.talk} mouthShape={a.mouth} turn={a.turn} view={a.view} stride={a.stride} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} tears={a.tears} sweat={a.sweat} vomit={a.vomit} hipY={a.hipY} />
+        <CharacterGroup c={a.c} talk={a.talk} mouthShape={a.mouth} turn={a.turn} view={a.view} stride={a.stride} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} tears={a.tears} vomit={a.vomit} hipY={a.hipY} />
       </MirroredPart.Provider>
     </g>
   );

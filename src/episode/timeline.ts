@@ -895,9 +895,8 @@ export interface ActorFrame {
   talk: number;
   mouth: MouthShape;
   blink: boolean;
-  /** Crying, sweating, being sick: 0 for not, otherwise a step 1-4 that moves it along. */
+  /** Crying, being sick: 0 for not, otherwise a step 1-4 that moves it along. */
   tears: number;
-  sweat: number;
   vomit: number;
   /** Where the pupils point, -1..1 across and down. */
   gazeX: number;
@@ -1285,7 +1284,6 @@ function sampleCrowd(sc: CompiledScene, t: number): ActorFrame[] {
         mouth: 'ah' as const,
         blink: false,
         tears: 0,
-        sweat: 0,
         vomit: 0,
         gazeX: e.turn * GAZE_LOOK,
         gazeY: 0,
@@ -1575,7 +1573,6 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
       mouth: shape,
       blink,
       tears: mood === 'cry' ? drip : 0,
-      sweat: mood === 'nervous' ? drip : 0,
       vomit: act.vomit,
       gazeX: flip ? -gaze.x : gaze.x,
       gazeY: gaze.y,

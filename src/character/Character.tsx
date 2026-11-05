@@ -9,7 +9,7 @@ import { HATS } from './parts/hats';
 import { FACE_GEAR, GLASSES } from './parts/glasses';
 import { BOTTOMS, NECKWEAR, SHOES, topBack, TOPS, type TopDef } from './parts/clothes';
 import { HELD, SIDEKICKS } from './parts/held';
-import { sweatFx, tearsFx, vomitFx } from './parts/fx';
+import { tearsFx, vomitFx } from './parts/fx';
 
 function byId<T extends { id: string }>(list: T[], id: string): T {
   return list.find((x) => x.id === id) ?? list[0];
@@ -46,9 +46,8 @@ export interface CharacterProps {
   /** Where the pupils point, -1..1 across and down. */
   gazeX?: number;
   gazeY?: number;
-  /** Crying, sweating or being sick: 0 for not, otherwise a step 1-4 that moves it along. */
+  /** Crying or being sick: 0 for not, otherwise a step 1-4 that moves it along. */
   tears?: number;
-  sweat?: number;
   vomit?: number;
   /** Sitting: where the hips are (character coordinates); see seatedGeo. */
   hipY?: number;
@@ -56,7 +55,7 @@ export interface CharacterProps {
 }
 
 /** A whole character as an SVG <g>, in character coordinates (ground at y = 480). */
-export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthShape, turn = 0, view = 'front', stride, arms: pose, blink = false, gazeX = 0, gazeY = 0, tears = 0, sweat = 0, vomit = 0, hipY, onPartClick }: CharacterProps) {
+export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthShape, turn = 0, view = 'front', stride, arms: pose, blink = false, gazeX = 0, gazeY = 0, tears = 0, vomit = 0, hipY, onPartClick }: CharacterProps) {
   const rawId = useId();
   const prefix = 'c' + rawId.replace(/[^a-zA-Z0-9]/g, '');
   let counter = 0;
@@ -291,7 +290,6 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
       {cover && lowerEdge}
       {showHair && hair.back && part('hair', <g clipPath={backClip}>{hair.back(ctx(c.hairColor))}</g>, 'hairback')}
       {(hat.rear ?? hat.front) && part('hat', <g transform={hatT}>{(hat.rear ?? hat.front)!(ctx(c.hatColor))}</g>, 'hat')}
-      {sweat > 0 && sweatFx(sweat)}
     </>
   );
 
@@ -320,7 +318,6 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
       )}
       {(side ? hat.side ?? hat.front : hat.front) && part('hat', <g transform={swayT}><g transform={hatT}>{(side ? hat.side ?? hat.front : hat.front)!(ctx(c.hatColor))}</g></g>, 'hat')}
       {hat.eyesOver && !photo && <g transform={faceT}>{part('eyes', fit(EYES_FIT, eyesNode()), 'eyes-over')}</g>}
-      {sweat > 0 && sweatFx(sweat)}
     </>
   );
 

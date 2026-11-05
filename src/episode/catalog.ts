@@ -15,13 +15,13 @@ export const MOOD_LIST: VocabEntry<MoodId>[] = [
   { id: 'sad', label: 'Sad', desc: 'droopy eyes, worried brows, frown' },
   { id: 'shock', label: 'Shocked', desc: 'wide eyes, raised brows, O mouth' },
   { id: 'smug', label: 'Smug', desc: 'shifty half-lidded eyes, smirk' },
-  { id: 'evil', label: 'Evil', desc: 'scheming demon eyes and fangs' },
+  { id: 'evil', label: 'Evil', desc: 'narrowed eyes and a sly smirk' },
   { id: 'sick', label: 'Sick', desc: 'tired eyes, wavy queasy mouth' },
   { id: 'love', label: 'Lovestruck', desc: 'heart eyes, kissy mouth' },
   { id: 'deadpan', label: 'Deadpan', desc: 'sleepy eyes, flat mouth, unimpressed' },
-  { id: 'crazy', label: 'Unhinged', desc: 'mismatched pupils, grimace' },
+  { id: 'crazy', label: 'Unhinged', desc: 'a wide stare and a manic grin' },
   { id: 'cry', label: 'Crying', desc: 'sobbing, tears running down the cheeks' },
-  { id: 'nervous', label: 'Sweating', desc: 'wide eyes, grimace, beads of sweat flying off' },
+  { id: 'nervous', label: 'Nervous', desc: 'wide eyes, worried brows, a wobbly mouth' },
 ];
 
 export const GESTURE_LIST: VocabEntry<GestureId>[] = [
