@@ -2127,3 +2127,53 @@ describe('side and back views', () => {
     });
   });
 });
+
+describe('Quick build reads names and weather', () => {
+  const lastBeat = (names: string, direction: string) => parseScript(`EXT. MAIN STREET - DAY\n${names}\n${direction}`).scenes[0].beats.at(-1)!;
+  const FAMILY = 'BUTTERS: Hi.\nBUTTERS MOM: Hi.\nBUTTERS DAD: Hi.';
+
+  it('makes it snow however the script says so', () => {
+    for (const d of ['It starts snowing.', 'It begins to snow.', "It's snowing.", 'Snow starts to fall.']) expect(parseScript(`EXT. MAIN STREET - DAY\nGUS: Hi.\n${d}`).scenes[0].weather, d).toBe('snow');
+    expect(parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus starts talking.').scenes[0].weather).toBe('none');
+    expect(parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus throws a snowball.').scenes[0].weather).toBe('none');
+  });
+
+  it('gives a direction to the person named, not someone whose name is part of theirs', () => {
+    expect(lastBeat(FAMILY, 'Butters Mom cries.').who).toBe('butters-mom');
+    expect(lastBeat(FAMILY, 'BUTTERS DAD trembles.').who).toBe('butters-dad');
+    expect(lastBeat(FAMILY, 'Butters cries.').who).toBe('butters');
+  });
+
+  it('still sees both when they are both named', () => {
+    expect(lastBeat(FAMILY, 'Butters Mom hugs Butters.')).toMatchObject({ who: 'butters-mom', hug: 'butters' });
+    expect(lastBeat(FAMILY, 'Butters hugs Butters Mom.')).toMatchObject({ who: 'butters', hug: 'butters-mom' });
+    expect(lastBeat(FAMILY, 'Butters Dad and Butters Mom dance.')).toMatchObject({ who: 'butters-dad', also: ['butters-mom'] });
+  });
+
+  it("doesn't take someone's belongings for the shorter name inside theirs", () => {
+    expect(lastBeat(FAMILY, "Butters Mom's phone explodes.").who).toBeUndefined();
+  });
+
+  it('knows a name in mixed capitals, but not an everyday word', () => {
+    expect(lastBeat('TV ANCHOR: Hi.', 'TV Anchor waves.').who).toBe('tv-anchor');
+    expect(lastBeat('TV ANCHOR: Hi.', 'Tv Anchor waves.').who).toBe('tv-anchor');
+    expect(lastBeat('TV ANCHOR: Hi.', 'TV ANCHOR waves.').who).toBe('tv-anchor');
+    expect(lastBeat('GUS: Hi.\nPHONE: Ring.', 'Gus holds the phone.').who).toBe('gus');
+    expect(lastBeat('GUS: Hi.\nMR. KIM: Hi.', 'Mr. Kim waves.').who).toBe('mr-kim');
+  });
+
+  it('keeps someone off stage until another character turns into them', () => {
+    const ep = parseScript('INT. CAVE - NIGHT\nDEX: Hi.\nDex turns into Priya.\nPRIYA: Surprise.');
+    expect(ep.scenes[0].blocking.find((b) => b.who === 'priya')?.offstage).toBe(true);
+    const c = compileEpisode(ep, new Map());
+    const sc = c.scenes[0];
+    const here = (t: number) => (sampleEpisode(c, sc.start + t) as SceneFrame).actors.map((a) => a.castId);
+    expect(here(0.1)).toEqual(['dex']);
+    expect(here(sc.duration - 0.1)).toEqual(['priya']);
+  });
+
+  it('leaves someone who was already there on stage', () => {
+    const ep = parseScript('INT. CAVE - NIGHT\nPRIYA: Hi.\nDEX: Hi.\nDex turns into Priya.');
+    expect(ep.scenes[0].blocking.find((b) => b.who === 'priya')?.offstage).toBeUndefined();
+  });
+});

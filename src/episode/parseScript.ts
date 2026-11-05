@@ -332,13 +332,22 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   // What a caption says isn't something happening on stage.
   const caption = captionIn(direction);
   const line = caption ? direction.replace(caption, '') : direction;
-  // Subjects in the order the direction names them: "Dex hands the money to Priya". Names count as written
-  // ("Stan", "STAN"): not the word "phone" for a character called Phone, and not "Stan's living room".
+  // Subjects in the order the direction names them: "Dex hands the money to Priya". Names count as written, a word
+  // at a time ("Stan", "STAN", "TV Anchor"): not the word "phone" for a character called Phone, and not "Stan's living room".
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const at = (n: string) => line.search(new RegExp(`\\b(?:${esc(n)}|${esc(n.toUpperCase())})\\b(?!['’]s\\b)`));
+  const named = (n: string) => `\\b${n.split(/\s+/).map((w) => `(?:${esc(w)}|${esc(w.toUpperCase())})`).join('\\s+')}\\b`;
+  // The longest name gets its words first: "Butters Mom" isn't Butters as well.
+  const spots = new Map<string, number>();
+  let unread = line;
+  for (const n of [...known].sort((a, b) => b.length - a.length)) {
+    const found = unread.search(new RegExp(`${named(n)}(?!['’]s\\b)`));
+    if (found >= 0) spots.set(n, found);
+    unread = unread.replace(new RegExp(named(n), 'g'), (m) => ' '.repeat(m.length));
+  }
+  const at = (n: string) => spots.get(n) ?? -1;
   const subjects = known.filter((n) => at(n) >= 0).sort((a, b) => at(a) - at(b));
   // Names aren't verbs: "Dance Master spins."
-  const text = subjects.reduce((t, n) => t.replace(new RegExp(`\\b(?:${esc(n)}|${esc(n.toUpperCase())})\\b`, 'g'), ''), line);
+  const text = subjects.reduce((t, n) => t.replace(new RegExp(named(n), 'g'), ''), line);
   // A phone call: everyone after the first name is in a second set, on the other half of the screen.
   if (/\b(?:split[- ]?screen|intercut)\b/i.test(text)) {
     scene.split = { set: setFor(text, !/\b(?:outside|street|park|yard)\b/i.test(text)), who: subjects.length > 1 ? subjects.slice(1) : subjects };
@@ -444,7 +453,7 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   // Several people, or a group that's worked out once we know who's in the scene.
   const team = group ? [group] : crowd;
   if (team.length && !beat.hug && (beat.action || beat.gesture || beat.hold || beat.face)) beat.also = team;
-  if (/\bsnow(ing|s)?\b/i.test(text) && /\b(start|begin|it'?s)\b/i.test(text)) scene.weather = 'snow';
+  if (/\bsnow(ing|s)?\b/i.test(text) && /\b(starts?|begins?|it'?s)\b/i.test(text)) scene.weather = 'snow';
   if (!beat.moves?.length) delete beat.moves;
   if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.hug && !beat.mood && !beat.caption && !beat.shot && !beat.lookAt && !beat.face && !beat.crowd && !beat.burst && !beat.drift && !beat.becomes) return null;
   if ((beat.hold || beat.give) && !who && !beat.also) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot || beat.crowd || beat.burst || beat.drift || beat.face ? { ...beat, hold: undefined, give: undefined } : null;
@@ -630,8 +639,11 @@ export function parseScript(script: string): Episode {
       const arrives = firstMove?.kind === 'enter' || firstMove?.kind === 'appear' || firstMove?.kind === 'joinScreen';
       const entersLater = arrives && (firstLine === -1 || firstMoveIdx < firstLine);
       if (arrives) firstMove.x = x;
+      // Someone another character turns into isn't there until it happens.
+      const madeAt = s.beats.findIndex((b) => b.becomes === p);
+      const madeLater = madeAt >= 0 && (firstLine === -1 || madeAt < firstLine) && (firstMoveIdx === -1 || madeAt < firstMoveIdx);
       const sit = seated.get(p);
-      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater ? { offstage: true } : {}), ...(sit ? (lying.has(p) ? { lie: sit } : { sit }) : {}), ...(s.split ? { hold: 'phone' } : {}) });
+      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater || madeLater ? { offstage: true } : {}), ...(sit ? (lying.has(p) ? { lie: sit } : { sit }) : {}), ...(s.split ? { hold: 'phone' } : {}) });
     });
     for (const p of onScreen) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', screen: true });
     for (const [p, v] of s.riders) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', in: v });
