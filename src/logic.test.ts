@@ -2169,3 +2169,50 @@ describe('Quick build reads names and weather', () => {
     expect(ep.scenes[0].blocking.find((b) => b.who === 'priya')?.offstage).toBeUndefined();
   });
 });
+
+describe('pupils stay in view', () => {
+  const draw = (more: object, gazeX: number, gazeY = 0) => renderToStaticMarkup(createElement('svg', null, createElement(CharacterGroup, { c: { ...DEFAULT_CHARACTER, hat: 'none', ...more }, gazeX, gazeY })));
+  /** How far each pupil moved, left then right. */
+  const moved = (svg: string) => [...svg.matchAll(/<g class="pupil"(?: transform="translate\((-?[\d.]+) (-?[\d.]+)\)")?/g)].map((m) => [Number(m[1] ?? 0), Number(m[2] ?? 0)]);
+
+  it("draws both whites before either pupil, so one eye can't cover the other's", () => {
+    const svg = draw({ eyes: 'wide' }, 0.6);
+    const whites = [...svg.matchAll(/<ellipse[^>]*fill="#fff"/g)].map((m) => m.index);
+    expect(whites).toHaveLength(2);
+    expect(Math.max(...whites)).toBeLessThan(svg.indexOf('class="pupil"'));
+  });
+
+  it('stops a pupil at the join when it looks across the face, and the other carries on', () => {
+    // The pupils of wide eyes sit 8 from the middle.
+    const [[left], [right]] = moved(draw({ eyes: 'wide' }, 1));
+    expect(-8 + left).toBeCloseTo(-3);
+    expect(right).toBe(15);
+    const [[l2], [r2]] = moved(draw({ eyes: 'wide' }, -1));
+    expect(l2).toBe(-15);
+    expect(8 + r2).toBeCloseTo(3);
+  });
+
+  it("doesn't let a pupil slide out of the side of the eye", () => {
+    // Shifty pupils already sit out at the left of each eye.
+    const [[left]] = moved(draw({ eyes: 'shifty' }, -1));
+    expect(-43 + left).toBeGreaterThanOrEqual(-47);
+  });
+
+  it('keeps pupils out from under a lid, but lets them look down', () => {
+    for (const eyes of ['angry', 'sleepy', 'shifty', 'sad', 'tired', 'demon', 'bloodshot']) {
+      expect(moved(draw({ eyes }, 0, -0.48)).every(([, y]) => y === 0), eyes).toBe(true);
+      expect(moved(draw({ eyes }, 0, 0.3)).every(([, y]) => y > 0), eyes).toBe(true);
+    }
+    expect(moved(draw({ eyes: 'classic' }, 0, -0.48)).every(([, y]) => y < 0)).toBe(true);
+  });
+
+  it('keeps the eyes from looking under a fringe that hangs over one of them', () => {
+    expect(moved(draw({ eyes: 'classic', hair: 'emo' }, -1)).every(([x]) => x === 0)).toBe(true);
+    expect(moved(draw({ eyes: 'classic', hair: 'emo' }, 1)).some(([x]) => x > 0)).toBe(true);
+    expect(moved(draw({ eyes: 'classic', hair: 'messy' }, -1)).every(([x]) => x < 0)).toBe(true);
+  });
+
+  it('leaves cross-eyed eyes crossed', () => {
+    expect(moved(draw({ eyes: 'crossed' }, 1)).every(([x]) => x === 0)).toBe(true);
+  });
+});

@@ -308,11 +308,11 @@ export const HATS: HatDef[] = [
     clipHairAbove: -30,
     side: (c) => (
       <g>
-        <path d="M -148 96 C -160 -112 -72 -152 0 -152 C 72 -152 144 -112 140 -40 L 56 -34 Q 22 6 34 96 Z" {...f(c.color)} />
+        <path d="M -148 96 C -160 -112 -72 -152 0 -152 C 72 -152 144 -112 140 -40 L 30 -34 Q -6 6 6 96 Z" {...f(c.color)} />
         <path d="M -150 -44 C -110 -130 -40 -151 40 -146" fill="none" stroke="#fff" strokeWidth={12} />
-        <circle cx={-16} cy={14} r={13} {...f(shade(c.color, -0.3))} strokeWidth={2} />
+        <circle cx={-34} cy={14} r={13} {...f(shade(c.color, -0.3))} strokeWidth={2} />
         <g fill="none" stroke="#9aa3ad" strokeWidth={7} strokeLinecap="round">
-          <path d="M 34 14 Q 100 16 154 2 M 36 54 Q 100 66 148 42 M 110 8 L 112 62" />
+          <path d="M 6 44 Q 90 58 154 34 M 8 74 Q 90 92 148 66 M 110 40 L 112 84" />
         </g>
       </g>
     ),

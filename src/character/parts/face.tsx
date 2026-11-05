@@ -16,16 +16,22 @@ interface EyeOpts {
   lid?: Lid;
   scale?: number;
   white?: string;
-  pupil?: (side: -1 | 1, cx: number) => ReactNode;
+  pupil?: (side: -1 | 1, cx: number, x: number) => ReactNode;
   extra?: (side: -1 | 1, cx: number) => ReactNode;
   only?: -1 | 1;
   /** Big pupils fill the eye, so they stay put when the character looks around. */
   still?: boolean;
+  /** Where a pupil sits across the face, if it isn't the usual spot. */
+  at?: (side: -1 | 1, cx: number) => number;
 }
 
 /** How far the pupils travel inside the eye. */
 const GAZE_X = 15;
 const GAZE_Y = 12;
+/** The eyes meet in the middle: a pupil looking across the face stops this far short of the join. */
+const SEAM_GAP = 3;
+/** Looking outward, a pupil stops this far short of the edge of the eye. */
+const RIM_GAP = 8;
 
 const LID_LEFT: Record<Exclude<Lid, 'none'>, string> = {
   sleepy: 'M -80 -70 L 80 -70 L 80 -3 L -80 -3 Z',
@@ -45,28 +51,41 @@ function eyePair(ctx: RenderCtx, o: EyeOpts = {}): ReactNode {
   const shape = (side: -1 | 1) => ({ cx: side * 27 * s, cy: 0, rx: 28 * s, ry: 36 * s, transform: `rotate(${-side * 14} ${side * 27 * s} 0)` });
   const clipIds = { [-1]: ctx.uid('eye-1'), [1]: ctx.uid('eye1') } as Record<-1 | 1, string>;
   const [gx, gy] = o.still ? [0, 0] : ctx.gaze ?? [0, 0];
-  const look = gx || gy ? `translate(${(gx * GAZE_X).toFixed(1)} ${(gy * GAZE_Y).toFixed(1)})` : undefined;
+  const at = o.at ?? ((side: -1 | 1) => side * 16.5);
+  const rim = 55 * s - RIM_GAP;
+  const look = (side: -1 | 1, x: number) => {
+    // A pupil stays in view: it stops at the join between the eyes and short of the far edge, and doesn't go up under a lid.
+    const [lo, hi] = side < 0 ? [-rim, -SEAM_GAP] : [SEAM_GAP, rim];
+    const dx = Math.min(Math.max(x + gx * GAZE_X, Math.min(lo, x)), Math.max(hi, x)) - x;
+    const dy = (lid === 'none' ? gy : Math.max(0, gy)) * GAZE_Y;
+    return dx || dy ? `translate(${dx.toFixed(1)} ${dy.toFixed(1)})` : undefined;
+  };
   return (
     <g>
+      {/* Both whites go down first: the eyes overlap, and one mustn't cover the other's pupil. */}
+      {sides.map((side) => (
+        <g key={side}>
+          <clipPath id={clipIds[side]}>
+            <ellipse {...shape(side)} />
+          </clipPath>
+          <ellipse {...shape(side)} fill={o.white ?? '#fff'} />
+          {side === 1 && sides.length === 2 && (
+            <ellipse {...shape(1)} fill="none" stroke="#aaa49c" strokeWidth={1.6} clipPath={`url(#${clipIds[-1]})`} />
+          )}
+        </g>
+      ))}
       {sides.map((side) => {
         const { cx } = shape(side);
-        const id = clipIds[side];
+        const x = at(side, cx);
         return (
-          <g key={side}>
-            <clipPath id={id}>
-              <ellipse {...shape(side)} />
-            </clipPath>
-            <ellipse {...shape(side)} fill={o.white ?? '#fff'} />
-            {side === 1 && sides.length === 2 && (
-              <ellipse {...shape(1)} fill="none" stroke="#aaa49c" strokeWidth={1.6} clipPath={`url(#${clipIds[-1]})`} />
-            )}
-            <g clipPath={`url(#${id})`}>
-              <g transform={look}>{o.pupil ? o.pupil(side, cx) : <circle cx={side * 16.5} cy={2} r={3.4} fill={O} />}</g>
-              {o.extra?.(side, cx)}
-              {lid !== 'none' && (
-                <path d={LID_LEFT[lid]} transform={side === 1 ? 'scale(-1 1)' : undefined} fill={ctx.c.skin} {...ink} className="keep" />
-              )}
+          <g key={side} clipPath={`url(#${clipIds[side]})`}>
+            <g className="pupil" transform={look(side, x)}>
+              {o.pupil ? o.pupil(side, cx, x) : <circle cx={x} cy={2} r={3.4} fill={O} />}
             </g>
+            {o.extra?.(side, cx)}
+            {lid !== 'none' && (
+              <path d={LID_LEFT[lid]} transform={side === 1 ? 'scale(-1 1)' : undefined} fill={ctx.c.skin} {...ink} className="keep" />
+            )}
           </g>
         );
       })}
@@ -82,32 +101,32 @@ export const EYES: HeadPart[] = [
     id: 'wide',
     name: 'Wide Awake',
     quip: 'Has had four coffees. It is 7 AM. It is a child.',
-    render: (c) => eyePair(c, { scale: 1.1, pupil: (s) => dot(s * 8, 0, 3) }),
+    render: (c) => eyePair(c, { scale: 1.1, at: (s) => s * 8, pupil: (_s, _cx, x) => dot(x, 0, 3) }),
   },
   {
     id: 'sleepy',
     name: 'Sleepy',
     quip: 'Woke up like this. Then went back to sleep. Then woke up like this again.',
-    render: (c) => eyePair(c, { lid: 'sleepy', pupil: (s) => dot(s * 16, 12) }),
+    render: (c) => eyePair(c, { lid: 'sleepy', at: (s) => s * 16, pupil: (_s, _cx, x) => dot(x, 12) }),
   },
   {
     id: 'shifty',
     name: 'Shifty',
     quip: "Definitely didn't eat the last pudding cup. Why do you ask?",
-    render: (c) => eyePair(c, { lid: 'half', pupil: (_s, cx) => dot(cx - 16, 4) }),
+    render: (c) => eyePair(c, { lid: 'half', at: (_s, cx) => cx - 16, pupil: (_s, _cx, x) => dot(x, 4) }),
   },
   { id: 'angry', name: 'Angry', quip: 'Mad at everything. Especially Tuesdays. And hippies.', render: (c) => eyePair(c, { lid: 'angry' }) },
   {
     id: 'sad',
     name: 'Sad',
     quip: 'Just found out the ice-cream truck plays music when it is OUT of ice cream.',
-    render: (c) => eyePair(c, { lid: 'sad', pupil: (s) => dot(s * 16, 8) }),
+    render: (c) => eyePair(c, { lid: 'sad', at: (s) => s * 16, pupil: (_s, _cx, x) => dot(x, 8) }),
   },
   {
     id: 'crazy',
     name: 'Unhinged',
     quip: 'Talks to the hall monitor. The hall monitor is a mop.',
-    render: (c) => eyePair(c, { pupil: (s) => (s === -1 ? dot(-24, 4, 10) : dot(22, -10, 2.5)) }),
+    render: (c) => eyePair(c, { at: (s) => (s === -1 ? -24 : 22), pupil: (s, _cx, x) => (s === -1 ? dot(x, 4, 10) : dot(x, -10, 2.5)) }),
   },
   {
     id: 'lashes',
@@ -197,7 +216,7 @@ export const EYES: HeadPart[] = [
     quip: 'Remembers when this was all fields. Was born in 2017.',
     render: (c) => (
       <g>
-        {eyePair(c, { lid: 'half', pupil: (s) => dot(s * 12, 6) })}
+        {eyePair(c, { lid: 'half', at: (s) => s * 12, pupil: (_s, _cx, x) => dot(x, 6) })}
         <Mirror>
           <path d="M -46 40 Q -28 50 -10 42" fill="none" {...ink} strokeWidth={2.4} />
         </Mirror>
@@ -208,7 +227,7 @@ export const EYES: HeadPart[] = [
     id: 'crossed',
     name: 'Cross-Eyed',
     quip: 'Looked at their own nose for too long. Committed to the bit.',
-    render: (c) => eyePair(c, { pupil: (s) => dot(s * 3, 4, 5) }),
+    render: (c) => eyePair(c, { still: true, pupil: (s) => dot(s * 3, 4, 5) }),
   },
   {
     id: 'hypno',
@@ -246,7 +265,8 @@ export const EYES: HeadPart[] = [
       eyePair(c, {
         white: '#ffd83d',
         lid: 'angry',
-        pupil: (_s, cx) => <ellipse cx={cx + 2} cy={4} rx={3.5} ry={15} fill={O} />,
+        at: (_s, cx) => cx + 2,
+        pupil: (_s, _cx, x) => <ellipse cx={x} cy={4} rx={3.5} ry={15} fill={O} />,
       }),
   },
 ];

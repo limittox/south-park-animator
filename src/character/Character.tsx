@@ -71,14 +71,15 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
   const body = sideBody(g);
   const armG = side ? sideGeo(g) : g;
   const shape = HEAD_SHAPES[c.headShape] ?? HEAD_SHAPES.round;
-  const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk, gaze: [gazeX, gazeY] });
+  const hat = byId(HATS, c.hat);
+  const hair = byId(HAIR, c.hair);
+  const lookX = hair.overEye && !hat.hidesHair && view === 'front' ? Math.max(0, gazeX) : gazeX;
+  const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk, gaze: [lookX, gazeY] });
 
   const top = byId(TOPS, c.top);
   const bottom = byId(BOTTOMS, c.bottom);
   const shoes = byId(SHOES, c.shoes);
   const neck = byId(NECKWEAR, c.neck);
-  const hat = byId(HATS, c.hat);
-  const hair = byId(HAIR, c.hair);
   const eyes = byId(EYES, c.eyes);
   const brows = byId(BROWS, c.brows);
   const mouth = byId(MOUTHS, c.mouth);

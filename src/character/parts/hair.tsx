@@ -17,6 +17,8 @@ export interface HairDef extends ItemBase {
   tail?: boolean;
   /** Side on, facing right, where the front art won't do. */
   side?: Render;
+  /** A fringe over the left eye: the eyes don't look that way, or the other pupil goes under it too. */
+  overEye?: boolean;
 }
 
 /**
@@ -296,6 +298,7 @@ export const HAIR: HairDef[] = [
   {
     id: 'emo',
     name: 'Emo Fringe',
+    overEye: true,
     nape: 60,
     mass: true,
     quip: "Hates conformity. Dresses exactly like all their friends. You wouldn't understand.",
