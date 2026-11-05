@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { createElement } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { parseScript } from './episode/parseScript';
 import { compileEpisode, sampleEpisode, type SceneFrame } from './episode/timeline';
 import { FrameSvg } from './render/FrameSvg';
 import { getScene } from './scenes/backgrounds';
 import { seatsOf } from './episode/seats';
+import { BeatsPanel } from './ui/BeatsPanel';
 
 /* What Quick build does with the plain-English parts of a script, played through to the frames where it matters. */
 
@@ -285,5 +287,22 @@ describe('signs and pets', () => {
   it("doesn't hand someone their pet as a prop", () => {
     const beats = scene('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus runs in with his pet chicken.').beats;
     expect(beats.at(-1)?.hold).toBeUndefined();
+  });
+});
+
+describe('the beats panel', () => {
+  it('shows one tag when a beat\'s sound and burst share a name', () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    Element.prototype.scrollIntoView = () => {};
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const episode = parseScript('INT. KITCHEN - DAY\nGUS: Hi.\nGus explodes.');
+    const box = document.createElement('div');
+    const root = createRoot(box);
+    act(() => root.render(createElement(BeatsPanel, { episode, sceneIndex: 0, currentBeat: 0, voiced: new Set<string>(), voiceStatus: { running: false, done: 0, total: 0, errors: new Map() }, onScene: () => {}, onSeekBeat: () => {}, onPlayLine: () => {} })));
+    const logged = errors.mock.calls.map((c) => String(c[0]));
+    errors.mockRestore();
+    expect(logged.filter((m) => m.includes('same key'))).toEqual([]);
+    expect([...box.querySelectorAll('.tag')].filter((t) => t.textContent === 'explosion')).toHaveLength(1);
+    act(() => root.unmount());
   });
 });

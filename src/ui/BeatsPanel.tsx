@@ -290,7 +290,7 @@ function BeatCard(props: {
       <details className="more">
         <summary>
           More
-          {[
+          {[...new Set([
             beat.action,
             beat.sfx,
             beat.effect,
@@ -306,7 +306,7 @@ function BeatCard(props: {
             beat.weather ? `weather: ${beat.weather}` : '',
             beat.also?.length ? `+${beat.also.length} together` : '',
             beat.pauseAfter ? `${beat.pauseAfter}s pause` : '',
-          ]
+          ])]
             .filter(Boolean)
             .map((x) => (
               <span key={String(x)} className="tag">
