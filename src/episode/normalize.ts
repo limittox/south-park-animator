@@ -223,7 +223,9 @@ export function normalizeSet(input: unknown): SetSpec {
   if (isObj(input)) {
     const preset = oneOf(input.preset, SCENES.map((s) => s.id));
     if (input.kind === 'preset' || (preset && input.kind !== 'kit')) {
-      return { kind: 'preset', preset: preset ?? 'busstop', townName: str(input.townName, 40) };
+      // Only places with a daytime have a time of day.
+      const time = SCENES.find((s) => s.id === preset)?.times ? oneOf(input.time, ['dusk', 'night'] as const) : undefined;
+      return { kind: 'preset', preset: preset ?? 'busstop', townName: str(input.townName, 40), ...(time ? { time } : {}) };
     }
     if (input.kind === 'kit' || Array.isArray(input.pieces)) return normalizeKitSet(input);
   }
@@ -538,6 +540,8 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   if (effect) beat.effect = effect;
   const caption = str(input.caption, 120);
   if (caption) beat.caption = caption;
+  const weather = oneOf(input.weather, WEATHER_IDS);
+  if (weather) beat.weather = weather;
   const duration = num(input.duration);
   if (duration !== undefined) beat.duration = clamp(duration, 0.1, 30);
   const pauseAfter = num(input.pauseAfter);
@@ -545,7 +549,7 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   // A line needs a speaker; a beat needs to do *something*.
   if (beat.text && !beat.who) return null;
   const doesSomething =
-    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt || beat.face || beat.becomes || beat.crowd || beat.burst || beat.drift;
+    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.hug || beat.lookAt || beat.face || beat.becomes || beat.crowd || beat.burst || beat.drift || beat.weather;
   return doesSomething ? beat : null;
 }
 

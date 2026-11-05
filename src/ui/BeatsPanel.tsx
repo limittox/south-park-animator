@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Beat, CastMember, Episode, Move, Scene, Shot } from '../episode/types';
-import { ACTION_LIST, BURST_LIST, CROWD_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST } from '../episode/catalog';
+import { ACTION_LIST, BURST_LIST, CROWD_LIST, EFFECT_LIST, GESTURE_LIST, MOOD_LIST, SFX_LIST, SHOT_LIST, WEATHER_LIST } from '../episode/catalog';
 import { insertBeat, moveBeat, removeBeat, updateBeat } from '../episode/edit';
 import { seatsOf } from '../episode/seats';
 import { FaceSelect } from './FaceSelect';
@@ -303,6 +303,7 @@ function BeatCard(props: {
             beat.crowd ? `crowd: ${beat.crowd}` : '',
             beat.burst?.kind,
             beat.drift ? `${beat.drift.item} goes by` : '',
+            beat.weather ? `weather: ${beat.weather}` : '',
             beat.also?.length ? `+${beat.also.length} together` : '',
             beat.pauseAfter ? `${beat.pauseAfter}s pause` : '',
           ]
@@ -424,6 +425,17 @@ function BeatCard(props: {
               {HELD.filter((h) => h.id !== 'none').map((h) => (
                 <option key={h.id} value={h.id}>
                   {h.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Weather from here
+            <select value={beat.weather ?? ''} onChange={(e) => set({ weather: (e.target.value || undefined) as Beat['weather'] })} title="It builds up over a couple of seconds, or Clear makes it die away">
+              <option value="">—</option>
+              {WEATHER_LIST.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.label}
                 </option>
               ))}
             </select>

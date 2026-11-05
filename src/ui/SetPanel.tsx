@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import type { CastMember, Crowd, KitPiece, KitSet, Scene, Transition, Vehicle, VehicleType, Weather } from '../episode/types';
+import type { CastMember, Crowd, KitPiece, KitSet, Scene, TimeOfDay, Transition, Vehicle, VehicleType, Weather } from '../episode/types';
 import { getVehicleDef, VEHICLES } from '../sets/vehicles';
 import { TRANSITION_LIST, WEATHER_LIST } from '../episode/catalog';
 import { SCENES } from '../scenes/backgrounds';
@@ -205,12 +205,22 @@ export function SetPanel({ scene, cast, onScene }: Props & { cast: CastMember[] 
         <>
           <div className="preset-grid">
             {SCENES.map((s) => (
-              <button key={s.id} className="preset-btn" aria-pressed={set.preset === s.id} onClick={() => onScene({ ...scene, set: { kind: 'preset', preset: s.id, townName: set.townName } })}>
+              <button key={s.id} className="preset-btn" aria-pressed={set.preset === s.id} onClick={() => onScene({ ...scene, set: { kind: 'preset', preset: s.id, townName: set.townName, ...(s.times && set.time ? { time: set.time } : {}) } })}>
                 <PresetThumb id={s.id} />
                 <span>{s.name}</span>
               </button>
             ))}
           </div>
+          {SCENES.find((s) => s.id === set.preset)?.times && (
+            <label className="field">
+              <span className="lbl">Time of day</span>
+              <select value={set.time ?? 'day'} onChange={(e) => onScene({ ...scene, set: { ...set, time: e.target.value === 'day' ? undefined : (e.target.value as TimeOfDay) } })}>
+                <option value="day">Day</option>
+                <option value="dusk">Dusk</option>
+                <option value="night">Night</option>
+              </select>
+            </label>
+          )}
           {set.preset === 'townsign' && (
             <label className="field">
               <span className="lbl">Town name</span>

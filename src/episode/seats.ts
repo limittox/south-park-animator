@@ -47,18 +47,24 @@ const nearest = (spots: SeatSpot[], x: number) => spots.reduce<SeatSpot | null>(
 
 /**
  * Which seat "sit on <ref>" means: an exact id, the nearest seat of that kind, or with no ref
- * the nearest seat. Null means the floor (asked for, or nothing to sit on nearby).
+ * the nearest seat. Null means the floor (asked for, or nothing to sit on nearby). `taken` says how
+ * many are on a seat already, so people spread out over the seats of that kind.
  */
-export function findSeat(spots: SeatSpot[], ref: string | undefined, nearX: number): SeatSpot | null {
+export function findSeat(spots: SeatSpot[], ref: string | undefined, nearX: number, taken?: (spot: SeatSpot) => number): SeatSpot | null {
   if (!spots.length) return null;
-  if (!ref?.trim()) return nearest(spots, nearX);
+  // With a desk each, nobody shares: only once they're all full do people squeeze up.
+  const free = (list: SeatSpot[]) => {
+    const open = taken ? list.filter((s) => taken(s) < seatRoom(s)) : list;
+    return open.length ? open : list;
+  };
+  if (!ref?.trim()) return nearest(free(spots), nearX);
   const r = ref.trim().toLowerCase().replace(/^the\s+/, '');
   if (/^(floor|ground|carpet|rug|snow)$/.test(r)) return null;
   const exact = spots.find((s) => s.id.toLowerCase() === r);
   if (exact) return exact;
   const kind = pieceType(r) ?? r.replace(/[\s_]+/g, '-').replace(/e?s$/, '');
   const same = spots.filter((s) => s.kind === kind || s.kind === r);
-  if (same.length) return nearest(same, nearX);
+  if (same.length) return nearest(free(same), nearX);
   const any = nearest(spots, nearX);
   return any && Math.abs(any.x - nearX) <= NEAR_ENOUGH ? any : null;
 }
@@ -103,6 +109,9 @@ export function wayOut(set: SetSpec, x: number, groundY: number): { x: number; y
 
 /** Squeezed up, people sit this close. */
 const SQUEEZE_W = 170;
+
+/** How many people a seat takes before they'd rather find another. */
+const seatRoom = (spot: SeatSpot) => Math.max(1, Math.round(spot.w / SQUEEZE_W));
 
 /** Centres of the places along a seat, left to right. With more sitters than it fits, they squeeze up (and past its ends). */
 export function seatSlots(spot: SeatSpot, sitters = 0): number[] {

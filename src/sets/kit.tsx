@@ -2471,7 +2471,10 @@ const TINT: Record<TimeOfDay, string | null> = {
   night: '0.62 0 0 0 0.015  0 0.62 0 0 0.024  0 0 0.62 0 0.076  0 0 0 1 0',
 };
 
-function tintDef(time: TimeOfDay): ReactNode {
+/** The filter for `tintDef`, or nothing by day. */
+export const tintFilter = (time: TimeOfDay) => (TINT[time] ? `url(#kit-tint-${time})` : undefined);
+
+export function tintDef(time: TimeOfDay): ReactNode {
   const m = TINT[time];
   if (!m) return null;
   return (

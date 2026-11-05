@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ink, O, scallop, seeded, starPath } from '../character/parts/common';
 import { shade } from '../lib/color';
+import type { TimeOfDay } from '../episode/types';
 
 export const SCENE_W = 1600;
 export const SCENE_H = 1000;
@@ -8,6 +9,7 @@ export const SCENE_H = 1000;
 export interface SceneOpts {
   townName: string;
   studioColor: string;
+  time?: TimeOfDay;
 }
 
 export interface SceneDef {
@@ -18,6 +20,8 @@ export interface SceneDef {
   render: (o: SceneOpts) => ReactNode;
   /** Drawn over the cast, e.g. a desk the characters stand behind. */
   front?: (o: SceneOpts) => ReactNode;
+  /** Can be dusk or night. Outdoors the whole picture darkens; indoors the lights stay on and only what's outside changes. */
+  times?: 'outdoors' | 'indoors';
   /** Places to sit, in scene coordinates. */
   seats?: PresetSeat[];
   /** The picture of a TV in the set, for people who appear on it. */
@@ -54,6 +58,34 @@ export const ROAD = '#48414d';
 
 export function sky(color = DAY_SKY) {
   return <rect x={0} y={0} width={SCENE_W} height={SCENE_H} fill={color} />;
+}
+
+export const DUSK_SKY = '#f2a56b';
+export const NIGHT_SKY = '#1a2558';
+/** Drawn under the set's dusk or night tint, these come out as DUSK_SKY and NIGHT_SKY. */
+const UNDER_TINT: Record<TimeOfDay, string> = { day: DAY_SKY, dusk: '#ffb672', night: '#233279' };
+
+const STARS = (() => {
+  const rnd = seeded(77);
+  return Array.from({ length: 46 }, () => [rnd() * SCENE_W, rnd() * 420, 2 + rnd() * 3.5]);
+})();
+
+/** The sky of a place outdoors at any time of day. */
+function skyAt(time: TimeOfDay = 'day') {
+  return (
+    <>
+      {sky(UNDER_TINT[time])}
+      {time === 'night' && (
+        <g className="nat">
+          {STARS.map(([x, y, r], i) => (
+            <circle key={i} cx={x} cy={y} r={r} fill="#fff" />
+          ))}
+          <circle cx={1330} cy={120} r={58} fill="#fff" />
+          <circle cx={1352} cy={106} r={50} fill={UNDER_TINT.night} />
+        </g>
+      )}
+    </>
+  );
 }
 
 // Natural shapes (`.nat`) stay edge-free; man-made props get the show's thin darker edges.
@@ -191,7 +223,7 @@ export function windowPane(x: number, y: number, w: number, h: number, glass = '
 }
 
 /** The classroom's kid desks (left edge x) and the desk without its chair back. */
-const CLASS_DESKS = [60, 1340];
+const CLASS_DESKS = [60, 340, 1060, 1340];
 const classDesk = (x: number) => (
   <g>
     <rect x={x} y={760} width={200} height={26} {...f('#e4dc4a')} />
@@ -220,11 +252,12 @@ export const SCENES: SceneDef[] = [
     name: 'Bus Stop',
     quip: 'Where all the important conversations happen. The bus is always late.',
     groundY: 845,
+    times: 'outdoors',
     // Laid out like the show's bus stop: two big green mountains, snowy pines at their feet,
     // a strip of snow to stand on, the road along the bottom and a yellow crossing sign.
-    render: () => (
+    render: (o) => (
       <g>
-        {sky()}
+        {skyAt(o.time)}
         {mountains(760)}
         {[
           [70, 748, 1.45],
@@ -261,7 +294,8 @@ export const SCENES: SceneDef[] = [
     name: 'Main Street',
     quip: 'Shop local! The local shops are weird, but shop anyway.',
     groundY: 960,
-    render: () => {
+    times: 'outdoors',
+    render: (o) => {
       const shops = [
         { x: -320, w: 320, h: 330, color: '#5b6b8c', roof: '#36405a', name: ['POST', 'OFFICE'], awning: '#d33b2c' },
         { x: 0, w: 320, h: 340, color: '#b8433a', roof: '#6e2a26', name: ['BARGAIN', 'BARN'], awning: '#2f6b4f' },
@@ -276,7 +310,7 @@ export const SCENES: SceneDef[] = [
       const base = 700;
       return (
         <g>
-          {sky()}
+          {skyAt(o.time)}
           {cloud(300, 100, 1)}
           {cloud(1300, 140, 1.2)}
           {mountains(560)}
@@ -315,6 +349,7 @@ export const SCENES: SceneDef[] = [
     name: 'Classroom',
     quip: 'Learning happens here. Allegedly. Sources unconfirmed.',
     groundY: 950,
+    times: 'indoors',
     render: () => (
       <g>
         {/* Colours measured from the show's classroom: lime-olive walls and a flat mauve-brown floor. */}
@@ -382,6 +417,7 @@ export const SCENES: SceneDef[] = [
   },
   {
     id: 'cafeteria',
+    times: 'indoors',
     name: 'Cafeteria',
     quip: 'Today\'s special: food-adjacent substance. Tomorrow: the same, but colder.',
     groundY: 950,
@@ -464,7 +500,8 @@ export const SCENES: SceneDef[] = [
     name: 'Living Room',
     quip: 'Where the family gathers to ignore each other in comfort.',
     groundY: 950,
-    render: () => (
+    times: 'indoors',
+    render: (o) => (
       <g>
         {/* Colours measured from the show's living rooms: pale aqua walls, yellow-green carpet, white skirting. */}
         <rect x={0} y={0} width={1600} height={740} fill="#b6dad9" />
@@ -472,7 +509,7 @@ export const SCENES: SceneDef[] = [
         <rect x={0} y={700} width={1600} height={24} {...f('#d7dbdd')} />
         <ellipse className="nat" cx={800} cy={860} rx={460} ry={70} fill="#7a9091" />
         <rect x={1040} y={150} width={300} height={260} {...f('#d7dbdd')} />
-        <rect x={1060} y={170} width={260} height={220} fill="#cfe9f2" />
+        <rect x={1060} y={170} width={260} height={220} fill={o.time === 'night' ? NIGHT_SKY : o.time === 'dusk' ? DUSK_SKY : '#cfe9f2'} />
         {Array.from({ length: 30 }, (_, i) => (
           <circle key={i} cx={1070 + ((i * 53) % 240)} cy={180 + ((i * 37) % 200)} r={4} fill="#fff" />
         ))}
@@ -515,9 +552,10 @@ export const SCENES: SceneDef[] = [
     name: 'Frozen Pond',
     quip: 'Thin ice? Probably fine. Definitely fine. Don\'t jump.',
     groundY: 930,
-    render: () => (
+    times: 'outdoors',
+    render: (o) => (
       <g>
-        {sky()}
+        {skyAt(o.time)}
         {cloud(400, 120, 1.1)}
         {cloud(1250, 90, 0.9)}
         {mountains(560)}
@@ -547,11 +585,12 @@ export const SCENES: SceneDef[] = [
     name: 'Welcome Sign',
     quip: 'Edit the town name! Population: you, and a whole lot of weirdos.',
     groundY: 930,
+    times: 'outdoors',
     render: (o) => {
       const town = (o.townName || 'SNOWPINE HOLLOW').toUpperCase().slice(0, 18);
       return (
         <g>
-          {sky()}
+          {skyAt(o.time)}
           {cloud(200, 120, 1)}
           {cloud(1400, 160, 1.3)}
           {mountains(600)}

@@ -1,12 +1,12 @@
 import { memo, useId, type ReactNode, type Ref, type SVGProps } from 'react';
-import type { SetSpec, Weather } from '../episode/types';
+import type { SetSpec, TimeOfDay, Weather } from '../episode/types';
 import { FRAME_H, FRAME_W, PANEL_W, type ActorFrame, type Camera, type Frame, type PropFrame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
 import { CharacterGroup } from '../character/Character';
 import { getGeo, handPos } from '../character/geometry';
 import { HELD, SIDEKICKS } from '../character/parts/held';
 import { BurstShape, WallHole } from './Effects';
-import { getScene } from '../scenes/backgrounds';
-import { renderKitSet } from '../sets/kit';
+import { DUSK_SKY, getScene, NIGHT_SKY } from '../scenes/backgrounds';
+import { renderKitSet, tintDef, tintFilter } from '../sets/kit';
 import { getVehicleDef, wheel } from '../sets/vehicles';
 import { renderSeatCover } from '../episode/seats';
 import { MirroredPart, seeded } from '../character/parts/common';
@@ -21,9 +21,17 @@ export const SetLayer = memo(function SetLayer({ set, layer }: { set: SetSpec; l
     return <>{layer === 'back' ? r.back : r.front}</>;
   }
   const scene = getScene(set.preset);
-  const opts = { townName: set.townName ?? 'Snowpine Hollow', studioColor: STUDIO_COLOR };
-  if (layer === 'front') return scene.front ? <g className="sp-scene">{scene.front(opts)}</g> : null;
-  return <g className="sp-scene">{scene.render(opts)}</g>;
+  const opts = { townName: set.townName ?? 'Snowpine Hollow', studioColor: STUDIO_COLOR, time: set.time };
+  const art = layer === 'front' ? scene.front?.(opts) : scene.render(opts);
+  if (!art) return null;
+  // Outdoors the whole picture darkens, as a built set does. Indoors the lights are on, so only the windows change.
+  const time = scene.times === 'outdoors' ? set.time : undefined;
+  return (
+    <g className="sp-scene">
+      {time && tintDef(time)}
+      <g filter={time && tintFilter(time)}>{art}</g>
+    </g>
+  );
 });
 
 export function actorTransform(a: ActorFrame): string {
@@ -107,13 +115,13 @@ const FLAKES = (() => {
   return Array.from({ length: 120 }, () => ({ x: rnd() * 1700 - 50, y: rnd() * 1100, r: rnd(), p: rnd() * Math.PI * 2 }));
 })();
 
-export function WeatherLayer({ weather, t }: { weather: Weather; t: number }) {
+export function WeatherLayer({ weather, t, level = 1 }: { weather: Weather; t: number; level?: number }) {
   if (weather === 'none') return null;
   const colors = ['#d33b2c', '#f2c230', '#3b6fd8', '#7fbf3f', '#e86fb0', '#2ec4c4'];
   const count = weather === 'snow' ? 110 : weather === 'rain' ? 120 : 60;
   return (
     <g pointerEvents="none">
-      {FLAKES.slice(0, count).map((f, i) => {
+      {FLAKES.slice(0, Math.round(count * level)).map((f, i) => {
         const speed = weather === 'rain' ? 900 + f.r * 300 : weather === 'snow' ? 40 + f.r * 50 : 90 + f.r * 60;
         const y = ((f.y + t * speed) % 1100) - 50;
         const x = f.x + (weather === 'rain' ? 0 : Math.sin(t * (0.6 + f.r) + f.p) * 18);
@@ -241,6 +249,10 @@ export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, 
 
 const viewBoxOf = (cam: Camera) => `${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`;
 
+/** What shows through a hole knocked in the back wall of a room. */
+const OUTSIDE: Record<TimeOfDay, string> = { day: '#bfe3ee', dusk: DUSK_SKY, night: NIGHT_SKY };
+const throughTheWall = (set: SetSpec) => (set.kind === 'kit' && set.place === 'exterior' ? '#26262c' : OUTSIDE[set.time ?? 'day']);
+
 const TILE_COLORS = ['#3a5a8c', '#7a4f8a', '#2f7a6b', '#8a5a3a', '#4f6f46', '#8a3f4f'];
 
 /** Everyone on the TV or the video call, each cut off at the edges of their own tile. */
@@ -275,6 +287,8 @@ function SceneContent({ frame, half, renderActor, sceneOverlay }: Pick<FrameSvgP
   const set = (right && frame.split?.set) || frame.scene.scene.set;
   const actors = half ? frame.actors.filter((a) => !!a.right === right) : frame.actors;
   const here = <T,>(list: T[]) => (right ? [] : list);
+  // A prop or a burst belongs in the half of whoever it's on. Crowds, vehicles and TVs are part of the scene's own set.
+  const mine = <T extends { right?: boolean }>(list: T[]) => (half ? list.filter((x) => !!x.right === right) : list);
   const actor = (a: ActorFrame) => {
     const node = <Actor key={a.castId} a={a} />;
     return renderActor ? <g key={a.castId}>{renderActor(a, node)}</g> : node;
@@ -302,18 +316,18 @@ function SceneContent({ frame, half, renderActor, sceneOverlay }: Pick<FrameSvgP
     <>
       <SetLayer set={set} layer="back" />
       {here(frame.holes).map((h) => (
-        <WallHole key={h.t} x={h.x} y={h.y} r={h.r} behind={set.kind === 'kit' && set.place === 'exterior' ? '#26262c' : '#bfe3ee'} seed={Math.round(h.t * 100) + 1} />
+        <WallHole key={h.t} x={h.x} y={h.y} r={h.r} behind={throughTheWall(set)} seed={Math.round(h.t * 100) + 1} />
       ))}
       {!right && <ScreenLayer frame={frame} draw={actor} />}
       {items.map((i) => i.node)}
-      {here(frame.props).map((p) => (
+      {mine(frame.props).map((p) => (
         <FlyingProp key={p.key} p={p} />
       ))}
-      {here(frame.bursts).map((b) => (
+      {mine(frame.bursts).map((b) => (
         <BurstShape key={b.key} b={b} />
       ))}
       <SetLayer set={set} layer="front" />
-      <WeatherLayer weather={right ? frame.split!.weather : frame.weather} t={frame.scene.start + frame.t} />
+      <WeatherLayer weather={right ? frame.split!.weather : frame.weather} level={right ? 1 : frame.weatherLevel} t={frame.scene.start + frame.t} />
       {sceneOverlay}
     </>
   );

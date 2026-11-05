@@ -747,7 +747,8 @@ A used mask blows past. A caption reads "Lockdown, day 112."`);
   it('keeps what happens on stage when a sign is read out', () => {
     const ep = parseScript('INT. CLASSROOM - DAY\nDEX: Hi.\nDex picks up a sign that reads "Explosion!"');
     const beat = ep.scenes[0].beats[1];
-    expect(beat).toMatchObject({ who: 'dex', caption: 'Explosion!', hold: 'sign' });
+    expect(beat).toMatchObject({ who: 'dex', hold: 'sign' });
+    expect(ep.cast[0].look.signText).toBe('Explosion!');
     expect(beat.sfx).toBeUndefined();
   });
 
@@ -2126,9 +2127,9 @@ describe('Quick build reads names and weather', () => {
   const FAMILY = 'BUTTERS: Hi.\nBUTTERS MOM: Hi.\nBUTTERS DAD: Hi.';
 
   it('makes it snow however the script says so', () => {
-    for (const d of ['It starts snowing.', 'It begins to snow.', "It's snowing.", 'Snow starts to fall.']) expect(parseScript(`EXT. MAIN STREET - DAY\nGUS: Hi.\n${d}`).scenes[0].weather, d).toBe('snow');
-    expect(parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus starts talking.').scenes[0].weather).toBe('none');
-    expect(parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus throws a snowball.').scenes[0].weather).toBe('none');
+    for (const d of ['It starts snowing.', 'It begins to snow.', "It's snowing.", 'Snow starts to fall.']) expect(parseScript(`EXT. MAIN STREET - DAY\nGUS: Hi.\n${d}`).scenes[0].beats.at(-1)?.weather, d).toBe('snow');
+    expect(parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus starts talking.').scenes[0].beats.some((b) => b.weather)).toBe(false);
+    expect(parseScript('EXT. MAIN STREET - DAY\nGUS: Hi.\nGus throws a snowball.').scenes[0].beats.some((b) => b.weather)).toBe(false);
   });
 
   it('gives a direction to the person named, not someone whose name is part of theirs', () => {

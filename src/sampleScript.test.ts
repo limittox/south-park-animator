@@ -26,9 +26,8 @@ describe('the sample script', () => {
     expect(moves(stop).filter((m) => m.kind === 'getIn').map((m) => m.who)).toEqual(['benny', 'dex', 'priya']);
     expect(moves(stop).at(-1)).toMatchObject({ who: 'bus-1', kind: 'exit' });
 
-    // A back turned, a pan, and a voice from a desk we can't see.
-    expect(classroom.blocking.filter((b) => b.sit).map((b) => b.who)).toEqual(['benny', 'priya']);
-    expect(classroom.blocking.find((b) => b.who === 'dex')?.offstage).toBe(true);
+    // A back turned, a pan, and a whisper from the desks.
+    expect(classroom.blocking.filter((b) => b.sit).map((b) => b.who).sort()).toEqual(['benny', 'dex', 'priya']);
     expect(classroom.beats.flatMap((b) => b.face ?? [])).toEqual(['away', 'front']);
     expect(classroom.beats.find((b) => b.face === 'away')?.shot).toMatchObject({ type: 'medium', pan: true });
     expect(classroom.beats.at(-1)).toMatchObject({ who: 'mr-hargrove', action: 'faint' });
@@ -56,8 +55,13 @@ describe('the sample script', () => {
     expect(moves(store)).toContainEqual({ who: 'police-1', kind: 'crash', x: 800, on: 'wall' });
     expect(store.beats.flatMap((b) => b.crowd ?? [])).toEqual(['boo', 'panic']);
 
-    // Snow at last, and how it goes wrong.
-    expect(ep.scenes.map((s) => s.weather)).toEqual(['none', 'none', 'none', 'none', 'none', 'snow']);
+    // Snow at last, starting right there in the scene, and how it goes wrong.
+    expect(ep.scenes.every((s) => s.weather === 'none')).toBe(true);
+    expect(street.beats.find((b) => b.weather)?.weather).toBe('snow');
+    expect(store.set).toMatchObject({ kind: 'kit', time: 'night' });
+    expect(street.set).toMatchObject({ kind: 'preset', preset: 'mainstreet', time: 'night' });
+    expect(ep.cast.find((m) => m.name === 'Dex')?.look.signText).toBe('SNOW DAY NOW');
+    expect(ep.cast.find((m) => m.name === 'Priya')?.look.sidekick).toBe('dog');
     expect(street.crowd?.layout).toBe('group');
     expect(street.beats[0]).toMatchObject({ who: 'dex', also: ['benny'], hold: 'sign' });
     expect(moves(street).map((m) => [m.who, m.run])).toEqual([['dex', true], ['benny', true]]);

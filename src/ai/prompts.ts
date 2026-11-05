@@ -194,6 +194,7 @@ Beat = {
   "shot": { "type": "wide|medium|close", "on": ["names"], "push": false, "pan": false, "follow": false },  // camera change at the start of the beat; omit to keep the current shot
   "sfx": sound effect, "effect": screen effect,
   "caption": "on-screen text for time jumps or signs",
+  "weather": "the weather from this beat on, for snow that starts or stops during the scene",
   "duration": seconds (silent beats only), "pauseAfter": seconds of silence after the beat
 }
 Leave out any field you don't need. Silent beats (no text) are for actions, entrances, reactions and pauses.
@@ -239,12 +240,13 @@ STAGE BUSINESS
 - Phone calls: "split" divides the picture down the middle: "who" are in the second set on the right, everyone else in the scene's own set on the left. Give the two speakers phones.
 - Crashes: a "crash" move slams a vehicle in to x with a crash, a shake, flying debris and smoke. "on": "wall" also tears a hole in the back of the set.
 - Smoke and fire: "burst" puts smoke, fire or an explosion on someone or something, or at x. Pair an explosion with "sfx": "explosion" and "effect": "flash".
+- A character's "look" takes "signText" for the words on their protest sign, and "sidekick" for a pet that goes everywhere with them.
 - Things on their own: "drift" sends a prop across the stage with nobody holding it, like litter on the wind.
 - Transformations: "becomes" flickers "who" into another character or a creature in a puff of smoke. A creature stays one for the rest of the scene.
 - Vehicles: list them in the scene's "vehicles". They drive with the same moves, using the vehicle id as "who": "enter" drives in and parks at x (vehicles face right and come from the left; give the vehicle "flip": true, or the move a "side", to come from the right), "walk" drives to x, "exit" drives off with everyone inside. Blocking "in" starts someone inside (the first one in is the driver); "getIn" walks someone to the door and in ("on": vehicle id), "getOut" lets them out next to it. A vehicle in "lane": "front" passes in front of everyone, like the school bus pulling up at the bus stop and hiding the kids; "back" (default) parks behind the front row. A car is about 780 wide, the bus 1320.
 
 SETS
-SetSpec is either a preset: { "kind": "preset", "preset": "<id>" } (townsign also takes "townName")
+SetSpec is either a preset: { "kind": "preset", "preset": "<id>" } (townsign also takes "townName"; busstop, mainstreet, pond, townsign, classroom, cafeteria and livingroom also take "time": "dusk" or "night")
 ${presetReference()}
 
 or a paper-kit set for any other place:

@@ -60,6 +60,8 @@ const DRIFT_TIME = 3;
 const FALL_TIME = 1.2;
 const BURST_TIME: Record<BurstId, number> = { smoke: 3, fire: 4, explosion: 1.5, poof: 0.75, debris: 1.25 };
 const REACTION_TIME = 2;
+/** Weather builds up or dies away over this long, rather than switching on. */
+const WEATHER_RAMP = 2.5;
 /** One side of a split screen, leaving a gap down the middle. */
 export const PANEL_W = 796;
 const PANEL_H = 800;
@@ -146,6 +148,8 @@ interface Flight {
   at?: string;
   /** Going by on its own, without a whoosh. */
   quiet?: boolean;
+  /** Thrown in the second set of a split screen. */
+  right?: boolean;
   beatId: string;
 }
 
@@ -246,6 +250,8 @@ export interface CompiledScene {
   impacts: Impact[];
   extras: Extra[];
   reactions: { t0: number; t1: number; kind: CrowdReaction }[];
+  /** Changes of weather during the scene. */
+  skies: { t: number; weather: Weather }[];
   screen: ScreenSpot;
 }
 
@@ -372,17 +378,20 @@ function holdAt(tr: ActorTrack, look: CharacterState, t: number): { item: string
 export function compileScene(scene: Scene, index: number, start: number, cast: Map<string, CastMember>, clips: ClipMap): CompiledScene {
   const groundY = groundYOf(scene.set);
   const spots = seatsOf(scene.set);
+  const farSpots = scene.split ? seatsOf(scene.split.set) : [];
+  /** The seats in the set someone's in: a split screen's far end has its own. */
+  const spotsFor = (who: string) => (scene.split?.who.includes(who) ? farSpots : spots);
   // How many people end up on each seat, so a crowded one squeezes them up instead of stacking them.
-  const sitters = new Map<string, Set<string>>();
+  const sitters = new Map<SeatSpot, Set<string>>();
   const willSit = (who: string, spot: SeatSpot | null) => {
     if (!spot) return;
-    if (!sitters.has(spot.id)) sitters.set(spot.id, new Set());
-    sitters.get(spot.id)!.add(who);
+    if (!sitters.has(spot)) sitters.set(spot, new Set());
+    sitters.get(spot)!.add(who);
   };
+  const crowd = (spot: SeatSpot) => sitters.get(spot)?.size ?? 0;
   const blockedX = (who: string) => scene.blocking.find((b) => b.who === who)?.x ?? SCENE_W / 2;
-  for (const b of scene.blocking) if (b.sit || b.lie) willSit(b.who, findSeat(spots, b.sit ?? b.lie, b.x));
-  for (const beat of scene.beats) for (const m of beat.moves ?? []) if (m.kind === 'sit' || m.kind === 'lie') willSit(m.who, findSeat(spots, m.on, m.x ?? blockedX(m.who)));
-  const crowd = (spot: SeatSpot) => sitters.get(spot.id)?.size ?? 0;
+  for (const b of scene.blocking) if (b.sit || b.lie) willSit(b.who, findSeat(spotsFor(b.who), b.sit ?? b.lie, b.x, crowd));
+  for (const beat of scene.beats) for (const m of beat.moves ?? []) if (m.kind === 'sit' || m.kind === 'lie') willSit(m.who, findSeat(spotsFor(m.who), m.on, m.x ?? blockedX(m.who), crowd));
 
   // Everyone who is blocked, moves, speaks or is handed something gets a track. Unblocked speakers are spread across the stage.
   const tracks = new Map<string, ActorTrack>();
@@ -461,10 +470,10 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
   for (const v of scene.vehicles ?? []) vehicles.set(v.id, { vehicle: v, y: v.lane === 'front' ? Math.min(990, groundY + LANE_FRONT) : groundY - LANE_BACK, moves: [] });
 
   // Who sits where and who rides in what, while laying out the beats.
-  const seatTaken = new Map<string, Set<number>>();
-  const takenOn = (id: string) => {
-    let s = seatTaken.get(id);
-    if (!s) seatTaken.set(id, (s = new Set()));
+  const seatTaken = new Map<SeatSpot, Set<number>>();
+  const takenOn = (spot: SeatSpot) => {
+    let s = seatTaken.get(spot);
+    if (!s) seatTaken.set(spot, (s = new Set()));
     return s;
   };
   const rideTaken = new Map<string, Set<number>>();
@@ -499,10 +508,10 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       p.riding = ride;
     } else if (b?.sit || b?.lie) {
       p.lying = !b.sit;
-      const spot = findSeat(spots, b.sit ?? b.lie, tr.startX);
+      const spot = findSeat(spotsFor(tr.castId), b.sit ?? b.lie, tr.startX, (s) => takenOn(s).size);
       if (spot) {
-        const slot = pickSlot(spot, takenOn(spot.id), tr.startX, crowd(spot));
-        takenOn(spot.id).add(slot);
+        const slot = pickSlot(spot, takenOn(spot), tr.startX, crowd(spot));
+        takenOn(spot).add(slot);
         tr.startX = p.x = p.lying ? spot.x : seatSlots(spot, crowd(spot))[slot];
         tr.startY = p.y = spot.y;
         tr.startSeat = seatPosture(spot, p.lying);
@@ -580,7 +589,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     const getUp = (animate: boolean) => {
       if (!p.seat) return;
       tr.postures.push({ t: t0, seat: null });
-      if (p.seat !== 'floor') seatTaken.get(p.seat.spot.id)?.delete(p.seat.slot);
+      if (p.seat !== 'floor') seatTaken.get(p.seat.spot)?.delete(p.seat.slot);
       p.seat = null;
       p.lying = false;
       if (animate) t0 += SIT_TIME;
@@ -632,12 +641,12 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       case 'sit':
       case 'lie': {
         const lie = m.kind === 'lie';
-        const spot = findSeat(spots, m.on, m.x ?? p.x);
+        const spot = findSeat(spotsFor(tr.castId), m.on, m.x ?? p.x, (s) => takenOn(s).size - (p.seat && p.seat !== 'floor' && p.seat.spot === s ? 1 : 0));
         if (p.seat && p.lying === lie && (spot ? p.seat !== 'floor' && p.seat.spot.id === spot.id : p.seat === 'floor')) return t0;
         getUp(true);
         if (spot) {
-          const slot = pickSlot(spot, takenOn(spot.id), m.x ?? p.x, crowd(spot));
-          takenOn(spot.id).add(slot);
+          const slot = pickSlot(spot, takenOn(spot), m.x ?? p.x, crowd(spot));
+          takenOn(spot).add(slot);
           walkTo(lie ? spot.x : seatSlots(spot, crowd(spot))[slot], spot.y);
           tr.postures.push({ t: t0, seat: seatPosture(spot, lie) });
           p.seat = { spot, slot };
@@ -668,7 +677,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         let y0 = p.y;
         let y1 = tr.baseY;
         // Walking away from the camera: along the front to the door first, if there is one.
-        const out = m.kind === 'exit' && m.side === 'back' ? wayOut(scene.set, p.x, groundY) : null;
+        const out = m.kind === 'exit' && m.side === 'back' ? wayOut(tr.right && scene.split ? scene.split.set : scene.set, p.x, tr.baseY) : null;
         if (m.kind === 'enter') {
           x1 = clamp(m.x ?? p.x, 140, 1460);
           const side = m.side ?? (x1 < SCENE_W / 2 ? 'left' : 'right');
@@ -726,10 +735,11 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     const y0 = p.y - (GROUND_Y - getGeo(look.body, look.headShape).headCy) * BASE_SCALE * (1 - tr.depth * 0.28);
     const x1 = aim ? aim.x : dir > 0 ? OFF_RIGHT : OFF_LEFT;
     const span = Math.abs(x1 - p.x);
-    flights.push({ t0: release, t1: release + clamp(span / 1000, 0.45, 0.9), x0: p.x + dir * 90, y0, x1, y1: y0 - 60, arc: 80 + span * 0.14, dir, item: prop.item, color: prop.color, look: withHeld(look, prop.item, prop.color), spin: dir * 540, sway: 0, ...(aim ? { at } : {}), beatId });
+    flights.push({ t0: release, t1: release + clamp(span / 1000, 0.45, 0.9), x0: p.x + dir * 90, y0, x1, y1: y0 - 60, arc: 80 + span * 0.14, dir, item: prop.item, color: prop.color, look: withHeld(look, prop.item, prop.color), spin: dir * 540, sway: 0, ...(aim ? { at } : {}), ...(tr.right ? { right: true } : {}), beatId });
   };
 
   const reactions: CompiledScene['reactions'] = [];
+  const skies: CompiledScene['skies'] = [];
   const beats: CompiledBeat[] = [];
   const shots: CompiledScene['shots'] = [{ t: 0, shot: { type: 'wide' } }];
   let t = nextPose(Math.max(0, scene.hold));
@@ -810,6 +820,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       }
     }
     for (const [id, mood] of Object.entries(beat.reactions ?? {})) tracks.get(id)?.moods.push({ t, mood });
+    if (beat.weather) skies.push({ t, weather: beat.weather });
     if (beat.crowd) reactions.push({ t0: t, t1: Math.max(end, t + REACTION_TIME), kind: beat.crowd });
     if (beat.burst) {
       const { kind, at = beat.who, x, stay } = beat.burst;
@@ -843,7 +854,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     }
   }
 
-  return { scene, index, start, duration, groundY, beats, tracks: [...tracks.values()], vehicles: [...vehicles.values()], shots, flights, bursts, impacts, extras: crowdOf(scene), reactions, screen: screenOf(scene.set) };
+  return { scene, index, start, duration, groundY, beats, tracks: [...tracks.values()], vehicles: [...vehicles.values()], shots, flights, bursts, impacts, extras: crowdOf(scene), reactions, skies, screen: screenOf(scene.set) };
 }
 
 export function compileEpisode(episode: Episode, clips: ClipMap): CompiledEpisode {
@@ -938,6 +949,8 @@ export interface PropFrame {
   y: number;
   rotate: number;
   scale: number;
+  /** In the second set of a split screen. */
+  right?: boolean;
 }
 
 export interface BurstFrame {
@@ -952,6 +965,8 @@ export interface BurstFrame {
   /** Counts up every second pose, for flicker. */
   step: number;
   seed: number;
+  /** In the second set of a split screen. */
+  right?: boolean;
 }
 
 export interface SceneFrame {
@@ -980,6 +995,8 @@ export interface SceneFrame {
   /** The scene this one is dissolving out of, drawn on top of it. */
   under?: { frame: SceneFrame; opacity: number };
   weather: Weather;
+  /** How much of it there is, 0..1, while it builds up or dies away. */
+  weatherLevel: number;
 }
 
 export interface TitleFrame {
@@ -1016,7 +1033,7 @@ function withHeld(c: CharacterState, item: string, color: string): CharacterStat
   if (!m) heldCache.set(c, (m = new Map()));
   const key = `${item}|${color}`;
   let out = m.get(key);
-  if (!out) m.set(key, (out = { ...c, held: item, heldColor: color }));
+  if (!out) m.set(key, (out = { ...c, held: item, heldColor: color, sidekickColor: c.sidekickColor ?? c.heldColor }));
   return out;
 }
 
@@ -1289,8 +1306,24 @@ function sampleBursts(sc: CompiledScene, t: number, actors: ActorFrame[], vehicl
     .map((b, i) => {
       const on = actors.find((a) => a.castId === b.at) ?? vehicles.find((v) => v.id === b.at);
       const age = t - b.t0;
-      return { key: `${b.kind}-${i}-${b.t0}`, kind: b.kind, x: on?.x ?? b.x, y: on ? on.y - ('castId' in on ? 0 : 120) : b.y, size: b.size, age, life: Number.isFinite(b.t1) ? age / (b.t1 - b.t0) : 0, step: Math.floor(age * 6 + 1e-6), seed: b.seed };
+      return { key: `${b.kind}-${i}-${b.t0}`, kind: b.kind, x: on?.x ?? b.x, y: on ? on.y - ('castId' in on ? 0 : 120) : b.y, size: b.size, age, life: Number.isFinite(b.t1) ? age / (b.t1 - b.t0) : 0, step: Math.floor(age * 6 + 1e-6), seed: b.seed, ...(on && 'castId' in on && on.right ? { right: true } : {}) };
     });
+}
+
+/** What's falling at `t`, and how much of it. */
+function skyAt(sc: CompiledScene, t: number): { weather: Weather; weatherLevel: number } {
+  let weather = sc.scene.weather;
+  let weatherLevel = 1;
+  for (const s of sc.skies) {
+    if (t < s.t) break;
+    const k = clamp((t - s.t) / WEATHER_RAMP, 0, 1);
+    if (s.weather !== 'none') {
+      weather = s.weather;
+      weatherLevel = k;
+    } else if (k < 1) weatherLevel = 1 - k;
+    else weather = 'none';
+  }
+  return { weather, weatherLevel };
 }
 
 /** A half of a split screen, around whoever's in it. */
@@ -1318,6 +1351,7 @@ function sampleProps(sc: CompiledScene, t: number, actors: ActorFrame[]): PropFr
         y: f.y0 + (y1 - f.y0) * k - f.arc * 4 * k * (1 - k) + Math.sin(k * Math.PI * 4) * f.sway,
         rotate: k * f.spin,
         scale: BASE_SCALE * (f.quiet ? 1.5 : 1),
+        ...(f.right ? { right: true } : {}),
       };
     });
 }
@@ -1627,7 +1661,7 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number): 
     subtitle,
     flash,
     fade: 0,
-    weather: sc.scene.weather,
+    ...skyAt(sc, t),
     ...(split ? { split: { set: split.set, weather: split.weather ?? 'none', left: panelCamera(actors.filter((a) => !a.right)), right: panelCamera(actors.filter((a) => a.right)) } } : {}),
   };
 }

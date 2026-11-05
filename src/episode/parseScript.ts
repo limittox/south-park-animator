@@ -22,7 +22,7 @@ const NOT_A_SPEAKER = /^(note|fade|cut|title|caption|super|subtitle|title card|o
 /** "Fade to black.", "The screen fades out.", "DISSOLVE TO:" say how the next scene starts. "The ghost fades away" doesn't. */
 const SCREEN_CHANGE = /^(?:(?:slow|quick)(?:ly)? )?(?:the (?:screen|scene|picture|image) (?:slowly |quickly )?)?(fades?|dissolves?)\b/i;
 /** `A caption reads "1982."`, `The sign says "Closed."` */
-const CAPTION_READS = /\b(?:caption|title card|subtitle|card|sign|banner|chyron)\b[^"“”]{0,30}?\b(?:reads?|says?|shows?)\b[^"“”]{0,12}["“]([^"”]+)["”]/i;
+const CAPTION_READS = /\b(?:caption|title card|subtitle|card|signs?|banner|chyron)\b[^"“”]{0,30}?\b(?:reads?|says?|shows?)\b[^"“”]{0,12}["“]([^"”]+)["”]/i;
 /** `CAPTION: Later that night` */
 const CAPTION_LABEL = /^(?:caption|super|subtitle|title card|on[- ]?screen(?: text)?)\s*:\s*["“]?(.+?)["”]?$/i;
 /** A time jump on a line of its own: "Three hours later...", "THE NEXT MORNING". */
@@ -60,12 +60,15 @@ interface RawBeat {
   crowd?: CrowdReaction;
   burst?: { kind: BurstId; at?: string; stay?: boolean };
   drift?: { item: string; style: 'blow' | 'roll' | 'fall' };
+  weather?: string;
+  /** What the sign they're holding says. */
+  slogan?: string;
 }
 
 interface RawScene {
   title: string;
   description: string;
-  set: { kind: 'preset'; preset: string } | { kind: 'kit'; place: 'interior' | 'exterior'; time: string; pieces: unknown[] };
+  set: { kind: 'preset'; preset: string; time?: string } | { kind: 'kit'; place: 'interior' | 'exterior'; time: string; pieces: unknown[] };
   weather: string;
   blocking: { who: string; x: number; depth: number; mood: MoodId; offstage?: boolean; sit?: string; lie?: string; in?: string; screen?: boolean; hold?: string }[];
   beats: RawBeat[];
@@ -78,8 +81,11 @@ interface RawScene {
   turned: Set<string>;
   transition?: Transition;
   crowd?: Crowd;
-  split?: { set: RawScene['set']; who: string[] };
+  split?: { set: RawScene['set']; who: string[]; caller?: string };
 }
+
+/** What the script says about someone's look: their pet and the words on their sign. It lasts the whole episode. */
+type LookNotes = Map<string, { sidekick?: string; signText?: string }>;
 
 /** Stand for "the kids" / "everyone" until we know who's in the scene. */
 const KIDS = '*kids';
@@ -98,7 +104,7 @@ const SEAT_PIECES: Record<string, string> = { couch: 'couch', chair: 'chair', ar
 
 /** "hands the remote to Dad", "gives Priya the money". */
 const GIVE_PROP = /\b(?:hands?|gives?|passes?|offers?|tosses)\s+(?:[a-z][\w.]*\s+)?(?:a|an|the|his|her|their|some)\s+([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
-const PROP_VERB = /\b(?:picks? up|grabs?|takes? out|pulls? out|holds? up|holds|is holding|holding|clutches|clutching|carries|carrying|eats?|drinks?|sips?|reads?|waves? around|opens?|raises?|lifts?|brandish(?:es)?|swings?|with)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
+const PROP_VERB = /\b(?:picks? up|grabs?|takes? out|pulls? out|holds? up|holds?|is holding|holding|clutches|clutching|carries|carrying|eats?|drinks?|sips?|reads?|waves? around|opens?|raises?|lifts?|brandish(?:es)?|swings?|with)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
 const THROW = /\b(?:throws?|hurls?|chucks?|lobs?|flings?|tosses)\s+(?:a|an|the|his|her|their|some)?\s*([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)/i;
 
 /** A direction opening with several names: "Stan, Kyle and Butters". They all do what it says next. */
@@ -127,6 +133,11 @@ const TURNS_ROUND = /\b(?:turns?|turning|whirls?|swings?)\s+(?:back\s+)?(?:a)?ro
 const TURNS_TO = /\b(?:turns?|turning)\s+(?:back\s+)?(?:to|toward|towards)\b|(?<!\bmak(?:es?|ing)\s)\b(?:faces?|facing)\b/i;
 /** Off into the distance or out through a door, rather than off to one side. */
 const WALKS_AWAY = /\b(?:walks?|goes|heads?|wanders?|trudges?|shuffles?|limps?|stumbles?)\s+(?:slowly\s+|sadly\s+|quietly\s+)?(?:away|off into|into the (?:distance|night|snow|sunset|darkness|fog))\b|\b(?:walks?|goes|heads?|steps?|leaves?)\s+(?:out\s+|back\s+)?(?:through|out)\s+(?:of\s+)?(?:the|a)\s+(?:\w+\s+)?door\b/i;
+
+/** `holds a "FREE PIZZA" sign`: the words come first. */
+const SIGN_QUOTED = /["“]([^"”]+)["”]\s+(signs?)\b/i;
+/** "walks her dog", "with his pet chicken", "and their cat", "has a pet pig". Just a dog in the street isn't anyone's. */
+const PET = /\b(?:(?:a|an)\s+pet\s+|(?:walks?|walking|pets?|petting|feeds?|feeding|brings?|bringing|carries|carrying|holds?|holding|with|and)\s+(?:his|her|their)\s+(?:pet\s+)?|(?:his|her|their)\s+pet\s+)([a-z-]+(?:\s+pig)?)/i;
 
 /** Arm poses, the first match winning. */
 const GESTURE_WORDS: [RegExp, string][] = [
@@ -185,8 +196,8 @@ const PRESET_WORDS: [RegExp, string][] = [
 
 /** Pick a set for a scene heading. Unknown interiors get a plain paper room. */
 function setFor(heading: string, interior: boolean): RawScene['set'] {
-  for (const [re, preset] of PRESET_WORDS) if (re.test(heading)) return { kind: 'preset', preset };
   const time = /night|evening|midnight/i.test(heading) ? 'night' : /dusk|sunset|dawn/i.test(heading) ? 'dusk' : 'day';
+  for (const [re, preset] of PRESET_WORDS) if (re.test(heading)) return { kind: 'preset', preset, ...(time === 'day' ? {} : { time }) };
   if (interior) return { kind: 'kit', place: 'interior', time, pieces: [{ type: 'door', x: 260 }, { type: 'window', x: 820 }, { type: 'picture', x: 1260 }] };
   return { kind: 'kit', place: 'exterior', time, pieces: [{ type: 'pine', x: 180 }, { type: 'house', x: 1180 }, { type: 'pine', x: 1480 }] };
 }
@@ -201,7 +212,9 @@ function titleCase(name: string): string {
   if (name !== name.toUpperCase()) return name;
   return name
     .toLowerCase()
-    .replace(/(^|[\s.'-])([a-z])/g, (_m, p: string, ch: string) => p + ch.toUpperCase())
+    .replace(/(^|[\s.'’-])([a-z])/g, (_m, p: string, ch: string) => p + ch.toUpperCase())
+    // "Priya's", not "Priya'S". "O'Brien" keeps its capital.
+    .replace(/['’](?:S|T|Re|Ll|D|Ve|M)\b/g, (m) => m.toLowerCase())
     .replace(/\bMc([a-z])/g, (_m, ch: string) => `Mc${ch.toUpperCase()}`);
 }
 
@@ -270,6 +283,24 @@ function captionIn(text: string): string | undefined {
   return (CAPTION_READS.exec(line) ?? CAPTION_LABEL.exec(line))?.[1] ?? (TIME_JUMP.test(line) ? line : undefined);
 }
 
+/** "It starts snowing.", "It stops raining." */
+function weatherIn(text: string): string | undefined {
+  const kind = /\bsnow(?:ing|s)?\b/i.test(text) ? 'snow' : /\brain(?:ing|s)?\b/i.test(text) ? 'rain' : undefined;
+  if (!kind) return undefined;
+  if (/\b(?:stops?|ends?)\b/i.test(text)) return 'none';
+  return /\b(?:starts?|begins?|it'?s)\b/i.test(text) ? kind : undefined;
+}
+
+/** A role written the ordinary way: "the cashier" is the Cashier. "The phone" still isn't a character called Phone, nor "the kids" a character called Kids. */
+function capitalizeRoles(line: string, known: string[]): string {
+  return known.reduce((l, name) => {
+    const lower = name.toLowerCase();
+    if (propId(name) || SEAT_PIECES[lower] || VEHICLE_WORDS.some(([re]) => re.test(name)) || CROWD.test(name) || KID_WORDS.test(`the ${lower}`) || ALL_WORDS.test(lower)) return l;
+    const words = lower.split(/\s+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+    return l.replace(new RegExp(`\\b([Tt]he\\s+)${words}\\b`, 'g'), (_m, the: string) => the + name);
+  }, line);
+}
+
 /** A verb the camera does: "The camera pans to Priya", "We pull back", or just "Zoom in on Dex". "Dex pulls out a phone" isn't. */
 const cameraDoes = (verbs: string) => new RegExp(`^(?:slow(?:ly)? )?(?:${verbs})\\b|\\b(?:camera|we)\\s+(?:\\w+ly\\s+)?(?:${verbs})\\b`, 'i');
 const PULL_BACK = cameraDoes('pulls? back|pulls? out|zooms? out');
@@ -328,10 +359,12 @@ function vehicleBeat(text: string, subjects: string[], group: string | null, sce
 }
 
 /** Turn plain-English stage directions into moves and actions where we can recognise them. */
-function actionBeat(direction: string, known: string[], scene: RawScene): RawBeat | null {
+function actionBeat(direction: string, known: string[], scene: RawScene, looks: LookNotes): RawBeat | null {
+  const written = SIGN_QUOTED.exec(direction);
+  const plain = written ? direction.replace(written[0], written[2]) : direction;
   // What a caption says isn't something happening on stage.
-  const caption = captionIn(direction);
-  const line = caption ? direction.replace(caption, '') : direction;
+  const caption = captionIn(plain);
+  const line = capitalizeRoles(caption ? plain.replace(caption, '') : plain, known);
   // Subjects in the order the direction names them: "Dex hands the money to Priya". Names count as written, a word
   // at a time ("Stan", "STAN", "TV Anchor"): not the word "phone" for a character called Phone, and not "Stan's living room".
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -350,18 +383,17 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   const text = subjects.reduce((t, n) => t.replace(new RegExp(named(n), 'g'), ''), line);
   // A phone call: everyone after the first name is in a second set, on the other half of the screen.
   if (/\b(?:split[- ]?screen|intercut)\b/i.test(text)) {
-    scene.split = { set: setFor(text, !/\b(?:outside|street|park|yard)\b/i.test(text)), who: subjects.length > 1 ? subjects.slice(1) : subjects };
+    scene.split = { set: setFor(text, !/\b(?:outside|street|park|yard)\b/i.test(text)), who: subjects.length > 1 ? subjects.slice(1) : subjects, ...(subjects.length > 1 ? { caller: subjects[0] } : {}) };
     return null;
   }
   const reaction = crowdIn(text, scene);
   const group = subjects.length || reaction ? null : KID_WORDS.test(text) ? KIDS : ALL_WORDS.test(text) ? EVERYONE : null;
   const vehicle = vehicleBeat(text, subjects, group, scene);
-  if (vehicle) return vehicle;
   // "Stan and Kyle throw snowballs at Cartman": two people do it, to the third.
   const together = TOGETHER.exec(line)?.[0].length ?? 0;
   const crowd = subjects.slice(1).filter((s) => at(s) < together);
   const object = subjects.slice(1).find((s) => at(s) >= together);
-  const beat: RawBeat = {};
+  const beat: RawBeat = vehicle ? { ...vehicle } : {};
   const who = subjects[0];
   if (caption) beat.caption = caption;
   if (reaction) beat.crowd = reaction;
@@ -374,7 +406,9 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   const pace = run ? { run } : sneak ? { sneak } : {};
   const seat = SEAT_WORDS.exec(text)?.[1]?.toLowerCase();
   const on = seat === 'sofa' ? 'couch' : seat === 'campfire' ? 'log' : seat?.replace(/s$/, '');
-  if (ON_SCREEN.test(text)) {
+  if (vehicle) {
+    // The vehicle has said where everyone goes.
+  } else if (ON_SCREEN.test(text)) {
     beat.moves = subjects.map((s) => ({ who: s, kind: 'joinScreen' }));
   } else if (OFF_SCREEN.test(text)) {
     beat.moves = subjects.map((s) => ({ who: s, kind: 'leaveScreen' }));
@@ -399,17 +433,31 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   } else if (sneak) {
     beat.moves = subjects.map((s) => ({ who: s, kind: 'walk', sneak }));
   }
+  const pet = PET.exec(text);
+  const petId = pet ? formId(pet[1]) : undefined;
+  if (who && petId) (looks.get(who) ?? looks.set(who, {}).get(who)!).sidekick ??= petId;
+  for (const n of known) {
+    const theirs = new RegExp(`${named(n)}['’]s\\s+(?:pet\\s+)?([a-z-]+(?:\\s+pig)?)`).exec(line);
+    const id = theirs ? formId(theirs[1]) : undefined;
+    if (id) (looks.get(n) ?? looks.set(n, {}).get(n)!).sidekick ??= id;
+  }
   const thrown = thrownIn(text, !!object);
   const drinks = DRINKS.test(text);
   const eats = EATS.test(text);
-  const prop = thrown ?? propIn(text) ?? (drinks ? (/\b(?:beers?|bottles?|booze|whiskey|wine)\b/i.test(text) ? 'beer' : 'soda') : eats ? 'snack' : undefined);
+  const prop = thrown ?? propIn(petId ? text.replace(pet![0], '') : text) ?? (drinks ? (/\b(?:beers?|bottles?|booze|whiskey|wine)\b/i.test(text) ? 'beer' : 'soda') : eats ? 'snack' : undefined);
   const giving = !thrown && /\b(hands?|gives?|passes?|offers?|tosses)\b/i.test(text);
   if (giving && subjects.length >= 2) {
     beat.give = subjects[1];
     if (prop) beat.hold = prop;
   } else if (prop) beat.hold = prop;
   else if (/\b(drops?|puts? (it |them )?(down|away)|throws? (it )?away|pockets?)\b/i.test(text)) beat.hold = 'none';
-  if (/\b(faints?|passes out|collapses?|falls? (over|down)|dies)\b/i.test(text)) beat.action = 'faint';
+  const slogan = prop === 'sign' ? written?.[1] ?? (/\bsigns?\b/i.test(plain) ? caption : undefined) : undefined;
+  if (slogan) {
+    beat.slogan = slogan;
+    delete beat.caption;
+  }
+  // Only people faint: a plunger that falls down is just falling.
+  if ((who || group) && !drift && /\b(faints?|passes out|collapses?|falls? (over|down)|dies)\b/i.test(text)) beat.action = 'faint';
   else if (/\b(vomits?|vomiting|pukes?|puking|barfs?|barfing|throws? up|throwing up)\b/i.test(text)) beat.action = 'vomit';
   else if (thrown) {
     beat.action = 'throw';
@@ -453,10 +501,21 @@ function actionBeat(direction: string, known: string[], scene: RawScene): RawBea
   // Several people, or a group that's worked out once we know who's in the scene.
   const team = group ? [group] : crowd;
   if (team.length && !beat.hug && (beat.action || beat.gesture || beat.hold || beat.face)) beat.also = team;
-  if (/\bsnow(ing|s)?\b/i.test(text) && /\b(starts?|begins?|it'?s)\b/i.test(text)) scene.weather = 'snow';
+  // Before anything has happened it's how the scene opens; after that it starts then and there.
+  const sky = weatherIn(text);
+  if (sky) {
+    if (scene.beats.length) beat.weather = sky;
+    else scene.weather = sky;
+  }
+  if (vehicle) {
+    // Moving a vehicle is the point of the sentence, so only what goes along with it is kept: "jumps in the car" isn't a jump.
+    const { moves, caption: words, crowd: reacts, shot: framing, gesture, lookAt, mood, weather } = beat;
+    const acting = who && (gesture || lookAt || mood || beat.hold);
+    return { ...(moves ? { moves } : {}), ...(words ? { caption: words } : {}), ...(reacts ? { crowd: reacts, sfx: beat.sfx } : {}), ...(framing ? { shot: framing } : {}), ...(weather ? { weather } : {}), ...(vehicle.who ? { who: vehicle.who } : {}), ...(acting ? { who, gesture, lookAt, mood, hold: beat.hold } : {}) };
+  }
   if (!beat.moves?.length) delete beat.moves;
-  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.hug && !beat.mood && !beat.caption && !beat.shot && !beat.lookAt && !beat.face && !beat.crowd && !beat.burst && !beat.drift && !beat.becomes) return null;
-  if ((beat.hold || beat.give) && !who && !beat.also) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot || beat.crowd || beat.burst || beat.drift || beat.face ? { ...beat, hold: undefined, give: undefined } : null;
+  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.hug && !beat.mood && !beat.caption && !beat.shot && !beat.lookAt && !beat.face && !beat.crowd && !beat.burst && !beat.drift && !beat.becomes && !beat.weather) return null;
+  if ((beat.hold || beat.give) && !who && !beat.also) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot || beat.crowd || beat.burst || beat.drift || beat.face || beat.weather ? { ...beat, hold: undefined, give: undefined } : null;
   if (who) beat.who = who;
   return beat;
 }
@@ -466,6 +525,7 @@ export function parseScript(script: string): Episode {
   let title = '';
   const scenes: RawScene[] = [];
   const allNames: string[] = [];
+  const looks: LookNotes = new Map();
   /** A fade or dissolve written at the end of a scene, waiting for the scene it leads into. */
   let nextTransition: Transition | undefined;
   const newScene = (heading: string, interior: boolean): RawScene => {
@@ -573,7 +633,7 @@ export function parseScript(script: string): Episode {
     if (!scene.description) scene.description = text;
     const known = [...new Set([...speakers, ...allNames, ...scene.people])];
     for (const sentence of sentences) {
-      const b = actionBeat(sentence, known, scene);
+      const b = actionBeat(sentence, known, scene, looks);
       if (b) scene.beats.push(b);
     }
   }
@@ -581,7 +641,10 @@ export function parseScript(script: string): Episode {
   // Block everyone who talks or moves: spread across the stage, entrances start off stage.
   for (const s of scenes) {
     // "The kids" and "everyone" are whoever turns out to be in the scene.
-    const present = [...new Set([...s.people, ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? [])])].filter((p) => !p.startsWith('*') && !s.offscreen.has(p));
+    const isVehicle = (id: string) => s.vehicles.some((v) => v.id === id);
+    // Anyone a direction has doing something is there, even if they never move or speak.
+    const acting = s.beats.flatMap((b) => [b.who, ...(b.also ?? []), b.lookAt, b.give, b.hug].filter((p): p is string => !!p && !p.startsWith('*')));
+    const present = [...new Set([...s.people, ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? []), ...acting])].filter((p) => !p.startsWith('*') && !s.offscreen.has(p) && !isVehicle(p));
     const kids = present.filter((p) => !looksAdult(p));
     for (const b of s.beats) {
       if (!b.moves?.some((m) => m.who.startsWith('*'))) continue;
@@ -592,6 +655,9 @@ export function parseScript(script: string): Episode {
       const team = b.also.flatMap((w) => (w === KIDS && kids.length ? kids : w.startsWith('*') ? present : [w]));
       b.who ??= team[0];
       b.also = team.filter((w) => w !== b.who);
+    }
+    for (const b of s.beats) {
+      if (b.slogan) for (const p of [b.who, ...(b.also ?? [])]) if (p) (looks.get(p) ?? looks.set(p, {}).get(p)!).signText ??= b.slogan;
     }
     // Sitting down before anyone has said a word is how the scene starts.
     const firstLine = s.beats.findIndex((b) => b.text);
@@ -613,26 +679,35 @@ export function parseScript(script: string): Episode {
       });
       if (b.moves && !b.moves.length) delete b.moves;
     });
-    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.hug || b.mood || b.caption || b.shot || b.lookAt || b.face || b.crowd || b.burst || b.drift || b.becomes);
+    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.hug || b.mood || b.caption || b.shot || b.lookAt || b.face || b.crowd || b.burst || b.drift || b.becomes || b.weather);
     // A built set gets the furniture people sit on: "sit at a table" in a bar needs a table.
-    const set = s.set;
-    if (set.kind === 'kit') {
-      const asked = [...seated.values(), ...s.beats.flatMap((b) => b.moves ?? []).filter((m) => m.kind === 'sit' || m.kind === 'lie').map((m) => m.on ?? 'seat')];
+    const sits = [...seated].map(([who, on]) => ({ who, on }));
+    for (const m of s.beats.flatMap((b) => b.moves ?? [])) if (m.kind === 'sit' || m.kind === 'lie') sits.push({ who: m.who, on: m.on ?? 'seat' });
+    const furnish = (set: RawScene['set'], asked: string[]) => {
+      if (set.kind !== 'kit') return;
       [...new Set(asked)]
         .filter((k) => k !== 'floor' && k !== 'ground')
         .forEach((k, i) => {
           const type = set.place === 'exterior' && !['bench', 'rock', 'log'].includes(k) ? 'bench' : SEAT_PIECES[k] ?? 'chair';
           if (!set.pieces.some((p) => (p as { type?: string }).type === type)) set.pieces.push({ type, x: [800, 460, 1140][i % 3] });
         });
-    }
-    const people = [...new Set([...s.people, ...seated.keys(), ...onScreen, ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? [])])].filter((p) => !s.vehicles.some((v) => v.id === p));
+    };
+    const faraway = (who: string) => !!s.split?.who.includes(who);
+    furnish(s.set, sits.filter((x) => !faraway(x.who)).map((x) => x.on));
+    if (s.split) furnish(s.split.set, sits.filter((x) => faraway(x.who)).map((x) => x.on));
+    const people = [...new Set([...s.people, ...seated.keys(), ...onScreen, ...s.beats.flatMap((b) => b.moves?.map((m) => m.who) ?? []), ...acting, ...(s.split?.who ?? [])])].filter((p) => !isVehicle(p));
     for (const p of onScreen) s.offscreen.delete(p);
     const onstage = people.filter((p) => !s.offscreen.has(p) && !s.riders.has(p) && !onScreen.has(p));
+    // A call has two ends: whoever the split names, and whoever on this side talks first if it doesn't say.
+    const onCall = new Set(s.split?.who.length ? [...s.split.who, s.split.caller ?? s.beats.find((b) => b.text && b.who && !faraway(b.who))?.who ?? ''] : []);
     // Spread out whoever's standing; people seated at the start head for the seat nearest their own spot.
     const standing = onstage.filter((p) => !seated.has(p));
-    const spread = (i: number, n: number) => (n === 1 ? 800 : Math.round(330 + (i * (1270 - 330)) / (n - 1)));
-    onstage.forEach((p, i) => {
-      const x = seated.has(p) ? spread(i, onstage.length) : spread(standing.indexOf(p), standing.length);
+    // Each half of a split screen is its own narrow stage, so people there stand closer together.
+    const spread = (i: number, n: number) => (n === 1 ? 800 : s.split ? Math.round(800 + (i - (n - 1) / 2) * Math.min(300, 560 / (n - 1))) : Math.round(330 + (i * (1270 - 330)) / (n - 1)));
+    onstage.forEach((p) => {
+      const sameSide = (q: string) => faraway(q) === faraway(p);
+      const beside = (list: string[]) => spread(list.filter(sameSide).indexOf(p), list.filter(sameSide).length);
+      const x = beside(seated.has(p) ? onstage : standing);
       const firstMove = s.beats.find((b) => b.moves?.some((m) => m.who === p))?.moves?.find((m) => m.who === p);
       const firstLine = s.beats.findIndex((b) => b.who === p && b.text);
       const firstMoveIdx = s.beats.findIndex((b) => b.moves?.some((m) => m.who === p));
@@ -643,7 +718,7 @@ export function parseScript(script: string): Episode {
       const madeAt = s.beats.findIndex((b) => b.becomes === p);
       const madeLater = madeAt >= 0 && (firstLine === -1 || madeAt < firstLine) && (firstMoveIdx === -1 || madeAt < firstMoveIdx);
       const sit = seated.get(p);
-      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater || madeLater ? { offstage: true } : {}), ...(sit ? (lying.has(p) ? { lie: sit } : { sit }) : {}), ...(s.split ? { hold: 'phone' } : {}) });
+      s.blocking.push({ who: p, x, depth: 0, mood: 'happy', ...(entersLater || madeLater ? { offstage: true } : {}), ...(sit ? (lying.has(p) ? { lie: sit } : { sit }) : {}), ...(onCall.has(p) ? { hold: 'phone' } : {}) });
     });
     for (const p of onScreen) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', screen: true });
     for (const [p, v] of s.riders) s.blocking.push({ who: p, x: 800, depth: 0, mood: 'happy', in: v });
@@ -658,7 +733,8 @@ export function parseScript(script: string): Episode {
       }
       if (!b.text) {
         // A car through the wall or a puff of smoke wants the whole stage in view.
-        if (close && (b.moves?.length || b.sfx || b.effect)) {
+        // So does anything the arms or the crowd do, which a close-up would crop.
+        if (close && (b.moves?.length || b.sfx || b.effect || b.gesture || b.action || b.hold || b.give || b.hug || b.crowd || b.burst || b.drift || b.becomes)) {
           b.shot = { type: 'wide' };
           close = false;
         }
@@ -676,7 +752,7 @@ export function parseScript(script: string): Episode {
 
   const raw = {
     title: title || (scenes[0]?.title ? `The ${scenes[0].title} Incident` : 'Untitled Episode'),
-    cast: allNames.map((name) => ({ name, bio: looksAdult(name) ? 'a grown-up in town' : 'a kid in town' })),
+    cast: allNames.map((name) => ({ name, bio: looksAdult(name) ? 'a grown-up in town' : 'a kid in town', ...(looks.has(name) ? { look: looks.get(name) } : {}) })),
     scenes: scenes.map(({ people: _p, offscreen: _o, riders: _r, ...rest }) => rest),
   };
   return normalizeEpisode(raw, script);
@@ -685,7 +761,7 @@ export function parseScript(script: string): Episode {
 export const SAMPLE_SCRIPT = `TITLE: The Snow Day Scheme
 
 EXT. BUS STOP - MORNING
-Dex, Benny and Priya wait at the bus stop.
+Dex, Benny and Priya wait at the bus stop. Priya walks her dog.
 
 BENNY: Dude, the internet says flushing ice cubes makes it snow so much they cancel school.
 DEX: (deadpan) That's the dumbest thing I've ever heard.
@@ -706,7 +782,7 @@ MR. HARGROVE: Today, children, the water cycle.
 Mr. Hargrove faces the chalkboard as the camera pans to Priya.
 BENNY: (whispering) Psst. How many did you flush?
 PRIYA: (proud) Four hundred. My mom thinks the freezer is haunted.
-DEX (O.S.): (whispering) Flush harder.
+DEX: (whispering) Flush harder.
 Mr. Hargrove turns around.
 MR. HARGROVE: (yelling) Benny! Care to share with the class?
 BENNY: (nervous) Uhh... the water cycle is when you flush ice and the sky gets jealous?
@@ -733,7 +809,7 @@ Benny drinks a soda.
 BENNY: (sick) It's warm.
 Benny vomits.
 
-INT. GROCERY STORE - DAY
+INT. GROCERY STORE - NIGHT
 A line of angry townspeople waits for ice.
 
 CASHIER: Sir, that's your ninth cart of ice this week.
@@ -745,9 +821,10 @@ The crowd panics.
 OFFICER PLUNKETT: (nervous) Sorry. Icy roads.
 CASHIER: (shocked) Oh my God. Is it... snowing?
 
-EXT. MAIN STREET - DAY
-It starts snowing. A crowd of townspeople fills the street.
-Dex and Benny run in holding signs.
+EXT. MAIN STREET - NIGHT
+A crowd of townspeople fills the street.
+Dex and Benny run in holding signs that read "SNOW DAY NOW".
+It starts snowing.
 DEX: (triumphant) We did it! No school tomorrow!
 Dex and Benny dance as the crowd cheers while a caption reads "Science works."
 PRIYA (O.S.): Dex! Tomorrow's Saturday!

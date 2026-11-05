@@ -30,6 +30,8 @@ export interface CharacterState {
   held: string;
   heldColor: string;
   sidekick: string;
+  /** The pet's own colour, kept here while a prop in hand has taken over `heldColor`. */
+  sidekickColor?: string;
   signText: string;
   /** Cropped photo of a real face (data URL) used by "photo face" mode. */
   photoFace?: string | null;

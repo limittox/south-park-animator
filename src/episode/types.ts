@@ -185,6 +185,8 @@ export interface Beat {
   effect?: ScreenEffect;
   /** On-screen text (a sign, a time jump: "Three hours later..."). */
   caption?: string;
+  /** The weather from this beat on: it builds up, or "none" dies away. The scene's own `weather` is how it opens. */
+  weather?: Weather;
   /** Seconds. Lines are timed by their audio; this is for silent beats. */
   duration?: number;
   /** Extra silence after the beat, in seconds. */
@@ -271,7 +273,7 @@ export interface Crowd {
 /* ---------------------------------------------------------------- sets */
 
 /** A scene's background: one of the photo booth's hand-drawn places, or a set built from the paper kit. */
-export type SetSpec = { kind: 'preset'; preset: string; townName?: string } | KitSet;
+export type SetSpec = { kind: 'preset'; preset: string; townName?: string; time?: TimeOfDay } | KitSet;
 
 export type TimeOfDay = 'day' | 'dusk' | 'night';
 

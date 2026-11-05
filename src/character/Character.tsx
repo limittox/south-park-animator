@@ -447,7 +447,7 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
           </>
         )}
       </defs>
-      {pet.render && part('sidekick', pet.render(ctx(c.heldColor)))}
+      {pet.render && part('sidekick', pet.render(ctx(c.sidekickColor ?? c.heldColor)))}
       {neck.back && !rear && part('neck', side ? <g clipPath={`url(#${rearId})`}><g transform={`translate(${-body.w * 0.7} 0)`}>{neck.back({ ...ctx(c.neckColor), g: slimG })}</g></g> : neck.back(ctx(c.neckColor)))}
       {showHair && hair.back && !rear && (
         <g transform={headT}>{part('hair', <g clipPath={side ? `url(#${backHairId})` : undefined}><g transform={side ? (hair.tail ? 'scale(-1 1)' : `translate(${-SIDE_HAIR_BACK} 0)`) : undefined}><g clipPath={backClip}>{hair.back(ctx(c.hairColor))}</g></g></g>)}</g>
