@@ -23,13 +23,15 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 
 **Animation**
 - One pure timeline (`src/episode/timeline.ts`) turns the episode into frames. The player and the exporter both sample it, so what you see is what you export.
+- 24 frames a second with characters and props posed every second frame, the way the show is animated. Beats start on a pose, so lines, cuts and actions land the moment the picture changes; camera moves and fades run on every frame.
 - Stop-motion hop walks, entrances and exits, blinks, a talking bob, 12 moods, 13 arm gestures (wave, point, facepalm, flail…), jumps, spins, trembles and faints.
 - Running: faster, quicker hops, a forward lean and pumping arms.
 - Sitting on couches, chairs, benches, beds, logs and the floor, or behind tables and desks (which are drawn again over the sitters). Grown-ups sink into the seat with their knees toward the camera; little kids are lifted onto it, legs dangling. Several people share a seat side by side.
 - Props: 35 things to hold (phones, cash, gifts, love letters, sodas, snowballs, pickaxes, beers, swabs, microphones, butterfly nets…), picked up, put away or handed from one character to another mid-line.
 - Vehicles: a car, a police car with flashing lights and the yellow school bus drive in and off, juddering on spinning wheels, with passengers showing through the windows. People get in and out; the bus can pull up in front of everyone.
-- Listeners turn toward whoever is talking. Talkers face the person they address.
-- Hard camera cuts between wide, medium and close-up shots framed from where people stand, plus slow push-ins, screen shake and flashes.
+- Listeners turn toward whoever is talking. Talkers face the person they address. Pupils move on their own: they point at whoever matters, wander in quiet moments, and a silent look is a side-eye with no head turn.
+- Hard camera cuts between wide, medium and close-up shots framed from where people stand, plus pans between shots, shots that follow someone across the set, slow push-ins, screen shake and flashes.
+- Scene changes are hard cuts, fades through black or dissolves.
 - A title card, an original synthesized guitar sting for scene changes, synthesized sound effects (pop, boing, crash, thud, fart…), weather and captions.
 
 **Sets**

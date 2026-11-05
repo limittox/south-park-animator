@@ -24,13 +24,16 @@ export interface CharacterProps {
   arms?: ArmsPose;
   /** Eyes shut for a blink. */
   blink?: boolean;
+  /** Where the pupils point, -1..1 across and down. */
+  gazeX?: number;
+  gazeY?: number;
   /** Sitting: where the hips are (character coordinates); see seatedGeo. */
   hipY?: number;
   onPartClick?: (cat: CategoryId) => void;
 }
 
 /** A whole character as an SVG <g>, in character coordinates (ground at y = 480). */
-export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn = 0, arms: pose, blink = false, hipY, onPartClick }: CharacterProps) {
+export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn = 0, arms: pose, blink = false, gazeX = 0, gazeY = 0, hipY, onPartClick }: CharacterProps) {
   const rawId = useId();
   const prefix = 'c' + rawId.replace(/[^a-zA-Z0-9]/g, '');
   let counter = 0;
@@ -41,7 +44,7 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, turn =
   // Sitting with the legs folded: knees toward the camera, a little wider than the hips.
   const folded = g.legTop - standing.legTop > 8;
   const shape = HEAD_SHAPES[c.headShape] ?? HEAD_SHAPES.round;
-  const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk });
+  const ctx = (color: string): RenderCtx => ({ c, g, color, uid, talk, gaze: [gazeX, gazeY] });
 
   const top = byId(TOPS, c.top);
   const bottom = byId(BOTTOMS, c.bottom);

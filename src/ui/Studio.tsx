@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CastMember, Episode, MoodId, Scene } from '../episode/types';
-import { compileEpisode, compileScene, sampleScene, type CompiledEpisode } from '../episode/timeline';
+import { compileEpisode, compileScene, sampleScene, transitionTime, type CompiledEpisode } from '../episode/timeline';
 import { repositionActor, setMoodAt, toggleFlip, updateScene } from '../episode/edit';
 import { emptyScene, newId } from '../episode/normalize';
 import { MOOD_LIST } from '../episode/catalog';
@@ -78,7 +78,7 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
 
   const seekScene = (i: number) => {
     const sc = compiled.scenes[i];
-    if (sc) player.current?.seek(sc.start + 0.001);
+    if (sc) player.current?.seek(sc.start + transitionTime(sc) + 0.001);
     setLoc({ scene: i, beat: -1 });
   };
   const seekBeat = (bi: number) => {
@@ -104,7 +104,7 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
     goTo.current = null;
     const i = compiled.scenes.findIndex((s) => s.scene.id === id);
     if (i >= 0) {
-      player.current?.seek(compiled.scenes[i].start + 0.001);
+      player.current?.seek(compiled.scenes[i].start + transitionTime(compiled.scenes[i]) + 0.001);
       setLoc({ scene: i, beat: -1 });
     }
   }, [compiled]);

@@ -1,6 +1,6 @@
 import type { CharacterState } from '../types';
 import type { Beat, Blocking, CastMember, Episode, Move, Scene, SetSpec, Shot, Vehicle, VehicleType, VoiceSpec } from './types';
-import { ACTION_IDS, EFFECT_IDS, GESTURE_IDS, MOOD_IDS, SFX_IDS, SHOT_IDS, WEATHER_IDS } from './catalog';
+import { ACTION_IDS, EFFECT_IDS, GESTURE_IDS, MOOD_IDS, SFX_IDS, SHOT_IDS, TRANSITION_IDS, WEATHER_IDS } from './catalog';
 import { CATEGORIES } from '../data/catalog';
 import { DEFAULT_CHARACTER, normalizeCharacter } from '../data/defaults';
 import { applyItem } from '../lib/apply';
@@ -239,7 +239,13 @@ function normalizeShot(input: unknown, cast: CastMember[]): Shot | undefined {
   const type = oneOf(input.type, SHOT_IDS);
   if (!type) return undefined;
   const on = Array.isArray(input.on) ? input.on.map((x) => resolveCast(cast, x)).filter((x): x is string => !!x) : undefined;
-  return { type, ...(on?.length ? { on } : {}), ...(input.push === true ? { push: true } : {}) };
+  return {
+    type,
+    ...(on?.length ? { on } : {}),
+    ...(input.push === true ? { push: true } : {}),
+    ...(input.pan === true ? { pan: true } : {}),
+    ...(input.follow === true && type !== 'wide' ? { follow: true } : {}),
+  };
 }
 
 /** Move kinds as the LLM (or a person) might spell them, mapped to a kind plus "run". */
@@ -457,7 +463,7 @@ export function normalizeBeat(input: unknown, cast: CastMember[], vehicles: Vehi
   // A line needs a speaker; a beat needs to do *something*.
   if (beat.text && !beat.who) return null;
   const doesSomething =
-    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give;
+    beat.text || beat.moves || beat.action || beat.caption || beat.sfx || beat.effect || beat.shot || beat.duration || beat.mood || beat.reactions || beat.gesture || beat.hold || beat.give || beat.lookAt;
   return doesSomething ? beat : null;
 }
 
@@ -492,6 +498,7 @@ export function normalizeScene(input: unknown, cast: CastMember[], index: number
   }
   const blocking = Array.isArray(input.blocking) ? input.blocking.map((b) => normalizeBlocking(b, cast, vehicles)).filter((b): b is Blocking => !!b) : [];
   const dedup = blocking.filter((b, i) => blocking.findIndex((x) => x.who === b.who) === i);
+  const transition = oneOf(input.transition, TRANSITION_IDS);
   return {
     id: str(input.id, 40) ?? newId('s'),
     title: str(input.title, 80) ?? `Scene ${index + 1}`,
@@ -503,6 +510,7 @@ export function normalizeScene(input: unknown, cast: CastMember[], index: number
     ...(vehicles.length ? { vehicles } : {}),
     hold: clamp(num(input.hold) ?? (index === 0 ? 0.6 : 1.2), 0, 8),
     sting: typeof input.sting === 'boolean' ? input.sting : index > 0,
+    ...(transition && transition !== 'cut' ? { transition } : {}),
   };
 }
 

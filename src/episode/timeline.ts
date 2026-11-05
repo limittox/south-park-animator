@@ -18,17 +18,21 @@ import { findSeat, pickSlot, seatSlots, seatsOf, type SeatSpot } from './seats';
 
 /** Lip-sync envelopes are sampled this many times a second. */
 export const ENV_FPS = 60;
+/** The show runs at 24 frames a second and moves its characters and props every second frame. */
+export const FPS = 24;
+export const POSE_FPS = FPS / 2;
 export const FRAME_W = 1600;
 export const FRAME_H = 900;
-const TITLE_SECONDS = 3.2;
+const TITLE_SECONDS = 3.25;
 const WALK_SPEED = 380; // scene units per second
-const HOP_PERIOD = 0.42;
+/** Hops last a whole number of poses, so every step looks the same. */
+const HOP_PERIOD = 5 / POSE_FPS;
 const OFF_LEFT = -260;
 const OFF_RIGHT = SCENE_W + 260;
 const BASE_SCALE = 1.15;
 const GESTURE_BLEND = 0.12;
 const RUN_SPEED = 880;
-const RUN_HOP = 0.24;
+const RUN_HOP = 3 / POSE_FPS;
 /** Sitting down or getting up. */
 const SIT_TIME = 0.22;
 const DRIVE_SPEED = 760;
@@ -39,6 +43,21 @@ const LANE_BACK = 40;
 const LANE_FRONT = 70;
 /** Passengers are drawn smaller, a little further away, so their heads fit the windows. */
 export const PASSENGER_SCALE = 0.62;
+/** A pan from one shot to the next. */
+const PAN_TIME = 1;
+const FADE_TIME = 12 / FPS;
+const DISSOLVE_TIME = 20 / FPS;
+/** How far the pupils slide toward someone the head is already turned to. */
+const GAZE_LOOK = 0.6;
+
+/** A hair of slack keeps float error from losing a tick. */
+const stepDown = (t: number, fps: number) => Math.floor(t * fps + 1e-6) / fps;
+/** The frame showing at time t. */
+export const frameTime = (t: number) => stepDown(t, FPS);
+/** The pose showing at time t. */
+export const poseTime = (t: number) => stepDown(t, POSE_FPS);
+/** The first pose at or after t. Beats start on one, so lines, cuts and actions land the moment the picture changes. */
+const nextPose = (t: number) => Math.ceil(t * POSE_FPS - 1e-6) / POSE_FPS;
 
 /** Audio for one line: how long it runs and how loud it is over time (for the mouth). */
 export interface LineClip {
@@ -98,6 +117,10 @@ interface ActorTrack {
   actions: { t: number; action: ActionId }[];
   talks: { t0: number; t1: number; beatId: string; lookAt?: string }[];
   blinks: number[];
+  /** Silent beats where only the eyes slide over to someone. */
+  sideEyes: { t0: number; t1: number; at: string }[];
+  /** Idle moments when the eyes wander off. */
+  glances: { t0: number; t1: number; x: number; y: number }[];
 }
 
 interface VehicleTrack {
@@ -154,6 +177,7 @@ export function syntheticEnvelope(text: string, duration: number): Float32Array 
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const ease = (k: number) => (k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k));
 
 function beatLength(beat: Beat, clips: ClipMap, moveTime: number): number {
   if (beat.text?.trim()) return clips.get(beat.id)?.duration ?? estimateLineSeconds(beat.text);
@@ -163,17 +187,18 @@ function beatLength(beat: Beat, clips: ClipMap, moveTime: number): number {
   if (beat.action === 'faint') d = Math.max(d, 1.1);
   if (beat.action) d = Math.max(d, 0.9);
   if (beat.give) d = Math.max(d, HANDOFF);
+  if (beat.shot?.pan) d = Math.max(d, PAN_TIME);
   return Math.max(d, moveTime);
 }
 
 /** Where someone or something is at time t, from its moves. Vehicles ease in and out of their drives. */
-function placeOn(moves: MoveSeg[], x: number, y: number, visible: boolean, t: number, ease = false) {
+function placeOn(moves: MoveSeg[], x: number, y: number, visible: boolean, t: number, smooth = false) {
   let dir = 0;
   for (const m of moves) {
     if (t < m.t0) break;
     if (t < m.t1) {
       let k = (t - m.t0) / (m.t1 - m.t0);
-      if (ease) k = k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
+      if (smooth) k = ease(k);
       return { x: m.x0 + (m.x1 - m.x0) * k, y: m.y0 + (m.y1 - m.y0) * k, visible: true, moving: true, dir: Math.sign(m.x1 - m.x0) || dir || 1, moveT: t - m.t0, run: m.run };
     }
     x = m.x1;
@@ -249,6 +274,8 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
         actions: [],
         talks: [],
         blinks: [],
+        sideEyes: [],
+        glances: [],
       };
       tracks.set(id, tr);
     }
@@ -475,7 +502,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
 
   const beats: CompiledBeat[] = [];
   const shots: CompiledScene['shots'] = [{ t: 0, shot: { type: 'wide' } }];
-  let t = Math.max(0, scene.hold);
+  let t = nextPose(Math.max(0, scene.hold));
   scene.beats.forEach((beat, i) => {
     let moveTime = 0;
     for (const m of beat.moves ?? []) {
@@ -488,7 +515,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     const len = beatLength(beat, clips, moveTime);
     const end = t + len;
     const gap = beat.pauseAfter ?? (beat.text ? 0.24 : 0.12);
-    const cb: CompiledBeat = { beat, index: i, start: t, end, next: end + Math.max(0, gap) };
+    const cb: CompiledBeat = { beat, index: i, start: t, end, next: nextPose(end + Math.max(0, gap)) };
     beats.push(cb);
 
     const who = beat.who ? tracks.get(beat.who) : undefined;
@@ -498,6 +525,7 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
       if (beat.gesture && beat.gesture !== 'none') who.gestures.push({ t0: t, t1: Math.max(end, t + 0.9), gesture: beat.gesture });
       if (beat.action) who.actions.push({ t, action: beat.action });
       if (beat.text?.trim()) who.talks.push({ t0: t, t1: end, beatId: beat.id, lookAt: beat.lookAt });
+      else if (beat.lookAt) who.sideEyes.push({ t0: t, t1: cb.next, at: beat.lookAt });
       if (beat.hold) who.holds.push({ t, item: beat.hold, color: propColor(look, beat.hold) });
       const to = beat.give ? tracks.get(beat.give) : undefined;
       if (to && to !== who) {
@@ -515,15 +543,19 @@ export function compileScene(scene: Scene, index: number, start: number, cast: M
     if (beat.shot) shots.push({ t, shot: beat.shot, beat: cb });
     t = cb.next;
   });
-  const duration = Math.max(t, ...[...vbusy.values()].map((b) => b + 0.3)) + 0.5;
+  const duration = nextPose(Math.max(t, ...[...vbusy.values()].map((b) => b + 0.3)) + 0.5);
 
   for (const tr of tracks.values()) {
     tr.holds.sort((a, b) => a.t - b.t);
-    // Blinks every few seconds, at times that stay put between renders.
+    // Blinks and glances every few seconds, at times that stay put between renders.
     let h = 0;
     for (const ch of tr.castId + scene.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     const rnd = seeded(h);
     for (let bt = 0.6 + rnd() * 2.4; bt < duration; bt += 2.2 + rnd() * 3.2) tr.blinks.push(bt);
+    for (let gt = 1.2 + rnd() * 3; gt < duration; gt += 2.8 + rnd() * 4) {
+      const t1 = gt + 0.5 + rnd() * 0.7;
+      tr.glances.push({ t0: gt, t1, x: rnd() < 0.5 ? -1 : 1, y: (rnd() - 0.6) * 0.8 });
+    }
   }
 
   return { scene, index, start, duration, groundY, beats, tracks: [...tracks.values()], vehicles: [...vehicles.values()], shots };
@@ -535,7 +567,7 @@ export function compileEpisode(episode: Episode, clips: ClipMap): CompiledEpisod
   let t = titleDuration;
   const scenes = episode.scenes.map((s, i) => {
     const cs = compileScene(s, i, t, cast, clips);
-    t += cs.duration;
+    t = nextPose(t + cs.duration);
     return cs;
   });
   return { episode, cast, titleDuration, scenes, duration: t };
@@ -562,6 +594,9 @@ export interface ActorFrame {
   turn: number;
   talk: number;
   blink: boolean;
+  /** Where the pupils point, -1..1 across and down. */
+  gazeX: number;
+  gazeY: number;
   arms: ArmsPose | undefined;
   /** Extra transform for jumps, spins and faints, in character coordinates. */
   lift: number;
@@ -606,6 +641,10 @@ export interface SceneFrame {
   caption: string | null;
   subtitle: { who: string; text: string } | null;
   flash: number;
+  /** Black over the picture, 0..1. */
+  fade: number;
+  /** The scene this one is dissolving out of, drawn on top of it. */
+  under?: { frame: SceneFrame; opacity: number };
   weather: Weather;
 }
 
@@ -613,6 +652,7 @@ export interface TitleFrame {
   kind: 'title';
   title: string;
   t: number;
+  fade: number;
 }
 
 export type Frame = SceneFrame | TitleFrame;
@@ -680,6 +720,16 @@ function seatHip(h: number, legs: number): number {
   return legs >= h * 0.6 ? Math.min(h, legs * 0.6) : h;
 }
 
+/** Where the pupils point at time t: a silent side-eye, then whoever they're facing, then wandering when nothing's going on. */
+function gazeAt(tr: ActorTrack, t: number, lookDir: number, here: number, where: Map<string, number>, talking: boolean): { x: number; y: number } {
+  const side = tr.sideEyes.find((e) => t >= e.t0 && t < e.t1);
+  const target = side && where.get(side.at);
+  if (target !== undefined && Math.abs(target - here) > 30) return { x: Math.sign(target - here), y: 0 };
+  if (lookDir) return { x: lookDir * GAZE_LOOK, y: 0 };
+  const idle = talking ? undefined : tr.glances.find((e) => t >= e.t0 && t < e.t1);
+  return idle ?? { x: 0, y: 0 };
+}
+
 /** Where everyone is at time t (x of whoever is on stage), passengers riding with their vehicle. */
 function whereabouts(sc: CompiledScene, vehicles: VehicleFrame[], t: number): Map<string, number> {
   const out = new Map<string, number>();
@@ -701,8 +751,10 @@ function talkLevel(tr: ActorTrack, t: number, clips: ClipMap): { level: number; 
     if (t >= tk.t0 && t < tk.t1) {
       const clip = clips.get(tk.beatId);
       const env = clip?.env;
-      const i = Math.floor((t - tk.t0) * ENV_FPS);
-      const raw = env && env.length ? env[Math.min(env.length - 1, i)] : 0.5 + 0.5 * Math.sin((t - tk.t0) * 16);
+      const i = Math.floor((t - tk.t0) * ENV_FPS + 1e-6);
+      // A pose stands for the whole stretch of sound until the next one, or quick syllables would fall between poses.
+      const span = env?.subarray(Math.min(i, env.length - 1), i + ENV_FPS / POSE_FPS);
+      const raw = span?.length ? span.reduce((a, b) => a + b, 0) / span.length : 0.5 + 0.5 * Math.sin((t - tk.t0) * 16);
       // Cut-out mouths snap between a few shapes rather than easing.
       const level = raw < 0.14 ? 0 : raw < 0.5 ? 0.5 : 1;
       return { level, talk: tk };
@@ -740,7 +792,8 @@ function actionAt(tr: ActorTrack, t: number) {
     } else if (a.action === 'spin' && dt < 0.6) {
       squash = Math.cos((dt / 0.6) * Math.PI * 2);
     } else if (a.action === 'shake' && dt < 1) {
-      jitter = Math.sin(dt * 160) * 5;
+      // Side to side on every pose.
+      jitter = Math.round(dt * POSE_FPS) % 2 ? 5 : -5;
     }
   }
   return { lift, rotate, squash, jitter };
@@ -764,6 +817,8 @@ function fitCamera(cx: number, cy: number, w: number): Camera {
 }
 
 export const WIDE: Camera = { x: 0, y: SCENE_H - FRAME_H, w: FRAME_W, h: FRAME_H };
+
+const mixCamera = (a: Camera, b: Camera, k: number): Camera => ({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k });
 
 export function cameraFor(shot: Shot, actors: ActorFrame[], speaker: string | undefined): Camera {
   if (shot.type === 'wide') return WIDE;
@@ -894,6 +949,7 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
       else if (vehicle) lookDir = vehicle.flip ? -1 : 1;
     }
     const turn = walking ? lookDir : lookDir * (talk ? 0.55 : 0.42);
+    const gaze = gazeAt(tr, t, lookDir, here, where, !!talk);
 
     // Arms: hand-overs, then gestures, then pumping while running.
     const lead = (lookDir || 1) as -1 | 1;
@@ -919,6 +975,8 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
       turn: tr.flip ? -turn : turn,
       talk: level,
       blink,
+      gazeX: tr.flip ? -gaze.x : gaze.x,
+      gazeY: gaze.y,
       arms,
       lift: hop * (place.run ? 34 : 26) + act.lift + level * 3 + raise,
       // Runners lean into it.
@@ -935,20 +993,32 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: 
   return out.sort((a, b) => a.y - b.y || a.talk - b.talk);
 }
 
-export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: ClipMap): SceneFrame {
+/** `t` is the pose on screen; `frameT` is the frame, which camera moves and fades run on. */
+export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, clips: ClipMap, frameT = t): SceneFrame {
   const vehicles = sampleVehicles(sc, t);
   const actors = sampleActors(sc, ep, t, clips, vehicles);
   let beat: CompiledBeat | null = null;
   for (const b of sc.beats) if (b.start <= t) beat = b;
 
-  // Camera: the latest shot, framed on where everyone stood when it cut in.
-  const shotEv = lastAt(sc.shots, t) ?? sc.shots[0];
-  const framing = shotEv.t === t ? actors : sampleActors(sc, ep, shotEv.t + 1e-3, clips, sampleVehicles(sc, shotEv.t + 1e-3));
-  let camera = cameraFor(shotEv.shot, framing, shotEv.beat?.beat.who);
-  if (shotEv.shot.push && shotEv.beat) {
-    const k = clamp((t - shotEv.beat.start) / Math.max(0.5, shotEv.beat.end - shotEv.beat.start), 0, 1);
-    camera = fitCamera(camera.x + camera.w / 2, camera.y + camera.h / 2, camera.w * (1 - 0.1 * k));
-  }
+  // What a shot shows at time `at`: framed on where everyone stood when it started, or on them as they go if it follows them.
+  const shotCamera = (i: number, at: number): Camera => {
+    const { t: t0, shot, beat: from } = sc.shots[i];
+    let framing: ActorFrame[] = [];
+    if (shot.follow) {
+      // On the pose, so the character holds still in the frame while the set moves behind them. Their hops don't shake it.
+      // Once they've left there's nobody to frame, and it cuts back to wide for whoever's still there.
+      const p = poseTime(at);
+      framing = sampleActors(sc, ep, p, clips, sampleVehicles(sc, p)).map((a) => ({ ...a, lift: 0 }));
+    } else if (shot.type !== 'wide') framing = t0 === t ? actors : sampleActors(sc, ep, t0 + 1e-3, clips, sampleVehicles(sc, t0 + 1e-3));
+    let cam = cameraFor(shot, framing, from?.beat.who);
+    if (shot.push && from) {
+      const k = clamp((at - from.start) / Math.max(0.5, from.end - from.start), 0, 1);
+      cam = fitCamera(cam.x + cam.w / 2, cam.y + cam.h / 2, cam.w * (1 - 0.1 * k));
+    }
+    const k = (at - t0) / PAN_TIME;
+    return shot.pan && i > 0 && k < 1 ? mixCamera(shotCamera(i - 1, t0), cam, ease(Math.max(0, k))) : cam;
+  };
+  let camera = shotCamera(sc.shots.indexOf(lastAt(sc.shots, t) ?? sc.shots[0]), frameT);
 
   // Screen effects.
   let flash = 0;
@@ -957,9 +1027,10 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, c
     if (dt < 0) break;
     if (b.beat.effect === 'shake' && dt < 0.6) {
       const amp = (1 - dt / 0.6) * camera.w * 0.012;
-      camera = { ...camera, x: camera.x + Math.sin(dt * 90) * amp, y: camera.y + Math.cos(dt * 70) * amp };
+      const k = Math.round(dt * POSE_FPS);
+      camera = { ...camera, x: camera.x + (k % 2 ? amp : -amp), y: camera.y + (k % 4 < 2 ? amp : -amp) * 0.7 };
     }
-    if (b.beat.effect === 'flash' && dt < 0.45) flash = Math.max(flash, 1 - dt / 0.45);
+    if (b.beat.effect === 'flash' && frameT - b.start < 0.45) flash = Math.max(flash, 1 - (frameT - b.start) / 0.45);
   }
 
   let caption: string | null = null;
@@ -968,16 +1039,45 @@ export function sampleScene(sc: CompiledScene, ep: CompiledEpisode, t: number, c
   let subtitle: SceneFrame['subtitle'] = null;
   if (beat?.beat.text && t < beat.end) subtitle = { who: ep.cast.get(beat.beat.who ?? '')?.name ?? '', text: beat.beat.text };
 
-  return { kind: 'scene', scene: sc, t, camera, actors, vehicles, beat, caption, subtitle, flash, weather: sc.scene.weather };
+  return { kind: 'scene', scene: sc, t, camera, actors, vehicles, beat, caption, subtitle, flash, fade: 0, weather: sc.scene.weather };
 }
 
+const fadeLength = (sc: CompiledScene) => Math.min(FADE_TIME, sc.duration / 2);
+
+/** How long a scene takes to come into view. The editor skips this, so a scene isn't picked on a black frame. */
+export function transitionTime(sc: CompiledScene): number {
+  if (sc.scene.transition === 'fade') return fadeLength(sc);
+  return sc.scene.transition === 'dissolve' ? Math.min(DISSOLVE_TIME, sc.duration) : 0;
+}
+
+/** Scene changes are overlays: fades and dissolves use the hold and the tail each scene already has, so nothing moves in time. */
+function transition(frame: SceneFrame, ep: CompiledEpisode, local: number, clips: ClipMap): SceneFrame {
+  const sc = frame.scene;
+  const t = frameTime(local);
+  const time = transitionTime(sc);
+  const up = sc.scene.transition === 'fade' ? 1 - t / time : 0;
+  const down = ep.scenes[sc.index + 1]?.scene.transition === 'fade' ? 1 - (sc.duration - t) / fadeLength(sc) : 0;
+  frame.fade = clamp(Math.max(up, down), 0, 1);
+  const prev = ep.scenes[sc.index - 1];
+  if (sc.scene.transition === 'dissolve' && prev && t < time) {
+    frame.under = { frame: sampleScene(prev, ep, prev.duration + poseTime(local), clips, prev.duration + t), opacity: 1 - t / time };
+  }
+  return frame;
+}
+
+/** The picture at time t, held on the current frame and pose. */
 export function sampleEpisode(ep: CompiledEpisode, t: number, clips: ClipMap): Frame | null {
-  if (t < ep.titleDuration) return { kind: 'title', title: ep.episode.title, t };
-  for (const sc of ep.scenes) {
-    if (t < sc.start + sc.duration) return sampleScene(sc, ep, Math.max(0, t - sc.start), clips);
+  if (t < ep.titleDuration) {
+    const fade = ep.scenes[0]?.scene.transition === 'fade' ? clamp(1 - (ep.titleDuration - frameTime(t)) / FADE_TIME, 0, 1) : 0;
+    return { kind: 'title', title: ep.episode.title, t: poseTime(t), fade };
+  }
+  const sc = ep.scenes.find((s) => t < s.start + s.duration);
+  if (sc) {
+    const local = Math.max(0, t - sc.start);
+    return transition(sampleScene(sc, ep, poseTime(local), clips, frameTime(local)), ep, local, clips);
   }
   const last = ep.scenes[ep.scenes.length - 1];
-  return last ? sampleScene(last, ep, last.duration, clips) : null;
+  return last ? transition(sampleScene(last, ep, last.duration, clips), ep, last.duration, clips) : null;
 }
 
 /** Which scene (index) and beat is playing at episode time t. */

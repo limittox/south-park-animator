@@ -1,6 +1,6 @@
 import { memo, useId, type ReactNode, type Ref, type SVGProps } from 'react';
 import type { SetSpec, Weather } from '../episode/types';
-import { FRAME_H, FRAME_W, type ActorFrame, type Frame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
+import { FRAME_H, FRAME_W, type ActorFrame, type Camera, type Frame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
 import { CharacterGroup } from '../character/Character';
 import { getScene } from '../scenes/backgrounds';
 import { renderKitSet } from '../sets/kit';
@@ -32,7 +32,7 @@ export function actorTransform(a: ActorFrame): string {
 export const Actor = memo(function Actor({ a }: { a: ActorFrame }) {
   return (
     <g transform={actorTransform(a)}>
-      <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} hipY={a.hipY} />
+      <CharacterGroup c={a.c} talk={a.talk} turn={a.turn} arms={a.arms} blink={a.blink} gazeX={a.gazeX} gazeY={a.gazeY} hipY={a.hipY} />
     </g>
   );
 });
@@ -197,16 +197,18 @@ export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, 
     return (
       <svg ref={svgRef} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} {...rest}>
         <TitleCard title={frame.title} t={frame.t} />
+        {frame.fade > 0 && <rect width={FRAME_W} height={FRAME_H} fill="#000" opacity={frame.fade} />}
       </svg>
     );
   }
   return <SceneSvg frame={frame} subtitles={subtitles} renderActor={renderActor} sceneOverlay={sceneOverlay} freeCamera={freeCamera} svgRef={svgRef} {...rest} />;
 }
 
-function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
-  const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : frame.camera;
+const viewBoxOf = (cam: Camera) => `${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`;
+
+/** Everything that stands in the set, in scene coordinates. */
+function SceneContent({ frame, renderActor, sceneOverlay }: Pick<FrameSvgProps, 'renderActor' | 'sceneOverlay'> & { frame: SceneFrame }) {
   const set = frame.scene.scene.set;
-  const k = cam.w / FRAME_W;
   const actor = (a: ActorFrame) => {
     const node = <Actor key={a.castId} a={a} />;
     return renderActor ? <g key={a.castId}>{renderActor(a, node)}</g> : node;
@@ -230,16 +232,36 @@ function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svg
   ];
   items.sort((a, b) => a.y - b.y);
   return (
-    <svg ref={svgRef} viewBox={`${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`} preserveAspectRatio="xMidYMid slice" {...rest}>
+    <>
       <SetLayer set={set} layer="back" />
       {items.map((i) => i.node)}
       <SetLayer set={set} layer="front" />
       <WeatherLayer weather={frame.weather} t={frame.scene.start + frame.t} />
       {sceneOverlay}
+    </>
+  );
+}
+
+function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
+  const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : frame.camera;
+  const k = cam.w / FRAME_W;
+  // The set editor shows the whole stage, so it leaves out what's only there for the transition.
+  const under = freeCamera ? undefined : frame.under;
+  return (
+    <svg ref={svgRef} viewBox={viewBoxOf(cam)} preserveAspectRatio="xMidYMid slice" {...rest}>
+      <SceneContent frame={frame} renderActor={renderActor} sceneOverlay={sceneOverlay} />
       <g transform={`translate(${cam.x} ${cam.y}) scale(${k})`} pointerEvents="none">
+        {under && (
+          <g opacity={under.opacity}>
+            <svg width={FRAME_W} height={FRAME_H} viewBox={viewBoxOf(under.frame.camera)} preserveAspectRatio="xMidYMid slice">
+              <SceneContent frame={under.frame} />
+            </svg>
+          </g>
+        )}
         {frame.caption && <Caption text={frame.caption} />}
         {subtitles && frame.subtitle && <Subtitle who={frame.subtitle.who} text={frame.subtitle.text} />}
         {frame.flash > 0 && <rect width={FRAME_W} height={FRAME_H} fill="#fff" opacity={frame.flash} />}
+        {frame.fade > 0 && !freeCamera && <rect width={FRAME_W} height={FRAME_H} fill="#000" opacity={frame.fade} />}
       </g>
     </svg>
   );

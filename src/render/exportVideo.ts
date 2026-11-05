@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { AudioBufferSource, BufferTarget, CanvasSource, getFirstEncodableAudioCodec, getFirstEncodableVideoCodec, Mp4OutputFormat, Output, QUALITY_HIGH } from 'mediabunny';
 import displayFontUrl from '@fontsource/luckiest-guy/files/luckiest-guy-latin-400-normal.woff2?url';
 import bodyFontUrl from '@fontsource/nunito/files/nunito-latin-900-normal.woff2?url';
-import { audioCues, sampleEpisode, type ClipMap, type CompiledEpisode } from '../episode/timeline';
+import { audioCues, FPS, sampleEpisode, type ClipMap, type CompiledEpisode } from '../episode/timeline';
 import { FLAT_CSS } from '../character/flat';
 import { playSfx } from '../audio/sfx';
 import { toAudioBuffer, type VoicedLine } from '../audio/voices';
@@ -98,7 +98,7 @@ export interface ExportOptions {
   signal?: AbortSignal;
 }
 
-export async function exportEpisode({ compiled, clips, lines, height, fps = 30, subtitles, onProgress, signal }: ExportOptions): Promise<Blob> {
+export async function exportEpisode({ compiled, clips, lines, height, fps = FPS, subtitles, onProgress, signal }: ExportOptions): Promise<Blob> {
   const width = Math.round((height * 16) / 9 / 2) * 2;
   const videoCodec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width, height });
   if (!videoCodec) throw new Error("This browser can't encode video. Try a recent Chrome or Edge.");

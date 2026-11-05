@@ -45,24 +45,35 @@ function ShotEditor({ shot, cast, onChange }: { shot?: Shot; cast: CastMember[];
           </option>
         ))}
       </select>
-      {shot && shot.type !== 'wide' && (
+      {shot && (
         <div className="chips">
-          {cast.map((c) => {
-            const on = shot.on?.includes(c.id) ?? false;
-            return (
-              <button
-                key={c.id}
-                className="chip-btn"
-                aria-pressed={on}
-                onClick={() => onChange({ ...shot, on: on ? shot.on?.filter((x) => x !== c.id) : [...(shot.on ?? []), c.id] })}
-              >
-                {c.name}
-              </button>
-            );
-          })}
-          <label className="check">
-            <input type="checkbox" checked={!!shot.push} onChange={(e) => onChange({ ...shot, push: e.target.checked || undefined })} /> push in
+          {shot.type !== 'wide' &&
+            cast.map((c) => {
+              const on = shot.on?.includes(c.id) ?? false;
+              return (
+                <button
+                  key={c.id}
+                  className="chip-btn"
+                  aria-pressed={on}
+                  onClick={() => onChange({ ...shot, on: on ? shot.on?.filter((x) => x !== c.id) : [...(shot.on ?? []), c.id] })}
+                >
+                  {c.name}
+                </button>
+              );
+            })}
+          <label className="check" title="Glide here from the last shot instead of cutting">
+            <input type="checkbox" checked={!!shot.pan} onChange={(e) => onChange({ ...shot, pan: e.target.checked || undefined })} /> pan
           </label>
+          {shot.type !== 'wide' && (
+            <>
+              <label className="check">
+                <input type="checkbox" checked={!!shot.push} onChange={(e) => onChange({ ...shot, push: e.target.checked || undefined })} /> push in
+              </label>
+              <label className="check" title="Stay on them as they move">
+                <input type="checkbox" checked={!!shot.follow} onChange={(e) => onChange({ ...shot, follow: e.target.checked || undefined })} /> follow
+              </label>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -336,12 +347,10 @@ function BeatCard(props: {
             Hands it to
             <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.give} onChange={(v) => set({ give: v })} allowNone />
           </label>
-          {isLine && (
-            <label className="span2">
-              Looks at
-              <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.lookAt} onChange={(v) => set({ lookAt: v })} allowNone />
-            </label>
-          )}
+          <label className="span2" title={isLine ? undefined : 'Just the eyes move: a side-eye'}>
+            Looks at
+            <CastSelect cast={ep.cast.filter((c) => c.id !== beat.who)} value={beat.lookAt} onChange={(v) => set({ lookAt: v })} allowNone />
+          </label>
           <div className="span2">
             <span className="lbl">Movement</span>
             <MovesEditor moves={beat.moves ?? []} cast={ep.cast} scene={scene} onChange={(m) => set({ moves: m })} />

@@ -19,7 +19,13 @@ interface EyeOpts {
   pupil?: (side: -1 | 1, cx: number) => ReactNode;
   extra?: (side: -1 | 1, cx: number) => ReactNode;
   only?: -1 | 1;
+  /** Big pupils fill the eye, so they stay put when the character looks around. */
+  still?: boolean;
 }
+
+/** How far the pupils travel inside the eye. */
+const GAZE_X = 15;
+const GAZE_Y = 12;
 
 const LID_LEFT: Record<Exclude<Lid, 'none'>, string> = {
   sleepy: 'M -80 -70 L 80 -70 L 80 -3 L -80 -3 Z',
@@ -38,6 +44,8 @@ function eyePair(ctx: RenderCtx, o: EyeOpts = {}): ReactNode {
   const sides: (-1 | 1)[] = o.only ? [o.only] : [-1, 1];
   const shape = (side: -1 | 1) => ({ cx: side * 27 * s, cy: 0, rx: 28 * s, ry: 36 * s, transform: `rotate(${-side * 14} ${side * 27 * s} 0)` });
   const clipIds = { [-1]: ctx.uid('eye-1'), [1]: ctx.uid('eye1') } as Record<-1 | 1, string>;
+  const [gx, gy] = o.still ? [0, 0] : ctx.gaze ?? [0, 0];
+  const look = gx || gy ? `translate(${(gx * GAZE_X).toFixed(1)} ${(gy * GAZE_Y).toFixed(1)})` : undefined;
   return (
     <g>
       {sides.map((side) => {
@@ -53,7 +61,7 @@ function eyePair(ctx: RenderCtx, o: EyeOpts = {}): ReactNode {
               <ellipse {...shape(1)} fill="none" stroke="#aaa49c" strokeWidth={1.6} clipPath={`url(#${clipIds[-1]})`} />
             )}
             <g clipPath={`url(#${id})`}>
-              {o.pupil ? o.pupil(side, cx) : <circle cx={side * 16.5} cy={2} r={3.4} fill={O} />}
+              <g transform={look}>{o.pupil ? o.pupil(side, cx) : <circle cx={side * 16.5} cy={2} r={3.4} fill={O} />}</g>
               {o.extra?.(side, cx)}
               {lid !== 'none' && (
                 <path d={LID_LEFT[lid]} transform={side === 1 ? 'scale(-1 1)' : undefined} fill={ctx.c.skin} {...ink} className="keep" />
@@ -151,6 +159,7 @@ export const EYES: HeadPart[] = [
     quip: "Oh no, you killed them! Relax. They'll be back next episode.",
     render: (c) =>
       eyePair(c, {
+        still: true,
         pupil: (_s, cx) => (
           <path d={`M ${cx - 11} -11 L ${cx + 11} 11 M ${cx + 11} -11 L ${cx - 11} 11`} {...ink} strokeWidth={4.5} />
         ),
@@ -162,6 +171,7 @@ export const EYES: HeadPart[] = [
     quip: 'Just saw a celebrity at the mall. It was a guy who was once in a mattress ad.',
     render: (c) =>
       eyePair(c, {
+        still: true,
         pupil: (s) => <path d={starPath(s * 13, 2, 11)} fill="#f2c230" {...ink} strokeWidth={2} />,
       }),
   },
@@ -169,7 +179,7 @@ export const EYES: HeadPart[] = [
     id: 'hearts',
     name: 'Smitten',
     quip: 'In love with the new kid. Or a burrito. Unclear.',
-    render: (c) => eyePair(c, { pupil: (s) => <path d={heartPath(s * 13, 2, 10)} fill="#e5322d" {...ink} strokeWidth={2} /> }),
+    render: (c) => eyePair(c, { still: true, pupil: (s) => <path d={heartPath(s * 13, 2, 10)} fill="#e5322d" {...ink} strokeWidth={2} /> }),
   },
   {
     id: 'happy',
@@ -206,6 +216,7 @@ export const EYES: HeadPart[] = [
     quip: 'You are getting sleepy... you will buy more snacks...',
     render: (c) =>
       eyePair(c, {
+        still: true,
         pupil: (_s, cx) => (
           <path
             d={`M ${cx} 0 m 0 -2 a 2 2 0 1 1 -2 2 a 5 5 0 1 1 5 5 a 9 9 0 1 1 -9 -9 a 13 13 0 1 1 13 13 a 18 18 0 1 1 -18 -18`}

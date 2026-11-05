@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { KitSet } from '../episode/types';
-import { audioCues, locate, sampleEpisode, type ActorFrame, type ClipMap, type CompiledEpisode } from '../episode/timeline';
+import { audioCues, frameTime, locate, sampleEpisode, type ActorFrame, type ClipMap, type CompiledEpisode } from '../episode/timeline';
 import { PlaybackEngine } from '../audio/engine';
 import type { VoicedLine } from '../audio/voices';
 import { FrameSvg } from '../render/FrameSvg';
@@ -92,7 +92,8 @@ export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
         setT(duration);
         return;
       }
-      setT(now);
+      // Only a new frame changes the picture; setting the same time again skips the render.
+      setT(frameTime(now));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

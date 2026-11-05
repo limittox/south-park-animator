@@ -82,6 +82,10 @@ export interface Shot {
   on?: string[];
   /** Slow push-in over the beat. */
   push?: boolean;
+  /** Glide here from the previous shot instead of cutting. */
+  pan?: boolean;
+  /** Keep the framing on them as they move. */
+  follow?: boolean;
 }
 
 export type MoveKind = 'walk' | 'enter' | 'exit' | 'appear' | 'vanish' | 'sit' | 'stand' | 'getIn' | 'getOut';
@@ -118,6 +122,9 @@ export type SfxId =
 
 export type ScreenEffect = 'shake' | 'flash';
 
+/** How a scene takes over from the one before it. */
+export type Transition = 'cut' | 'fade' | 'dissolve';
+
 export interface Beat {
   id: string;
   /** Cast id of the speaker (lines) or the main subject (actions). */
@@ -140,7 +147,7 @@ export interface Beat {
   hold?: string;
   /** Cast id `who` hands their prop to during this beat. */
   give?: string;
-  /** Cast id `who` looks at; defaults to the nearest other character. */
+  /** Cast id `who` looks at; defaults to the nearest other character. On a silent beat only their eyes move: a side-eye. */
   lookAt?: string;
   /** Camera cut at the start of the beat. Leave out to keep the previous shot. */
   shot?: Shot;
@@ -208,6 +215,8 @@ export interface Scene {
   hold: number;
   /** Play the scene-change guitar sting over the hold. */
   sting: boolean;
+  /** How this scene takes over from the last one. Leave out for a hard cut. */
+  transition?: Transition;
 }
 
 /* ---------------------------------------------------------------- sets */

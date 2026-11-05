@@ -95,6 +95,8 @@ export interface RenderCtx {
   uid: (name: string) => string;
   /** 0 = mouth closed, 1 = mouth open (talking). */
   talk: number;
+  /** Where the pupils point, -1..1 across and down. */
+  gaze?: [number, number];
 }
 
 export type Render = (ctx: RenderCtx) => ReactNode;

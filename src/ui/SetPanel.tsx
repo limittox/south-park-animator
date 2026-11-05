@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
-import type { KitPiece, KitSet, Scene, Vehicle, VehicleType, Weather } from '../episode/types';
+import type { KitPiece, KitSet, Scene, Transition, Vehicle, VehicleType, Weather } from '../episode/types';
 import { getVehicleDef, VEHICLES } from '../sets/vehicles';
-import { WEATHER_LIST } from '../episode/catalog';
+import { TRANSITION_LIST, WEATHER_LIST } from '../episode/catalog';
 import { SCENES } from '../scenes/backgrounds';
 import { defaultKitSet, getPieceDef, KIT_PIECES } from '../sets/kit';
 import { newId } from '../episode/normalize';
@@ -88,6 +88,22 @@ export function SetPanel({ scene, onScene }: Props) {
         <label>
           Opening shot (s)
           <input type="number" min={0} max={8} step={0.1} value={scene.hold} onChange={(e) => onScene({ ...scene, hold: Number(e.target.value) }, `hold-${scene.id}`)} />
+        </label>
+        <label className="span2">
+          Scene change
+          <select
+            value={scene.transition ?? 'cut'}
+            onChange={(e) => {
+              const v = e.target.value as Transition;
+              onScene({ ...scene, transition: v === 'cut' ? undefined : v });
+            }}
+          >
+            {TRANSITION_LIST.map((x) => (
+              <option key={x.id} value={x.id} title={x.desc}>
+                {x.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="check span2">
           <input type="checkbox" checked={scene.sting} onChange={(e) => onScene({ ...scene, sting: e.target.checked })} /> Guitar sting at the start of the scene

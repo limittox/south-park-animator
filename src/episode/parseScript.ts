@@ -1,6 +1,6 @@
 import type { MoodId } from './types';
 import { normalizeEpisode, looksAdult, propId } from './normalize';
-import type { Episode } from './types';
+import type { Episode, Transition } from './types';
 
 /*
  * The no-LLM path. Understands the common script shapes:
@@ -15,6 +15,18 @@ const HEADING = /^\s*(?:#+\s*)?(?:(INT|EXT|INT\.?\/EXT|I\/E)\b\.?|SCENE\b\s*\d*\
 const TITLE = /^\s*(?:TITLE|EPISODE)\s*:\s*(.+)$/i;
 const COLON_LINE = /^\s*([A-Za-z][A-Za-z0-9 .'’-]{0,40}?)\s*(\(([^)]*)\))?\s*:\s*(.+)$/;
 const NAME_ONLY = /^\s*([A-Z][A-Z0-9 .'’-]{1,40}?)\s*(\(([^)]*)\))?\s*$/;
+/** Screenplay furniture that looks like a name on its own line. */
+const NOT_A_NAME = /^(FADE|CUT|SMASH CUT|MATCH CUT|DISSOLVE|THE END|END|INT|EXT)\b/;
+/** Labels, not people: "NOTE: ...", "CAPTION: Later that night". */
+const NOT_A_SPEAKER = /^(note|fade|cut|title|caption|super|subtitle|title card|on[- ]?screen(?: text)?)$/i;
+/** "Fade to black.", "The screen fades out.", "DISSOLVE TO:" say how the next scene starts. "The ghost fades away" doesn't. */
+const SCREEN_CHANGE = /^(?:(?:slow|quick)(?:ly)? )?(?:the (?:screen|scene|picture|image) (?:slowly |quickly )?)?(fades?|dissolves?)\b/i;
+/** `A caption reads "1982."`, `The sign says "Closed."` */
+const CAPTION_READS = /\b(?:caption|title card|subtitle|card|sign|banner|chyron)\b[^"“”]{0,30}?\b(?:reads?|says?|shows?)\b[^"“”]{0,12}["“]([^"”]+)["”]/i;
+/** `CAPTION: Later that night` */
+const CAPTION_LABEL = /^(?:caption|super|subtitle|title card|on[- ]?screen(?: text)?)\s*:\s*["“]?(.+?)["”]?$/i;
+/** A time jump on a line of its own: "Three hours later...", "THE NEXT MORNING". */
+const TIME_JUMP = /^(?:(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty|thirty|fifty|a few|several|many|\d+)\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+later|later(?:\s+that\s+(?:day|night|morning|afternoon|evening))?|the next (?:day|morning))[.…!]*$/i;
 
 interface RawMove {
   who: string;
@@ -34,10 +46,12 @@ interface RawBeat {
   moves?: RawMove[];
   sfx?: string;
   effect?: string;
-  shot?: { type: string; on?: string[] };
+  shot?: { type: string; on?: string[]; pan?: boolean; follow?: boolean };
   gesture?: string;
   hold?: string;
   give?: string;
+  lookAt?: string;
+  caption?: string;
 }
 
 interface RawScene {
@@ -52,6 +66,7 @@ interface RawScene {
   riders: Map<string, string>;
   people: string[];
   offscreen: Set<string>;
+  transition?: Transition;
 }
 
 /** Stand for "the kids" / "everyone" until we know who's in the scene. */
@@ -146,6 +161,30 @@ function propIn(text: string): string | undefined {
   return undefined;
 }
 
+/** On-screen text in a direction. */
+function captionIn(text: string): string | undefined {
+  const line = text.trim();
+  return (CAPTION_READS.exec(line) ?? CAPTION_LABEL.exec(line))?.[1] ?? (TIME_JUMP.test(line) ? line : undefined);
+}
+
+/** A verb the camera does: "The camera pans to Priya", "We pull back", or just "Zoom in on Dex". "Dex pulls out a phone" isn't. */
+const cameraDoes = (verbs: string) => new RegExp(`^(?:slow(?:ly)? )?(?:${verbs})\\b|\\b(?:camera|we)\\s+(?:\\w+ly\\s+)?(?:${verbs})\\b`, 'i');
+const PULL_BACK = cameraDoes('pulls? back|pulls? out|zooms? out');
+const ZOOM_IN = cameraDoes('zooms? in|push(?:es)? in');
+const FOLLOW = cameraDoes('follows?|tracks?');
+const PAN = cameraDoes('pans?');
+
+function cameraIn(text: string, subjects: string[]): RawBeat['shot'] {
+  if (PULL_BACK.test(text)) return { type: 'wide', pan: true };
+  if (/\bwide shot\b/i.test(text)) return { type: 'wide' };
+  if (!subjects.length) return undefined;
+  if (ZOOM_IN.test(text)) return { type: 'close', on: subjects.slice(0, 1), pan: true };
+  if (/^close on\b|\bclose[- ]?up (?:on|of)\b/i.test(text)) return { type: 'close', on: subjects.slice(0, 1) };
+  if (FOLLOW.test(text)) return { type: 'medium', on: subjects, follow: true };
+  if (PAN.test(text)) return { type: 'medium', on: subjects, pan: true };
+  return undefined;
+}
+
 /** Vehicles: arriving, getting in and out, driving off. Returns null when the direction isn't about one. */
 function vehicleBeat(text: string, subjects: string[], group: string | null, scene: RawScene): RawBeat | null {
   const type = VEHICLE_WORDS.find(([re]) => re.test(text))?.[1];
@@ -177,7 +216,10 @@ function vehicleBeat(text: string, subjects: string[], group: string | null, sce
 }
 
 /** Turn plain-English stage directions into moves and actions where we can recognise them. */
-function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | null {
+function actionBeat(direction: string, known: string[], scene: RawScene): RawBeat | null {
+  // What a caption says isn't something happening on stage.
+  const caption = captionIn(direction);
+  const text = caption ? direction.replace(caption, '') : direction;
   // Subjects in the order the direction names them: "Dex hands the money to Priya". Names count as written
   // ("Stan", "STAN"): not the word "phone" for a character called Phone, and not "Stan's living room".
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -188,6 +230,9 @@ function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | n
   if (vehicle) return vehicle;
   const beat: RawBeat = {};
   const who = subjects[0];
+  if (caption) beat.caption = caption;
+  const shot = cameraIn(text, subjects);
+  if (shot) beat.shot = shot;
   const run = /\b(runs?|running|dash(es)?|sprints?|races?|rushes|bolts?)\b/i.test(text);
   if (/\b(enters?|walks? in|comes? in|arrives?|runs? in|shows? up|steps? in|rushes in|bursts? in)\b/i.test(text)) {
     beat.moves = (subjects.length ? subjects : []).map((s) => ({ who: s, kind: 'enter', ...(run ? { run } : {}) }));
@@ -197,7 +242,7 @@ function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | n
     const seat = SEAT_WORDS.exec(text)?.[1]?.toLowerCase();
     const on = seat === 'sofa' ? 'couch' : seat === 'campfire' ? 'log' : seat?.replace(/s$/, '');
     beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'sit', ...(on ? { on } : {}) }));
-  } else if (/\b(stands? up|gets? up|jumps? up|rises|leaps? up)\b/i.test(text)) {
+  } else if (/\b(stands? up|gets? up|jumps? up(?! and down)|rises|leaps? up)\b/i.test(text)) {
     beat.moves = (subjects.length ? subjects : group ? [group] : []).map((s) => ({ who: s, kind: 'stand' }));
   } else if (/\b(vanish(es)?|disappears?|poofs?)\b/i.test(text)) {
     beat.moves = subjects.map((s) => ({ who: s, kind: 'vanish' }));
@@ -212,6 +257,7 @@ function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | n
   } else if (prop) beat.hold = prop;
   else if (/\b(drops?|puts? (it |them )?(down|away)|throws? (it )?away|pockets?)\b/i.test(text)) beat.hold = 'none';
   if (/\b(faints?|passes out|collapses?|falls? (over|down)|dies)\b/i.test(text)) beat.action = 'faint';
+  else if (/\b(bounces?|bouncing|(?:jumps?|jumping|hops?|hopping) up and down)\b/i.test(text)) beat.action = 'bounce';
   else if (/\b(jumps?|leaps?)\b/i.test(text)) beat.action = 'jump';
   else if (/\b(shakes?|trembles?|shivers?)\b/i.test(text)) beat.action = 'shake';
   else if (/\b(spins?|twirls?)\b/i.test(text)) beat.action = 'spin';
@@ -229,10 +275,11 @@ function actionBeat(text: string, known: string[], scene: RawScene): RawBeat | n
   if (/\bflash(es)?\b/i.test(text) && !beat.effect) beat.effect = 'flash';
   if (/\bwaves?\b/i.test(text)) beat.gesture = 'wave';
   if (/\bpoints?\b/i.test(text)) beat.gesture = 'point';
+  if (subjects.length >= 2 && /\b(?:looks?|glances?|stares?|glares?|peeks?)\s+(?:\w+\s+)?at\b|\bside-?eyes\b/i.test(text)) beat.lookAt = subjects[1];
   if (/\bsnow(ing|s)?\b/i.test(text) && /\b(start|begin|it'?s)\b/i.test(text)) scene.weather = 'snow';
   if (!beat.moves?.length) delete beat.moves;
-  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give) return null;
-  if ((beat.hold || beat.give) && !who) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect ? { ...beat, hold: undefined, give: undefined } : null;
+  if (!beat.moves && !beat.action && !beat.sfx && !beat.gesture && !beat.effect && !beat.hold && !beat.give && !beat.caption && !beat.shot && !beat.lookAt) return null;
+  if ((beat.hold || beat.give) && !who) return beat.moves || beat.action || beat.sfx || beat.gesture || beat.effect || beat.caption || beat.shot ? { ...beat, hold: undefined, give: undefined } : null;
   if (who) beat.who = who;
   return beat;
 }
@@ -242,6 +289,8 @@ export function parseScript(script: string): Episode {
   let title = '';
   const scenes: RawScene[] = [];
   const allNames: string[] = [];
+  /** A fade or dissolve written at the end of a scene, waiting for the scene it leads into. */
+  let nextTransition: Transition | undefined;
   const newScene = (heading: string, interior: boolean): RawScene => {
     const s: RawScene = {
       title: heading ? titleCase(heading.replace(/\s*[-–—]\s*(DAY|NIGHT|MORNING|EVENING|LATER|CONTINUOUS|DUSK|DAWN).*$/i, '').trim()) || `Scene ${scenes.length + 1}` : `Scene ${scenes.length + 1}`,
@@ -254,7 +303,9 @@ export function parseScript(script: string): Episode {
       riders: new Map(),
       people: [],
       offscreen: new Set(),
+      ...(nextTransition ? { transition: nextTransition } : {}),
     };
+    nextTransition = undefined;
     scenes.push(s);
     return s;
   };
@@ -267,7 +318,7 @@ export function parseScript(script: string): Episode {
     const line = raw.trim();
     const c = COLON_LINE.exec(line);
     const n = !c && lines[i + 1]?.trim() ? NAME_ONLY.exec(line) : null;
-    const name = c && !/^(note|fade|cut|title)$/i.test(c[1]) ? c[1] : n && n[1].trim().split(/\s+/).length <= 4 && !/^(FADE|CUT|THE END|END|INT|EXT)\b/.test(n[1]) ? n[1] : '';
+    const name = c && !NOT_A_SPEAKER.test(c[1]) ? c[1] : n && n[1].trim().split(/\s+/).length <= 4 && !NOT_A_NAME.test(n[1]) && !TIME_JUMP.test(line) ? n[1] : '';
     const clean = name && !HEADING.test(line) && !TITLE.test(line) ? titleCase(cleanName(name)) : '';
     if (clean && !speakers.includes(clean)) speakers.push(clean);
   });
@@ -323,21 +374,27 @@ export function parseScript(script: string): Episode {
       continue;
     }
     const c = COLON_LINE.exec(line);
-    if (c && !/^(note|fade|cut|title)$/i.test(c[1])) {
+    if (c && !NOT_A_SPEAKER.test(c[1])) {
       addLine(c[1], c[3], c[4]);
       continue;
     }
     const n = NAME_ONLY.exec(line);
-    if (n && n[1].trim().split(/\s+/).length <= 4 && !/^(FADE|CUT|THE END|END)\b/.test(n[1])) {
+    if (n && n[1].trim().split(/\s+/).length <= 4 && !NOT_A_NAME.test(n[1]) && !TIME_JUMP.test(line)) {
       pendingSpeaker = { name: n[1] + (n[2] ?? ''), delivery: n[3] };
       continue;
     }
     // Stage direction, a sentence at a time: "Dad sits on the couch. The kids sit on the floor."
-    if (!scene) scene = newScene('', false);
     const text = line.replace(/^[[(]|[\])]$/g, '');
+    const sentences = text.split(/(?<=[.!?])(?<!\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|Mt|Lt|Sgt|Prof)\.)\s+(?=[A-Z])|;\s+/).filter((sentence) => {
+      const change = SCREEN_CHANGE.exec(sentence);
+      if (change) nextTransition = /^d/i.test(change[1]) ? 'dissolve' : 'fade';
+      return !change;
+    });
+    if (!sentences.length) continue;
+    if (!scene) scene = newScene('', false);
     if (!scene.description) scene.description = text;
     const known = [...new Set([...speakers, ...allNames, ...scene.people])];
-    for (const sentence of text.split(/(?<=[.!?])(?<!\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|Mt|Lt|Sgt|Prof)\.)\s+(?=[A-Z])|;\s+/)) {
+    for (const sentence of sentences) {
       const b = actionBeat(sentence, known, scene);
       if (b) scene.beats.push(b);
     }
@@ -365,7 +422,7 @@ export function parseScript(script: string): Episode {
       });
       if (b.moves && !b.moves.length) delete b.moves;
     });
-    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give);
+    s.beats = s.beats.filter((b) => b.text || b.moves || b.action || b.sfx || b.effect || b.gesture || b.hold || b.give || b.caption || b.shot || b.lookAt);
     // A built set gets the furniture people sit on: "sit at a table" in a bar needs a table.
     const set = s.set;
     if (set.kind === 'kit') {
@@ -398,6 +455,11 @@ export function parseScript(script: string): Episode {
     // A little camera grammar: big emotional lines get a close-up, then cut back wide.
     let close = false;
     for (const b of s.beats) {
+      // The script asked for this shot, and it stays until something else changes it.
+      if (b.shot) {
+        close = false;
+        continue;
+      }
       if (!b.text) {
         // A car through the wall or a puff of smoke wants the whole stage in view.
         if (close && (b.moves?.length || b.sfx || b.effect)) {

@@ -1,4 +1,4 @@
-import type { ActionId, GestureId, MoodId, ScreenEffect, SfxId, ShotType, Weather } from './types';
+import type { ActionId, GestureId, MoodId, ScreenEffect, SfxId, ShotType, Transition, Weather } from './types';
 
 /** The animation vocabulary: shown in the editor and handed to the LLM, so every entry says what it looks like. */
 export interface VocabEntry<T extends string> {
@@ -74,6 +74,12 @@ export const EFFECT_LIST: VocabEntry<ScreenEffect>[] = [
   { id: 'flash', label: 'Flash', desc: 'white flash (explosions, revelations)' },
 ];
 
+export const TRANSITION_LIST: VocabEntry<Transition>[] = [
+  { id: 'cut', label: 'Hard cut', desc: 'straight to the new scene (the usual)' },
+  { id: 'fade', label: 'Fade through black', desc: 'the last scene fades to black, then this one fades up (act breaks, big time jumps)' },
+  { id: 'dissolve', label: 'Dissolve', desc: 'the last scene melts into this one (time passing, flashbacks, daydreams)' },
+];
+
 export const WEATHER_LIST: VocabEntry<Weather>[] = [
   { id: 'none', label: 'Clear', desc: 'nothing falling' },
   { id: 'snow', label: 'Snow', desc: 'gentle snowfall (the town\'s default outdoors)' },
@@ -89,6 +95,7 @@ export const ACTION_IDS = ACTION_LIST.map((m) => m.id);
 export const SHOT_IDS = SHOT_LIST.map((m) => m.id);
 export const SFX_IDS = SFX_LIST.map((m) => m.id);
 export const EFFECT_IDS = EFFECT_LIST.map((m) => m.id);
+export const TRANSITION_IDS = TRANSITION_LIST.map((m) => m.id);
 export const WEATHER_IDS = WEATHER_LIST.map((m) => m.id);
 
 /** Feet stay inside this band so nobody is cut in half by the frame. */
