@@ -76,6 +76,8 @@ If this site and the Character Creator are served from the same origin (as on `l
 
 Every push to `main` runs the tests, builds the site and publishes it to GitHub Pages (`.github/workflows/deploy.yml`).
 
+The same push publishes it to Cloudflare too (`.github/workflows/deploy-cloudflare.yml`, `wrangler.jsonc`), once the repo has the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. Until then that workflow tests and builds but publishes nothing. Browsers keep saved work per site, so episodes, voice lines, settings and crew don't carry between the two addresses.
+
 ## How it's built
 
 | Path | What's there |

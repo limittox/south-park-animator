@@ -1,0 +1,41 @@
+# Builds the site and publishes it to Cloudflare on every push to main, alongside GitHub Pages.
+# It's a workflow of its own so that a problem here can't hold up the Pages deploy.
+# Until the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are set, it tests and builds but publishes nothing.
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      # The token is only given to this step, so nothing installed above can read it.
+      - name: Publish
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice::Not published: the CLOUDFLARE_API_TOKEN secret isn't set."
+          else
+            npx --yes wrangler@4.154.0 deploy
+          fi

@@ -1,0 +1,9 @@
+{
+  // Cloudflare serves the built site as plain files. There's no Worker script, because the app has no server.
+  // The name is also the start of the workers.dev address.
+  "name": "paper-town-studios",
+  "compatibility_date": "2026-10-27",
+  "assets": {
+    "directory": "./dist"
+  }
+}
