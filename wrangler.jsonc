@@ -3,7 +3,17 @@
   // The name is also the start of the workers.dev address.
   "name": "paper-town-studios",
   "compatibility_date": "2026-10-27",
+  // The site lives at yathuarul.xyz/paper-town-animator. Cloudflare finds files by their full path,
+  // so before each deploy this puts the built site in a folder of that name. Run `npm run build` first.
+  "build": {
+    "command": "node tools/build-cloudflare.mjs"
+  },
   "assets": {
-    "directory": "./dist"
-  }
+    "directory": "./dist-cloudflare"
+  },
+  "routes": [
+    { "pattern": "yathuarul.xyz/paper-town-animator*", "zone_name": "yathuarul.xyz" }
+  ],
+  // The workers.dev address stays up too, and sends its root on to /paper-town-animator/.
+  "workers_dev": true
 }

@@ -76,7 +76,7 @@ If this site and the Character Creator are served from the same origin (as on `l
 
 Every push to `main` runs the tests, builds the site and publishes it to GitHub Pages (`.github/workflows/deploy.yml`).
 
-The same push publishes it to Cloudflare too (`.github/workflows/deploy-cloudflare.yml`, `wrangler.jsonc`), once the repo has the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. Until then that workflow tests and builds but publishes nothing. Browsers keep saved work per site, so episodes, voice lines, settings and crew don't carry between the two addresses.
+The same push publishes it to Cloudflare at `yathuarul.xyz/paper-town-animator` (`.github/workflows/deploy-cloudflare.yml`, `wrangler.jsonc`), as long as the repo has the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets; without them that workflow tests and builds but publishes nothing. Cloudflare finds files by their full path, so `tools/build-cloudflare.mjs` copies `dist/` into a `paper-town-animator/` folder before each deploy, and the `workers.dev` address sends its root there too. Browsers keep saved work per site, so episodes, voice lines, settings and crew don't carry between addresses.
 
 ## How it's built
 
