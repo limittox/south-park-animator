@@ -9,7 +9,7 @@ import { HATS } from './parts/hats';
 import { FACE_GEAR, GLASSES } from './parts/glasses';
 import { BOTTOMS, NECKWEAR, SHOES, topBack, TOPS, type TopDef } from './parts/clothes';
 import { HELD, SIDEKICKS } from './parts/held';
-import { tearsFx, vomitFx } from './parts/fx';
+import { tearsFx, vomitFx, wellFx } from './parts/fx';
 
 function byId<T extends { id: string }>(list: T[], id: string): T {
   return list.find((x) => x.id === id) ?? list[0];
@@ -249,6 +249,8 @@ export const CharacterGroup = memo(function CharacterGroup({ c, talk = 0, mouthS
       if (fhair.over) out.push(part('facialHair', fit(FIT.mouth, fhair.over(ctx(c.hairColor))), 'fh-over'));
       if (!hat.eyesOver) out.push(part('eyes', fit(EYES_FIT, eyesNode()), 'eyes'));
       if (tears) out.push(<g key="tears" transform={FIT.detail}>{tearsFx(tears)}</g>);
+      // The water sits in the open eyes, on top of where the streams start.
+      if (tears && !blink && !hat.eyesOver) out.push(<g key="well" transform={EYES_FIT}>{wellFx(tears, uid('well'))}</g>);
     }
     if (gear.render) out.push(part('faceGear', fit(FIT.gear, gear.render(ctx(c.hairColor))), 'gear'));
     return out;

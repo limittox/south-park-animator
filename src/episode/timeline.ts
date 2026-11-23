@@ -895,7 +895,7 @@ export interface ActorFrame {
   talk: number;
   mouth: MouthShape;
   blink: boolean;
-  /** Crying, being sick: 0 for not, otherwise a step 1-4 that moves it along. */
+  /** Crying, being sick: 0 for not, otherwise 1 and up, moving it along (tears glide from 1 to 5, vomit steps 1-4). */
   tears: number;
   vomit: number;
   /** Where the pupils point, -1..1 across and down. */
@@ -1557,7 +1557,7 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
     const blink = !talk && mood !== 'love' && tr.blinks.some((b) => t >= b && t < b + 0.13);
     // Runners lean into it, and so does anyone creeping along, hugging or being sick.
     const lean = walking ? place.dir * (place.run ? 7 : place.sneak ? 5 : 0) : (hug ? lookDir * 5 : 0) + (act.vomit ? (lookDir || 1) * 10 : 0);
-    const drip = 1 + (Math.floor(t * 6 + 1e-6) % 4);
+    const drip = 1 + ((t * 6) % 4);
     out.push({
       castId: tr.castId,
       name: member.name,
@@ -1577,7 +1577,8 @@ function sampleActors(sc: CompiledScene, ep: CompiledEpisode, t: number, vehicle
       gazeX: flip ? -gaze.x : gaze.x,
       gazeY: gaze.y,
       arms,
-      lift: hop * (place.run ? 34 : place.sneak ? 10 : 26) + act.lift + level * 3 + raise + (form === 'bat' ? 150 + (Math.floor(t * 6 + 1e-6) % 2) * 22 : 0),
+      // Sobbing shakes the shoulders.
+      lift: hop * (place.run ? 34 : place.sneak ? 10 : 26) + act.lift + level * 3 + raise + (mood === 'cry' ? 4 * Math.sin(t * Math.PI * 3) ** 2 : 0) + (form === 'bat' ? 150 + (Math.floor(t * 6 + 1e-6) % 2) * 22 : 0),
       rotate: sit.lie ? -90 * sit.lie : act.rotate || lean,
       squash: act.squash,
       jitter: act.jitter,
