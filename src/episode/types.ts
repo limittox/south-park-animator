@@ -259,6 +259,8 @@ export interface Scene {
   crowd?: Crowd;
   /** A phone call: the screen splits, with these people in a second set on the right. */
   split?: { set: SetSpec; who: string[]; weather?: Weather };
+  /** A video file the user put on the set's TV: it loops, silently, for the whole scene. `id` is its key in the media store. */
+  screenVideo?: { id: string; name: string };
 }
 
 export interface Crowd {

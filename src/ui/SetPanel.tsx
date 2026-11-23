@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import type { CastMember, Crowd, KitPiece, KitSet, Scene, TimeOfDay, Transition, Vehicle, VehicleType, Weather } from '../episode/types';
 import { getVehicleDef, VEHICLES } from '../sets/vehicles';
 import { TRANSITION_LIST, WEATHER_LIST } from '../episode/catalog';
@@ -7,6 +7,8 @@ import { defaultKitSet, getPieceDef, KIT_PIECES } from '../sets/kit';
 import { newId } from '../episode/normalize';
 import { SetLayer } from '../render/FrameSvg';
 import { FaceSelect } from './FaceSelect';
+import { saveScreenVideo } from '../render/screenVideo';
+import { toast } from './toast';
 
 interface Props {
   scene: Scene;
@@ -31,6 +33,7 @@ function Staging({ scene, cast, onScene }: Props & { cast: CastMember[] }) {
     const blocking = has ? scene.blocking.map((b) => (b.who === id ? { ...b, face } : b)) : [...scene.blocking, { who: id, x: 800, depth: 0, mood: 'happy' as const, face }];
     onScene({ ...scene, blocking });
   };
+  const videoFile = useRef<HTMLInputElement>(null);
   const split = scene.split;
   const toggleSplit = (id: string) => {
     const who = split?.who.includes(id) ? split.who.filter((x) => x !== id) : [...(split?.who ?? []), id];
@@ -64,6 +67,36 @@ function Staging({ scene, cast, onScene }: Props & { cast: CastMember[] }) {
             </button>
           ))}
         </div>
+      </div>
+      <div className="span2">
+        <span className="lbl">Video on the TV</span>
+        <div className="chips">
+          <button className="chip-btn" onClick={() => videoFile.current?.click()}>
+            {scene.screenVideo ? 'Replace video' : 'Choose a video file'}
+          </button>
+          <input
+            ref={videoFile}
+            type="file"
+            accept="video/*"
+            hidden
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              try {
+                onScene({ ...scene, screenVideo: await saveScreenVideo(file) });
+              } catch {
+                toast("That video couldn't be saved. It may be too big for this browser's storage.", 'error');
+              }
+            }}
+          />
+          {scene.screenVideo && (
+            <button className="chip-btn" onClick={() => onScene({ ...scene, screenVideo: undefined })} aria-label={`Remove ${scene.screenVideo.name} from the TV`}>
+              ✕ {scene.screenVideo.name}
+            </button>
+          )}
+        </div>
+        <p className="muted small">It loops on this scene's TV without sound. A set with no TV gets a big screen on the back wall.</p>
       </div>
       <div className="span2">
         <span className="lbl">Other end of a split screen</span>

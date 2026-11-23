@@ -51,9 +51,10 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 - Pause and drag characters on the stage. If a move brought them there, the move's target changes; otherwise their starting spot does. Click a character to set their face from that beat on, or flip them.
 - In the Set tab, drag kit pieces around and change colours, text, size and the wall and floor styles.
 - In the Beats tab, edit every line, speaker, delivery, face, gesture, camera shot, action, sound effect, caption, pause, prop and movement (walk or run, sit and stand, get in and out, drive).
-- In the Set tab, add cars, police cars and buses to any scene.
+- In the Set tab, add cars, police cars and buses to any scene, or put a video file (gameplay, a clip, anything your browser plays) on the scene's TV. It loops without sound in the player and in the exported MP4, and stays in your browser's storage.
 - In the Cast tab: choose the voice, pitch, speed and acting note, and test the voice. Redesign a character by describing the change, randomise them, swap in a crew look, or open them in the Character Creator and paste the share link back.
 - In the Chat tab, write feedback ("make the teacher angrier and cut to his face", "move this scene to a hospital at night") for the current scene or the whole episode. Every change can be undone.
+- The Title chip under the stage switches the opening title card on or off.
 - Undo and redo (Ctrl+Z / Ctrl+Y); episodes autosave to IndexedDB.
 
 **Export**

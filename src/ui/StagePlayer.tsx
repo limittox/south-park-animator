@@ -5,6 +5,7 @@ import { PlaybackEngine } from '../audio/engine';
 import type { VoicedLine } from '../audio/voices';
 import { FrameSvg } from '../render/FrameSvg';
 import { pieceBounds } from '../sets/kit';
+import { grabFrame, loadScreenVideo, loopTime, seekFrame } from '../render/screenVideo';
 
 export interface PlayerHandle {
   seek: (t: number) => void;
@@ -26,6 +27,47 @@ interface Props {
   onDragPiece: (scene: number, pieceId: string, x: number, y: number) => void;
   /** Extra controls on the right of the transport bar. */
   tools?: ReactNode;
+}
+
+/** The picture of the video on the scene's TV at scene time `t`: it plays along while the episode plays and seeks when it's paused. */
+function useScreenImage(id: string | undefined, t: number, playing: boolean): string | undefined {
+  const [loaded, setLoaded] = useState<{ id: string; el: HTMLVideoElement } | null>(null);
+  // Every picture remembers which video it came from, so one scene's video never shows in the next scene.
+  const [still, setStill] = useState<{ id: string; src?: string }>();
+  // While playing, each tick grabs the picture the next tick draws, so the player isn't rendered twice a frame.
+  const shot = useRef<{ id: string; src?: string } | undefined>(undefined);
+  const video = loaded && loaded.id === id ? loaded.el : null;
+  useEffect(() => {
+    if (!id) return;
+    let live = true;
+    void loadScreenVideo(id).then((el) => live && el && setLoaded({ id, el }));
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  // Whatever was playing stops when its scene is over.
+  useEffect(() => () => loaded?.el.pause(), [loaded]);
+  useEffect(() => {
+    if (!video || !id) {
+      loaded?.el.pause();
+      return;
+    }
+    if (playing) {
+      if (video.paused) void video.play().catch(() => undefined);
+      // The audio clock runs the show: pull the video back when it wanders.
+      if (Math.abs(video.currentTime - loopTime(video, t)) > 0.3) video.currentTime = loopTime(video, t);
+      shot.current = { id, src: grabFrame(video) };
+      return;
+    }
+    video.pause();
+    let live = true;
+    void seekFrame(video, t).then((src) => live && setStill({ id, src }));
+    return () => {
+      live = false;
+    };
+  }, [video, id, loaded, t, playing]);
+  const mine = (p?: { id: string; src?: string }) => (p && p.id === id ? p.src : undefined);
+  return playing ? mine(shot.current) ?? mine(still) : mine(still);
 }
 
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
@@ -142,6 +184,7 @@ export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
   const frame = useMemo(() => sampleEpisode(compiled, t), [compiled, t]);
   const sceneFrame = frame?.kind === 'scene' ? frame : null;
   const setEdit = editing === 'set' && !playing && sceneFrame?.scene.scene.set.kind === 'kit';
+  const screenImage = useScreenImage(sceneFrame?.scene.scene.screenVideo?.id, sceneFrame?.t ?? 0, playing);
 
   /* ---- dragging ---- */
   const drag = useRef<{ kind: 'actor' | 'piece'; id: string; dx: number; dy: number; moved: boolean } | null>(null);
@@ -224,6 +267,7 @@ export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
           renderActor={renderActor}
           sceneOverlay={pieceOverlay}
           freeCamera={setEdit}
+          screenImage={screenImage}
           className="stage-svg"
           onPointerMove={onMove}
           onPointerUp={endDrag}

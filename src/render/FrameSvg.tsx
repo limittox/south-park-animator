@@ -225,10 +225,12 @@ export interface FrameSvgProps extends Omit<SVGProps<SVGSVGElement>, 'children'>
   sceneOverlay?: ReactNode;
   /** Ignore the camera and show the whole set (editing). */
   freeCamera?: boolean;
+  /** The current picture of the video on the scene's TV, as a data URL (see render/screenVideo.ts). */
+  screenImage?: string;
   svgRef?: Ref<SVGSVGElement>;
 }
 
-export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, freeCamera, svgRef, ...rest }: FrameSvgProps) {
+export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, freeCamera, screenImage, svgRef, ...rest }: FrameSvgProps) {
   if (!frame) {
     return (
       <svg ref={svgRef} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} {...rest}>
@@ -244,7 +246,7 @@ export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, 
       </svg>
     );
   }
-  return <SceneSvg frame={frame} subtitles={subtitles} renderActor={renderActor} sceneOverlay={sceneOverlay} freeCamera={freeCamera} svgRef={svgRef} {...rest} />;
+  return <SceneSvg frame={frame} subtitles={subtitles} renderActor={renderActor} sceneOverlay={sceneOverlay} freeCamera={freeCamera} screenImage={screenImage} svgRef={svgRef} {...rest} />;
 }
 
 const viewBoxOf = (cam: Camera) => `${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`;
@@ -255,15 +257,16 @@ const throughTheWall = (set: SetSpec) => (set.kind === 'kit' && set.place === 'e
 
 const TILE_COLORS = ['#3a5a8c', '#7a4f8a', '#2f7a6b', '#8a5a3a', '#4f6f46', '#8a3f4f'];
 
-/** Everyone on the TV or the video call, each cut off at the edges of their own tile. */
-function ScreenLayer({ frame, draw }: { frame: SceneFrame; draw: (a: ActorFrame) => ReactNode }) {
+/** The video on the TV, then everyone on the TV or the video call, each cut off at the edges of their own tile. */
+function ScreenLayer({ frame, draw, image }: { frame: SceneFrame; draw: (a: ActorFrame) => ReactNode; image?: string }) {
   const prefix = `tile${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const live = frame.actors.filter((a) => a.tile);
-  if (!live.length) return null;
+  if (!live.length && !image) return null;
   const s = frame.scene.screen;
   return (
     <g>
       {s.panel && <rect x={s.x - 16} y={s.y - 16} width={s.w + 32} height={s.h + 32} rx={12} fill="#26262c" />}
+      {image && <image href={image} x={s.x} y={s.y} width={s.w} height={s.h} preserveAspectRatio="xMidYMid slice" />}
       {live.map((a) => {
         const { x, y, w, h } = a.tile!;
         const id = `${prefix}-${a.castId}`;
@@ -282,7 +285,7 @@ function ScreenLayer({ frame, draw }: { frame: SceneFrame; draw: (a: ActorFrame)
 }
 
 /** Everything that stands in the set, in scene coordinates. `half` draws one side of a split screen. */
-function SceneContent({ frame, half, renderActor, sceneOverlay }: Pick<FrameSvgProps, 'renderActor' | 'sceneOverlay'> & { frame: SceneFrame; half?: 'left' | 'right' }) {
+function SceneContent({ frame, half, renderActor, sceneOverlay, screenImage }: Pick<FrameSvgProps, 'renderActor' | 'sceneOverlay' | 'screenImage'> & { frame: SceneFrame; half?: 'left' | 'right' }) {
   const right = half === 'right';
   const set = (right && frame.split?.set) || frame.scene.scene.set;
   const actors = half ? frame.actors.filter((a) => !!a.right === right) : frame.actors;
@@ -318,7 +321,7 @@ function SceneContent({ frame, half, renderActor, sceneOverlay }: Pick<FrameSvgP
       {here(frame.holes).map((h) => (
         <WallHole key={h.t} x={h.x} y={h.y} r={h.r} behind={throughTheWall(set)} seed={Math.round(h.t * 100) + 1} />
       ))}
-      {!right && <ScreenLayer frame={frame} draw={actor} />}
+      {!right && <ScreenLayer frame={frame} draw={actor} image={screenImage} />}
       {items.map((i) => i.node)}
       {mine(frame.props).map((p) => (
         <FlyingProp key={p.key} p={p} />
@@ -345,10 +348,10 @@ function Overlays({ frame, subtitles, freeCamera }: Pick<FrameSvgProps, 'subtitl
 }
 
 /** A phone call: two sets side by side, in the frame's own coordinates. */
-function SplitSvg({ frame, split, subtitles, renderActor, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame; split: NonNullable<SceneFrame['split']> }) {
+function SplitSvg({ frame, split, subtitles, renderActor, screenImage, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame; split: NonNullable<SceneFrame['split']> }) {
   const panel = (half: 'left' | 'right', x: number, cam: Camera) => (
     <svg x={x} width={PANEL_W} height={FRAME_H} viewBox={viewBoxOf(cam)} preserveAspectRatio="xMidYMid slice">
-      <SceneContent frame={frame} half={half} renderActor={renderActor} />
+      <SceneContent frame={frame} half={half} renderActor={renderActor} screenImage={screenImage} />
     </svg>
   );
   return (
@@ -363,15 +366,15 @@ function SplitSvg({ frame, split, subtitles, renderActor, svgRef, ...rest }: Fra
   );
 }
 
-function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
-  if (frame.split && !freeCamera) return <SplitSvg frame={frame} split={frame.split} subtitles={subtitles} renderActor={renderActor} svgRef={svgRef} {...rest} />;
+function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, screenImage, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
+  if (frame.split && !freeCamera) return <SplitSvg frame={frame} split={frame.split} subtitles={subtitles} renderActor={renderActor} screenImage={screenImage} svgRef={svgRef} {...rest} />;
   const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : frame.camera;
   const k = cam.w / FRAME_W;
   // The set editor shows the whole stage, so it leaves out what's only there for the transition.
   const under = freeCamera ? undefined : frame.under;
   return (
     <svg ref={svgRef} viewBox={viewBoxOf(cam)} preserveAspectRatio="xMidYMid slice" {...rest}>
-      <SceneContent frame={frame} renderActor={renderActor} sceneOverlay={sceneOverlay} />
+      <SceneContent frame={frame} renderActor={renderActor} sceneOverlay={sceneOverlay} screenImage={screenImage} />
       <g transform={`translate(${cam.x} ${cam.y}) scale(${k})`} pointerEvents="none">
         {under && (
           <g opacity={under.opacity}>

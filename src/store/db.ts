@@ -1,11 +1,13 @@
 /*
- * A tiny IndexedDB wrapper. Episodes and synthesized voice lines live here: they're too big
- * for localStorage, and voice lines cost money, so they're kept until the user clears them.
+ * A tiny IndexedDB wrapper. Episodes, synthesized voice lines and the videos shown on TVs live
+ * here: they're too big for localStorage, and voice lines cost money, so they're kept until the
+ * user clears them.
  */
 
 const DB_NAME = 'ptstudio';
-const VERSION = 1;
-export type StoreName = 'episodes' | 'tts';
+const VERSION = 2;
+const STORES = ['episodes', 'tts', 'media'] as const;
+export type StoreName = (typeof STORES)[number];
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -15,10 +17,16 @@ function open(): Promise<IDBDatabase> {
       const req = indexedDB.open(DB_NAME, VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
-        if (!db.objectStoreNames.contains('episodes')) db.createObjectStore('episodes');
-        if (!db.objectStoreNames.contains('tts')) db.createObjectStore('tts');
+        for (const name of STORES) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        // Another tab with a newer version of the app must not be left waiting on this one.
+        req.result.onversionchange = () => {
+          req.result.close();
+          dbPromise = null;
+        };
+        resolve(req.result);
+      };
       req.onerror = () => reject(req.error ?? new Error('Could not open storage.'));
     });
     dbPromise.catch(() => (dbPromise = null));

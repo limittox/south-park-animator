@@ -9,7 +9,7 @@ import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
 import { audioCues, cameraFor, compileEpisode, estimateLineSeconds, FPS, groundYOf, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
 import { repositionActor, setMoodAt } from './episode/edit';
-import { applyCrew, applyEdit } from './ai/director';
+import { applyCrew, applyEdit, applyScriptSigns } from './ai/director';
 import { extractJson } from './ai/openrouter';
 import { envelope, processVoice, resample, timeStretch, trimSilence } from './audio/dsp';
 import { directionMode, speechFormat, speechRequest } from './audio/voices';
@@ -666,6 +666,34 @@ describe('editing', () => {
     expect(dex.voice.voice).toBe(ep.cast.find((c) => c.id === 'dex')!.voice.voice);
     expect(res.episode.cast.some((c) => c.name === 'Newbie')).toBe(true);
     expect(res.episode.scenes[1]).toBe(ep.scenes[1]);
+  });
+
+  it("writes the script's words on a sign the cast designer left blank", () => {
+    const script = `INT. LIVING ROOM - DAY
+Benny holds a sign that reads "MOM WILL APPRECIATE THIS".
+BENNY: Hi.
+DAD: Hi.`;
+    // What the AI path builds: a cast with no sign text, so the creator's default.
+    const designed = normalizeEpisode({ cast: [{ name: 'Benny', look: { held: 'sign' } }, { name: 'Dad' }], scenes: [] }, script);
+    expect(designed.cast[0].look.signText).toBe('WE WANT RECESS');
+    const fixed = applyScriptSigns(designed, script);
+    expect(fixed.cast[0].look.signText).toBe('MOM WILL APPRECIATE THIS');
+    expect(fixed.cast[1]).toBe(designed.cast[1]);
+  });
+
+  it("keeps the video on a scene's TV through a chat edit, and draws it on the screen", () => {
+    const ep: Episode = sample();
+    ep.scenes[0] = { ...ep.scenes[0], screenVideo: { id: 'v1', name: 'gameplay.mp4' } };
+    const { screenVideo: _dropped, ...echoed } = ep.scenes[0];
+    expect(applyEdit(ep, 0, { scene: echoed }).episode.scenes[0].screenVideo).toEqual({ id: 'v1', name: 'gameplay.mp4' });
+    expect(applyEdit(ep, null, { scenes: ep.scenes.map(({ screenVideo: _v, ...s }) => s) }).episode.scenes[0].screenVideo).toEqual({ id: 'v1', name: 'gameplay.mp4' });
+
+    const compiled = compileEpisode(ep, new Map());
+    const frame = sampleEpisode(compiled, compiled.scenes[0].start + 0.1) as SceneFrame;
+    const { x, y, w, h } = frame.scene.screen;
+    const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, screenImage: 'data:image/jpeg;base64,AAAA' }));
+    expect(markup).toContain(`<image href="data:image/jpeg;base64,AAAA" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"`);
+    expect(renderToStaticMarkup(createElement(FrameSvg, { frame }))).not.toContain('<image');
   });
 
   it('pulls JSON out of chatty answers', () => {

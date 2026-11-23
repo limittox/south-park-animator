@@ -8,6 +8,7 @@ import { FLAT_CSS } from '../character/flat';
 import { playSfx } from '../audio/sfx';
 import { toAudioBuffer, type VoicedLine } from '../audio/voices';
 import { FrameSvg } from './FrameSvg';
+import { loadScreenVideo, seekFrame } from './screenVideo';
 
 /*
  * Offline export: every frame is sampled from the same timeline the player uses, drawn as SVG,
@@ -127,7 +128,10 @@ export async function exportEpisode({ compiled, lines, height, fps = FPS, subtit
       if (signal?.aborted) throw new DOMException('Export cancelled.', 'AbortError');
       const t = i / fps;
       const frame = sampleEpisode(compiled, t);
-      const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
+      const tv = frame?.kind === 'scene' ? frame.scene.scene.screenVideo : undefined;
+      const player = tv && (await loadScreenVideo(tv.id));
+      const screenImage = player ? await seekFrame(player, frame!.t) : undefined;
+      const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, screenImage, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
       // Cut-out animation holds its poses, so most frames repeat the last picture: the canvas still has it.
       if (markup !== drawn) {
         g.fillStyle = '#000';

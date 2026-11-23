@@ -1,6 +1,8 @@
 import type { CharacterState } from '../types';
 import type { CastMember, Episode, Scene } from '../episode/types';
 import { normalizeCastMember, normalizeEpisode, normalizeLook, normalizeScene, normalizeVoice, resolveCast } from '../episode/normalize';
+import { parseScript } from '../episode/parseScript';
+import { DEFAULT_CHARACTER } from '../data/defaults';
 import type { Settings } from '../store/settings';
 import { chatJson, listModels, type ChatMessage } from './openrouter';
 import { CAST_SYSTEM, characterReference, editSystem, scenesSystem, voiceReference } from './prompts';
@@ -68,7 +70,18 @@ export async function directScript(script: string, settings: Settings, crew: Cre
   const c = isObj(castOut) ? castOut : {};
   const s = isObj(scenesOut) ? scenesOut : {};
   const episode = normalizeEpisode({ title: c.title, cast: c.cast, scenes: s.scenes }, script);
-  return applyCrew(episode, crew);
+  return applyCrew(applyScriptSigns(episode, script), crew);
+}
+
+/** A sign says what the script says. The cast designer rarely fills it in, which leaves the creator's default words. */
+export function applyScriptSigns(episode: Episode, script: string): Episode {
+  const signs = parseScript(script).cast.filter((p) => p.look.signText !== DEFAULT_CHARACTER.signText);
+  if (!signs.length) return episode;
+  const cast = episode.cast.map((m) => {
+    const hit = signs.find((p) => resolveCast([m], p.name) === m.id);
+    return hit ? { ...m, look: { ...m.look, signText: hit.look.signText } } : m;
+  });
+  return { ...episode, cast };
 }
 
 /** Swap in the user's own saved characters wherever the script uses their names. */
@@ -99,6 +112,9 @@ function castForPrompt(cast: CastMember[]) {
     return { id, name, aliases, bio, voice, look: rest };
   });
 }
+
+/** The video on a scene's TV is the user's file: the edit model can't change it, so it carries over. */
+const keepVideo = (old?: Scene) => (old?.screenVideo ? { screenVideo: old.screenVideo } : {});
 
 /** Merge the edit model's answer into the episode. Exported for tests. */
 export function applyEdit(episode: Episode, sceneIndex: number | null, out: unknown): EditResult {
@@ -137,10 +153,14 @@ export function applyEdit(episode: Episode, sceneIndex: number | null, out: unkn
   let scenes = episode.scenes;
   if (sceneIndex !== null && isObj(o.scene)) {
     const next = normalizeScene(o.scene, cast, sceneIndex);
-    if (next) scenes = scenes.map((sc, i) => (i === sceneIndex ? { ...next, id: sc.id } : sc));
+    if (next) scenes = scenes.map((sc, i) => (i === sceneIndex ? { ...next, id: sc.id, ...keepVideo(sc) } : sc));
   } else if (sceneIndex === null && Array.isArray(o.scenes)) {
     const next = o.scenes.map((sc, i) => normalizeScene(sc, cast, i)).filter((sc): sc is Scene => !!sc);
-    if (next.length) scenes = next.map((sc, i) => ({ ...sc, id: episode.scenes.find((old) => old.id === sc.id)?.id ?? episode.scenes[i]?.id ?? sc.id }));
+    if (next.length)
+      scenes = next.map((sc, i) => {
+        const old = episode.scenes.find((o) => o.id === sc.id) ?? episode.scenes[i];
+        return { ...sc, id: old?.id ?? sc.id, ...keepVideo(old) };
+      });
   }
   const title = typeof o.title === 'string' && o.title.trim() ? o.title.trim().slice(0, 100) : episode.title;
   const reply = typeof o.reply === 'string' && o.reply.trim() ? o.reply.trim() : 'Done.';

@@ -221,6 +221,9 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
           tools={
             <>
               {voiceChip}
+              <button className="chip" aria-pressed={episode.titleCard} onClick={() => set((ep) => ({ ...ep, titleCard: !ep.titleCard }))} title="Open with the title card">
+                Title
+              </button>
               <button className="chip" aria-pressed={settings.subtitles} onClick={() => updateSettings({ subtitles: !settings.subtitles })} title="Subtitles">
                 CC
               </button>
