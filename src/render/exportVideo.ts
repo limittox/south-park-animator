@@ -91,15 +91,19 @@ export interface ExportProgress {
 export interface ExportOptions {
   compiled: CompiledEpisode;
   lines: ReadonlyMap<string, VoicedLine>;
+  /** The short side: 720 or 1080 pixels. */
   height: 720 | 1080;
+  /** 9:16 for phones instead of 16:9. */
+  vertical?: boolean;
   fps?: number;
   subtitles: boolean;
   onProgress: (p: ExportProgress) => void;
   signal?: AbortSignal;
 }
 
-export async function exportEpisode({ compiled, lines, height, fps = FPS, subtitles, onProgress, signal }: ExportOptions): Promise<Blob> {
-  const width = Math.round((height * 16) / 9 / 2) * 2;
+export async function exportEpisode({ compiled, lines, height: short, vertical = false, fps = FPS, subtitles, onProgress, signal }: ExportOptions): Promise<Blob> {
+  const long = Math.round((short * 16) / 9 / 2) * 2;
+  const [width, height] = vertical ? [short, long] : [long, short];
   const videoCodec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1'], { width, height });
   if (!videoCodec) throw new Error("This browser can't encode video. Try a recent Chrome or Edge.");
   const audioCodec = await getFirstEncodableAudioCodec(['aac', 'opus'], { numberOfChannels: 2, sampleRate: SAMPLE_RATE });
@@ -131,7 +135,7 @@ export async function exportEpisode({ compiled, lines, height, fps = FPS, subtit
       const tv = frame?.kind === 'scene' ? frame.scene.scene.screenVideo : undefined;
       const player = tv && (await loadScreenVideo(tv.id));
       const screenImage = player ? await seekFrame(player, frame!.t) : undefined;
-      const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, screenImage, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
+      const markup = renderToStaticMarkup(createElement(FrameSvg, { frame, subtitles, screenImage, vertical, width, height, xmlns: 'http://www.w3.org/2000/svg' }));
       // Cut-out animation holds its poses, so most frames repeat the last picture: the canvas still has it.
       if (markup !== drawn) {
         g.fillStyle = '#000';

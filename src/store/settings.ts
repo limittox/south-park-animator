@@ -7,6 +7,8 @@ export interface Settings {
   ttsModel: string;
   subtitles: boolean;
   exportHeight: 720 | 1080;
+  /** Preview and export 9:16 for phones (TikTok, Reels, Shorts). */
+  vertical: boolean;
   /** Generate voices automatically after a script is turned into an episode. */
   autoVoice: boolean;
 }
@@ -17,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ttsModel: 'google/gemini-3.8-flash-tts',
   subtitles: false,
   exportHeight: 720,
+  vertical: false,
   autoVoice: true,
 };
 

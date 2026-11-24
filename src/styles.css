@@ -817,6 +817,13 @@ label.inline input {
   box-shadow: var(--shadow);
 }
 
+.stage-frame.vertical {
+  aspect-ratio: 9 / 16;
+  width: auto;
+  height: calc(100vh - var(--top) - 150px);
+  max-width: 100%;
+}
+
 .stage-frame.set-edit {
   outline: 3px dashed var(--orange);
   outline-offset: 3px;
@@ -1521,6 +1528,7 @@ label.inline input {
 
 .export-video {
   width: 100%;
+  max-height: 70vh;
   border: 3px solid var(--ink);
   border-radius: 10px;
   background: #000;

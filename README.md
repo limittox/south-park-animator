@@ -58,7 +58,7 @@ Everything runs in the browser. Your OpenRouter key is stored only in your brows
 - Undo and redo (Ctrl+Z / Ctrl+Y); episodes autosave to IndexedDB.
 
 **Export**
-- Frame-exact offline rendering to MP4 (H.264 + AAC, or VP9/Opus if those aren't available) with mediabunny and WebCodecs, at 720p or 1080p, with optional burned-in subtitles. It runs at about real time or faster while its tab is in front (browsers slow down background tabs). Each frame is rasterized to an `ImageBitmap` that's closed straight away, so memory stays flat however long the episode is. Cut-out animation holds its poses, so a frame identical to the one before isn't redrawn (about two frames in three).
+- Frame-exact offline rendering to MP4 (H.264 + AAC, or VP9/Opus if those aren't available) with mediabunny and WebCodecs, at 720p or 1080p, landscape 16:9 or vertical 9:16 for TikTok, Reels and Shorts, with optional burned-in subtitles. Vertical framing (the 9:16 button under the player previews it) shows the whole height of each shot and pans to whoever's talking in wider shots; close-ups keep their subject, and phone calls stack one above the other. It runs at about real time or faster while its tab is in front (browsers slow down background tabs). Each frame is rasterized to an `ImageBitmap` that's closed straight away, so memory stays flat however long the episode is. Cut-out animation holds its poses, so a frame identical to the one before isn't redrawn (about two frames in three).
 
 ## Running it
 

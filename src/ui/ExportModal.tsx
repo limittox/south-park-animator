@@ -42,7 +42,7 @@ export function ExportModal({ compiled, lines, missingVoices, voicing, onVoice, 
     try {
       // The encoder and the static renderer load only when someone exports.
       const { exportEpisode } = await import('../render/exportVideo');
-      const blob = await exportEpisode({ compiled, lines, height: s.exportHeight, subtitles: s.subtitles, onProgress: setProgress, signal: ctrl.signal });
+      const blob = await exportEpisode({ compiled, lines, height: s.exportHeight, vertical: s.vertical, subtitles: s.subtitles, onProgress: setProgress, signal: ctrl.signal });
       setResult({ blob, url: URL.createObjectURL(blob) });
     } catch (e) {
       if (!ctrl.signal.aborted) setError((e as Error).message);
@@ -55,7 +55,7 @@ export function ExportModal({ compiled, lines, missingVoices, voicing, onVoice, 
   const pct = progress ? (progress.phase === 'video' ? progress.done / progress.total : progress.phase === 'finishing' ? 1 : 0) : 0;
   const elapsed = (performance.now() - started.current) / 1000;
   const eta = pct > 0.03 ? elapsed / pct - elapsed : null;
-  const filename = `${safeFileName(compiled.episode.title)}.mp4`;
+  const filename = `${safeFileName(compiled.episode.title)}${s.vertical ? '-vertical' : ''}.mp4`;
 
   return (
     <Modal title="Export video" onClose={onClose}>
@@ -97,10 +97,17 @@ export function ExportModal({ compiled, lines, missingVoices, voicing, onVoice, 
           )}
           <div className="field-grid">
             <label>
+              Shape
+              <select value={s.vertical ? 'vertical' : 'landscape'} onChange={(e) => updateSettings({ vertical: e.target.value === 'vertical' })}>
+                <option value="landscape">Landscape 16:9</option>
+                <option value="vertical">Vertical 9:16 (TikTok, Reels, Shorts)</option>
+              </select>
+            </label>
+            <label>
               Size
               <select value={s.exportHeight} onChange={(e) => updateSettings({ exportHeight: Number(e.target.value) as 720 | 1080 })}>
-                <option value={720}>1280 × 720</option>
-                <option value={1080}>1920 × 1080</option>
+                <option value={720}>{s.vertical ? '720 × 1280' : '1280 × 720'}</option>
+                <option value={1080}>{s.vertical ? '1080 × 1920' : '1920 × 1080'}</option>
               </select>
             </label>
             <label className="check">

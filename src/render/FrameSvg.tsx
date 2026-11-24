@@ -1,6 +1,6 @@
 import { memo, useId, type ReactNode, type Ref, type SVGProps } from 'react';
 import type { SetSpec, TimeOfDay, Weather } from '../episode/types';
-import { FRAME_H, FRAME_W, PANEL_W, type ActorFrame, type Camera, type Frame, type PropFrame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
+import { FRAME_H, FRAME_W, PANEL_W, verticalCamera, VFRAME_H, VFRAME_W, type ActorFrame, type Camera, type Frame, type PropFrame, type SceneFrame, type VehicleFrame } from '../episode/timeline';
 import { CharacterGroup } from '../character/Character';
 import { getGeo, handPos } from '../character/geometry';
 import { HELD, SIDEKICKS } from '../character/parts/held';
@@ -144,7 +144,13 @@ export function WeatherLayer({ weather, t, level = 1 }: { weather: Weather; t: n
   );
 }
 
-/* ---------------------------------------------------------------- overlays (frame space, 1600 × 900) */
+/* ---------------------------------------------------------------- overlays (frame space: 1600 × 900, or 900 × 1600 vertical) */
+
+/** The size of the frame space overlays are drawn in. */
+interface Size {
+  w: number;
+  h: number;
+}
 
 function wrap(text: string, max: number): string[] {
   const words = text.split(/\s+/);
@@ -160,14 +166,16 @@ function wrap(text: string, max: number): string[] {
   return lines;
 }
 
-function Caption({ text }: { text: string }) {
-  const lines = wrap(text, 26).slice(0, 3);
+function Caption({ text, size: { w, h: fh } }: { text: string; size: Size }) {
+  const boxW = Math.min(1000, w - 100);
+  const lines = wrap(text, Math.floor(boxW / 38)).slice(0, 3);
   const h = lines.length * 70 + 50;
+  const [cx, cy] = [w / 2, fh / 2];
   return (
-    <g transform="rotate(-2 800 450)">
-      <rect x={300} y={450 - h / 2} width={1000} height={h} rx={10} fill="#fffaf0" stroke="#1d1d1d" strokeWidth={5} />
+    <g transform={`rotate(-2 ${cx} ${cy})`}>
+      <rect x={cx - boxW / 2} y={cy - h / 2} width={boxW} height={h} rx={10} fill="#fffaf0" stroke="#1d1d1d" strokeWidth={5} />
       {lines.map((l, i) => (
-        <text key={i} x={800} y={450 - h / 2 + 82 + i * 70} textAnchor="middle" fontFamily={DISPLAY} fontSize={60} fill="#1d1d1d">
+        <text key={i} x={cx} y={cy - h / 2 + 82 + i * 70} textAnchor="middle" fontFamily={DISPLAY} fontSize={60} fill="#1d1d1d">
           {l}
         </text>
       ))}
@@ -175,12 +183,14 @@ function Caption({ text }: { text: string }) {
   );
 }
 
-function Subtitle({ who, text }: { who: string; text: string }) {
-  const lines = wrap(text, 48).slice(-2);
+function Subtitle({ who, text, size: { w, h } }: { who: string; text: string; size: Size }) {
+  const lines = wrap(text, Math.floor(w / 33)).slice(-2);
+  // On a phone the app's own caption and buttons cover the bottom quarter.
+  const bottom = w < h ? h * 0.26 : 40;
   return (
     <g fontFamily="'Nunito', 'Arial', sans-serif" fontWeight={900} fontSize={40} textAnchor="middle">
       {lines.map((l, i) => (
-        <text key={i} x={800} y={900 - 40 - (lines.length - 1 - i) * 50} fill="#fff" stroke="#111" strokeWidth={8} strokeLinejoin="round" paintOrder="stroke">
+        <text key={i} x={w / 2} y={h - bottom - (lines.length - 1 - i) * 50} fill="#fff" stroke="#111" strokeWidth={8} strokeLinejoin="round" paintOrder="stroke">
           {i === 0 && who ? `${who}: ` : ''}
           {l}
         </text>
@@ -189,23 +199,28 @@ function Subtitle({ who, text }: { who: string; text: string }) {
   );
 }
 
-function TitleCard({ title, t }: { title: string; t: number }) {
+function TitleCard({ title, t, size: { w, h } }: { title: string; t: number; size: Size }) {
   // The card slaps onto the screen: it starts a bit small, overshoots, settles. It's never off screen.
   const k = Math.min(1, t / 0.35);
   const scale = k < 1 ? 0.82 + 0.26 * k : 1 + 0.08 * Math.max(0, 1 - (t - 0.35) / 0.25) * Math.cos((t - 0.35) * 12);
-  const lines = wrap(title, 18).slice(0, 3);
+  const cardW = Math.min(1080, w - 80);
+  const lines = wrap(title, Math.floor(cardW / 60)).slice(0, 3);
+  const [cx, cy] = [w / 2, h * 0.478];
   return (
     <g>
-      <rect width={FRAME_W} height={FRAME_H} fill="#92d6e6" />
-      <path d="M 0 700 Q 300 640 620 690 T 1200 680 T 1600 650 L 1600 900 L 0 900 Z" fill="#f9f9f9" />
-      <path d="M 0 610 L 260 330 L 520 610 Z M 420 640 L 760 250 L 1100 640 Z M 980 650 L 1290 300 L 1600 650 Z" fill="#316647" opacity={0.95} />
-      <g transform={`translate(800 430) scale(${scale.toFixed(3)}) rotate(-3) translate(-800 -430)`}>
-        <rect x={260} y={250} width={1080} height={lines.length * 110 + 110} rx={18} fill="#fffaf0" stroke="#1d1d1d" strokeWidth={6} />
-        <text x={800} y={310} textAnchor="middle" fontFamily={DISPLAY} fontSize={34} fill="#d33b2c" letterSpacing={4}>
+      <rect width={w} height={h} fill="#92d6e6" />
+      {/* The hills are drawn for 1600 × 900 and sit along the bottom of whatever shape the frame is. */}
+      <svg width={w} height={h} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} preserveAspectRatio="xMidYMax meet">
+        <path d="M 0 700 Q 300 640 620 690 T 1200 680 T 1600 650 L 1600 900 L 0 900 Z" fill="#f9f9f9" />
+        <path d="M 0 610 L 260 330 L 520 610 Z M 420 640 L 760 250 L 1100 640 Z M 980 650 L 1290 300 L 1600 650 Z" fill="#316647" opacity={0.95} />
+      </svg>
+      <g transform={`translate(${cx} ${cy}) scale(${scale.toFixed(3)}) rotate(-3) translate(${-cx} ${-cy})`}>
+        <rect x={cx - cardW / 2} y={cy - 180} width={cardW} height={lines.length * 110 + 110} rx={18} fill="#fffaf0" stroke="#1d1d1d" strokeWidth={6} />
+        <text x={cx} y={cy - 120} textAnchor="middle" fontFamily={DISPLAY} fontSize={34} fill="#d33b2c" letterSpacing={4}>
           PAPER TOWN STUDIOS PRESENTS
         </text>
         {lines.map((l, i) => (
-          <text key={i} x={800} y={410 + i * 110} textAnchor="middle" fontFamily={DISPLAY} fontSize={96} fill="#1d1d1d">
+          <text key={i} x={cx} y={cy - 20 + i * 110} textAnchor="middle" fontFamily={DISPLAY} fontSize={96} fill="#1d1d1d">
             {l}
           </text>
         ))}
@@ -227,26 +242,29 @@ export interface FrameSvgProps extends Omit<SVGProps<SVGSVGElement>, 'children'>
   freeCamera?: boolean;
   /** The current picture of the video on the scene's TV, as a data URL (see render/screenVideo.ts). */
   screenImage?: string;
+  /** A 9:16 frame for phones instead of 16:9. */
+  vertical?: boolean;
   svgRef?: Ref<SVGSVGElement>;
 }
 
-export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, freeCamera, screenImage, svgRef, ...rest }: FrameSvgProps) {
+export function FrameSvg({ frame, subtitles = false, renderActor, sceneOverlay, freeCamera, screenImage, vertical, svgRef, ...rest }: FrameSvgProps) {
+  const size = vertical ? { w: VFRAME_W, h: VFRAME_H } : { w: FRAME_W, h: FRAME_H };
   if (!frame) {
     return (
-      <svg ref={svgRef} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} {...rest}>
-        <rect width={FRAME_W} height={FRAME_H} fill="#1d1d1d" />
+      <svg ref={svgRef} viewBox={`0 0 ${size.w} ${size.h}`} {...rest}>
+        <rect width={size.w} height={size.h} fill="#1d1d1d" />
       </svg>
     );
   }
   if (frame.kind === 'title') {
     return (
-      <svg ref={svgRef} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} {...rest}>
-        <TitleCard title={frame.title} t={frame.t} />
-        {frame.fade > 0 && <rect width={FRAME_W} height={FRAME_H} fill="#000" opacity={frame.fade} />}
+      <svg ref={svgRef} viewBox={`0 0 ${size.w} ${size.h}`} {...rest}>
+        <TitleCard title={frame.title} t={frame.t} size={size} />
+        {frame.fade > 0 && <rect width={size.w} height={size.h} fill="#000" opacity={frame.fade} />}
       </svg>
     );
   }
-  return <SceneSvg frame={frame} subtitles={subtitles} renderActor={renderActor} sceneOverlay={sceneOverlay} freeCamera={freeCamera} screenImage={screenImage} svgRef={svgRef} {...rest} />;
+  return <SceneSvg frame={frame} subtitles={subtitles} renderActor={renderActor} sceneOverlay={sceneOverlay} freeCamera={freeCamera} screenImage={screenImage} vertical={vertical} svgRef={svgRef} {...rest} />;
 }
 
 const viewBoxOf = (cam: Camera) => `${cam.x.toFixed(2)} ${cam.y.toFixed(2)} ${cam.w.toFixed(2)} ${cam.h.toFixed(2)}`;
@@ -336,40 +354,47 @@ function SceneContent({ frame, half, renderActor, sceneOverlay, screenImage }: P
   );
 }
 
-function Overlays({ frame, subtitles, freeCamera }: Pick<FrameSvgProps, 'subtitles' | 'freeCamera'> & { frame: SceneFrame }) {
+function Overlays({ frame, subtitles, freeCamera, size }: Pick<FrameSvgProps, 'subtitles' | 'freeCamera'> & { frame: SceneFrame; size: Size }) {
   return (
     <>
-      {frame.caption && <Caption text={frame.caption} />}
-      {subtitles && frame.subtitle && <Subtitle who={frame.subtitle.who} text={frame.subtitle.text} />}
-      {frame.flash > 0 && <rect width={FRAME_W} height={FRAME_H} fill="#fff" opacity={frame.flash} />}
-      {frame.fade > 0 && !freeCamera && <rect width={FRAME_W} height={FRAME_H} fill="#000" opacity={frame.fade} />}
+      {frame.caption && <Caption text={frame.caption} size={size} />}
+      {subtitles && frame.subtitle && <Subtitle who={frame.subtitle.who} text={frame.subtitle.text} size={size} />}
+      {frame.flash > 0 && <rect width={size.w} height={size.h} fill="#fff" opacity={frame.flash} />}
+      {frame.fade > 0 && !freeCamera && <rect width={size.w} height={size.h} fill="#000" opacity={frame.fade} />}
     </>
   );
 }
 
-/** A phone call: two sets side by side, in the frame's own coordinates. */
-function SplitSvg({ frame, split, subtitles, renderActor, screenImage, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame; split: NonNullable<SceneFrame['split']> }) {
-  const panel = (half: 'left' | 'right', x: number, cam: Camera) => (
-    <svg x={x} width={PANEL_W} height={FRAME_H} viewBox={viewBoxOf(cam)} preserveAspectRatio="xMidYMid slice">
-      <SceneContent frame={frame} half={half} renderActor={renderActor} screenImage={screenImage} />
-    </svg>
-  );
+/** A phone call: two sets side by side (one above the other when vertical), in the frame's own coordinates. */
+function SplitSvg({ frame, split, subtitles, renderActor, screenImage, vertical, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame; split: NonNullable<SceneFrame['split']> }) {
+  const size = vertical ? { w: VFRAME_W, h: VFRAME_H } : { w: FRAME_W, h: FRAME_H };
+  const panel = (half: 'left' | 'right', cam: Camera) => {
+    const at = half === 'left' ? 0 : (vertical ? size.h : size.w) - PANEL_W;
+    const box = vertical ? { y: at, width: size.w, height: PANEL_W } : { x: at, width: PANEL_W, height: size.h };
+    return (
+      <svg {...box} viewBox={viewBoxOf(cam)} preserveAspectRatio="xMidYMid slice">
+        <SceneContent frame={frame} half={half} renderActor={renderActor} screenImage={screenImage} />
+      </svg>
+    );
+  };
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${FRAME_W} ${FRAME_H}`} {...rest}>
-      <rect width={FRAME_W} height={FRAME_H} fill="#111" />
-      {panel('left', 0, split.left)}
-      {panel('right', FRAME_W - PANEL_W, split.right)}
+    <svg ref={svgRef} viewBox={`0 0 ${size.w} ${size.h}`} {...rest}>
+      <rect width={size.w} height={size.h} fill="#111" />
+      {panel('left', split.left)}
+      {panel('right', split.right)}
       <g pointerEvents="none">
-        <Overlays frame={frame} subtitles={subtitles} />
+        <Overlays frame={frame} subtitles={subtitles} size={size} />
       </g>
     </svg>
   );
 }
 
-function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, screenImage, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
-  if (frame.split && !freeCamera) return <SplitSvg frame={frame} split={frame.split} subtitles={subtitles} renderActor={renderActor} screenImage={screenImage} svgRef={svgRef} {...rest} />;
-  const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : frame.camera;
-  const k = cam.w / FRAME_W;
+function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, screenImage, vertical, svgRef, ...rest }: FrameSvgProps & { frame: SceneFrame }) {
+  if (frame.split && !freeCamera) return <SplitSvg frame={frame} split={frame.split} subtitles={subtitles} renderActor={renderActor} screenImage={screenImage} vertical={vertical} svgRef={svgRef} {...rest} />;
+  const tall = vertical && !freeCamera;
+  const size = tall ? { w: VFRAME_W, h: VFRAME_H } : { w: FRAME_W, h: FRAME_H };
+  const cam = freeCamera ? { x: 0, y: 100, w: FRAME_W, h: FRAME_H } : tall ? verticalCamera(frame) : frame.camera;
+  const k = cam.w / size.w;
   // The set editor shows the whole stage, so it leaves out what's only there for the transition.
   const under = freeCamera ? undefined : frame.under;
   return (
@@ -378,12 +403,12 @@ function SceneSvg({ frame, subtitles, renderActor, sceneOverlay, freeCamera, scr
       <g transform={`translate(${cam.x} ${cam.y}) scale(${k})`} pointerEvents="none">
         {under && (
           <g opacity={under.opacity}>
-            <svg width={FRAME_W} height={FRAME_H} viewBox={viewBoxOf(under.frame.camera)} preserveAspectRatio="xMidYMid slice">
+            <svg width={size.w} height={size.h} viewBox={viewBoxOf(tall ? verticalCamera(under.frame) : under.frame.camera)} preserveAspectRatio="xMidYMid slice">
               <SceneContent frame={under.frame} />
             </svg>
           </g>
         )}
-        <Overlays frame={frame} subtitles={subtitles} freeCamera={freeCamera} />
+        <Overlays frame={frame} subtitles={subtitles} freeCamera={freeCamera} size={size} />
       </g>
     </svg>
   );

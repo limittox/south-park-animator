@@ -7,7 +7,7 @@ import { FIXTURE_SCRIPT } from './fixtureScript';
 import { PROMPT_EXAMPLE, PROMPT_PLACES, scriptWritingPrompt } from './episode/writingPrompt';
 import { stripCodeFences } from './lib/clipboard';
 import { normalizeEpisode, normalizeLook, resolveCast, stockCharacter } from './episode/normalize';
-import { audioCues, cameraFor, compileEpisode, estimateLineSeconds, FPS, groundYOf, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
+import { audioCues, cameraFor, compileEpisode, estimateLineSeconds, FPS, groundYOf, locate, POSE_FPS, sampleEpisode, syntheticEnvelope, transitionTime, verticalCamera, WIDE, type ClipMap, type SceneFrame, type TitleFrame } from './episode/timeline';
 import { repositionActor, setMoodAt } from './episode/edit';
 import { applyCrew, applyEdit, applyScriptSigns } from './ai/director';
 import { extractJson } from './ai/openrouter';
@@ -932,6 +932,31 @@ describe('camera moves', () => {
     expect(beat.end - beat.start).toBeCloseTo(1);
   });
 
+  it('frames vertical video 9:16 inside the set, on whoever talks in a wide shot and on the subject of a close-up', () => {
+    const ep = normalizeEpisode(
+      { cast: [{ name: 'A' }, { name: 'B' }], scenes: [{ blocking: [{ who: 'A', x: 300 }, { who: 'B', x: 1300 }], beats: [{ who: 'A', text: 'Over here.' }, { who: 'B', text: 'And over here.' }] }] },
+      '',
+    );
+    ep.titleCard = false;
+    const c = compileEpisode(ep, new Map());
+    for (const b of c.scenes[0].beats) {
+      const f = sampleEpisode(c, b.start + 0.2) as SceneFrame;
+      const v = verticalCamera(f);
+      const who = f.actors.find((a) => a.castId === b.beat.who)!;
+      expect(v.w / v.h).toBeCloseTo(9 / 16);
+      expect(v.x).toBeGreaterThanOrEqual(0);
+      expect(v.x + v.w).toBeLessThanOrEqual(1600);
+      expect(v.y + v.h).toBeLessThanOrEqual(1000);
+      expect(who.x).toBeGreaterThan(v.x);
+      expect(who.x).toBeLessThan(v.x + v.w);
+    }
+    const close = twoHanders({}).frame(0.2);
+    const v = verticalCamera(close);
+    expect(v.x + v.w / 2).toBeCloseTo(close.camera.x + close.camera.w / 2);
+    const title = renderToStaticMarkup(createElement(FrameSvg, { frame: { kind: 'title', title: 'A very long title for a phone', t: 1, fade: 0 } as TitleFrame, vertical: true }));
+    expect(title).toContain('viewBox="0 0 900 1600"');
+  });
+
   it('follows someone across the stage and cuts back to wide once they have left', () => {
     const ep = normalizeEpisode(
       {
@@ -1823,6 +1848,10 @@ KENNY leaves the call.`).scenes[0];
       expect(markup.match(/<svg/g)).toHaveLength(3);
       expect(markup).toContain('viewBox="0 0 1600 900"');
       expect(markup.match(/sp-char/g)).toHaveLength(2);
+      // Vertical, one half sits above the other.
+      const tall = renderToStaticMarkup(createElement(FrameSvg, { frame: f, vertical: true }));
+      expect(tall).toContain('viewBox="0 0 900 1600"');
+      expect(tall).toContain('y="804" width="900" height="796"');
     });
 
     it('reads a split screen and gives everyone a phone', () => {

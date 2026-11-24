@@ -1219,6 +1219,25 @@ export function cameraFor(shot: Shot, actors: ActorFrame[], speaker: string | un
   return fitCamera((minX + maxX) / 2, (top + bottom) / 2, w);
 }
 
+/** The vertical frame size (9:16, for phones), in the same units as FRAME_W × FRAME_H. */
+export const VFRAME_W = 900;
+export const VFRAME_H = 1600;
+
+/**
+ * A 9:16 view of a shot for phones: as tall as the shot is wide (at most the whole set), centred
+ * where the shot is, or on whoever's talking when a wider shot would leave them out. Close-ups keep their subject.
+ */
+export function verticalCamera(f: SceneFrame): Camera {
+  const cam = f.camera;
+  const h = Math.min(cam.w, SCENE_H);
+  const w = (h * VFRAME_W) / VFRAME_H;
+  let cx = cam.x + cam.w / 2;
+  const close = lastAt(f.scene.shots, f.t)?.shot.type === 'close';
+  const who = f.actors.find((a) => a.castId === f.beat?.beat.who && !a.tile && a.x >= cam.x && a.x <= cam.x + cam.w);
+  if (!close && who && Math.abs(who.x - cx) > w * 0.3) cx = who.x;
+  return { x: clamp(cx - w / 2, 0, SCENE_W - w), y: clamp(cam.y + cam.h / 2 - h / 2, 0, SCENE_H - h), w, h };
+}
+
 /** Blend a pose in and out over GESTURE_BLEND, cut-out quick. */
 function blendIn(g: ReturnType<typeof getGeo>, target: ArmsPose, t: number, t0: number, t1: number): ArmsPose {
   const kin = Math.min(1, (t - t0) / GESTURE_BLEND);

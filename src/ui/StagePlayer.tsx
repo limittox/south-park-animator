@@ -19,6 +19,8 @@ interface Props {
   compiled: CompiledEpisode;
   lines: ReadonlyMap<string, VoicedLine>;
   subtitles: boolean;
+  /** Show the 9:16 phone framing. */
+  vertical: boolean;
   editing: 'actors' | 'set';
   selectedActor: string | null;
   onSelectActor: (id: string | null) => void;
@@ -73,7 +75,7 @@ function useScreenImage(id: string | undefined, t: number, playing: boolean): st
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
 export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
-  { compiled, lines, subtitles, editing, selectedActor, onSelectActor, onLocate, onDragActor, onDragPiece, tools },
+  { compiled, lines, subtitles, vertical, editing, selectedActor, onSelectActor, onLocate, onDragActor, onDragPiece, tools },
   ref,
 ) {
   const [t, setT] = useState(0);
@@ -260,10 +262,11 @@ export const StagePlayer = forwardRef<PlayerHandle, Props>(function StagePlayer(
 
   return (
     <div className="player">
-      <div className={`stage-frame${setEdit ? ' set-edit' : ''}`}>
+      <div className={`stage-frame${setEdit ? ' set-edit' : vertical ? ' vertical' : ''}`}>
         <FrameSvg
           frame={frame}
           subtitles={subtitles}
+          vertical={vertical}
           renderActor={renderActor}
           sceneOverlay={pieceOverlay}
           freeCamera={setEdit}

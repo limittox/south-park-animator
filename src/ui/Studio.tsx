@@ -212,6 +212,7 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
           compiled={compiled}
           lines={bank.lines}
           subtitles={settings.subtitles}
+          vertical={settings.vertical}
           editing={tab === 'set' ? 'set' : 'actors'}
           selectedActor={selectedActor}
           onSelectActor={setSelectedActor}
@@ -226,6 +227,9 @@ export function Studio({ editor, settings, bank, onOpenSettings }: Props) {
               </button>
               <button className="chip" aria-pressed={settings.subtitles} onClick={() => updateSettings({ subtitles: !settings.subtitles })} title="Subtitles">
                 CC
+              </button>
+              <button className="chip" aria-pressed={settings.vertical} onClick={() => updateSettings({ vertical: !settings.vertical })} title="Vertical video for TikTok, Reels and Shorts">
+                9:16
               </button>
             </>
           }
